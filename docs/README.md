@@ -19,6 +19,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
 - [Translation Guide](../TRANSLATIONS.md) — Crowdin workflow and translator contribution rules.
+- [Achievement Text Localization](./achievement-localization.md) — server-owned achievement copy, `Accept-Language`, and the current BookOrbit limitation.
 - BookOrbit OIDC / SSO authentication is documented in [Provider documentation](./providers/bookorbit/oidc-authentication.md).
 - [Security Policy](../SECURITY.md) — responsible-disclosure guidance for security reports.
 

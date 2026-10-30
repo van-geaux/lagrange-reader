@@ -71,6 +71,55 @@ internal object AppLocale {
     }
 }
 
+/**
+ * `Accept-Language` value for BookOrbit requests. The server localizes some of its own text
+ * (achievement names/descriptions/category labels) using this header.
+ *
+ * The value follows the app UI locale, not the device locale alone:
+ * - an explicit app language wins (`zh-CN`, `en`, and any language added to [AppLocale.languages]);
+ * - "system" picks the first app-supported language that matches the system locale;
+ * - unsupported system languages fall back to English, matching the current UI resource fallback.
+ *
+ * The app does not need a per-language branch here: adding an [AppLanguage] entry makes its tag
+ * eligible for both explicit selection and system matching. BookOrbit matches the tag against its
+ * own supported locales and falls back to English when it has no matching catalog.
+ */
+internal fun bookOrbitAcceptLanguage(
+    appTag: String,
+    systemLocale: Locale,
+    supportedAppLocales: List<String> = AppLocale.languages.mapNotNull { it.localeOverride }
+): String {
+    if (appTag != AppLocale.SYSTEM) {
+        supportedAppLocales.firstOrNull { candidate -> candidate.equals(appTag, ignoreCase = true) }
+            ?.let { return it }
+        Locale.forLanguageTag(appTag).takeIf { it.language.isNotEmpty() }?.let { appLocale ->
+            supportedAppLocales.firstOrNull { candidate ->
+                appLocaleMatches(Locale.forLanguageTag(candidate), appLocale)
+            }?.let { return it }
+        }
+    }
+    return supportedAppLocales.firstOrNull { candidate ->
+        appLocaleMatches(Locale.forLanguageTag(candidate), systemLocale)
+    } ?: AppLocale.ENGLISH
+}
+
+private fun appLocaleMatches(candidate: Locale, requested: Locale): Boolean {
+    if (candidate.language.isEmpty() || !candidate.language.equals(requested.language, ignoreCase = true)) {
+        return false
+    }
+    if (candidate.language != "zh") return true
+    return isTraditionalChinese(candidate) == isTraditionalChinese(requested)
+}
+
+private fun isTraditionalChinese(locale: Locale): Boolean =
+    locale.script.equals("Hant", ignoreCase = true) || locale.country in setOf("TW", "HK", "MO")
+
+internal fun Context.bookOrbitAcceptLanguage(): String =
+    bookOrbitAcceptLanguage(
+        appTag = AppLocale.readTag(this),
+        systemLocale = resources.configuration.locales[0]
+    )
+
 /** Finds the Activity that owns [this] context, if any. */
 internal fun Context.findActivity(): Activity? {
     var current: Context = this

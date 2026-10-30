@@ -596,6 +596,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val appStorageManager = AppStorageManager(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
+        .addInterceptor { chain ->
+            // BookOrbit localizes server-owned text (for example achievements) from this header.
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("Accept-Language", context.bookOrbitAcceptLanguage())
+                    .build()
+            )
+        }
         .followRedirects(true)
         .followSslRedirects(true)
         .build()

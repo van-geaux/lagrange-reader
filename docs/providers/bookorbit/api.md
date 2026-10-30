@@ -301,6 +301,8 @@ GET /api/v1/achievements
 
 The contract is verified against the official current BookOrbit source. The response's `iconName` uses BookOrbit's official achievement icon vocabulary; the Android UI maps those values to semantic Material equivalents instead of displaying raw icon names. The client preserves server-censored secret fields, shows award dates for earned achievements, and shows locked current/threshold progress only when both values are provided. HTTP 404 is treated as an older server without Achievements support; other failures remain retryable.
 
+Achievement names, descriptions, category labels, and secret-achievement copy are server-owned text. The client requests them with an `Accept-Language` header that reflects the app interface language; BookOrbit resolves it against its own translation catalogs. If the server catalog has no translation for that language (or the server predates this support), the response falls back to the server's default text and the surrounding Android UI remains localized.
+
 ## Files
 
 ### Stream a file
