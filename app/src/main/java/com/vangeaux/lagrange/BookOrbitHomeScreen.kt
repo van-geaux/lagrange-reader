@@ -4463,6 +4463,13 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (downloadStorageSelection.usesPortableFolder) {
+                            Text(
+                                stringResource(R.string.settings_download_location_managed_subfolder),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         downloadStorageMessage?.let { message ->
                             Text(
                                 message,

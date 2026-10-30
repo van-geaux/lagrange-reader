@@ -3623,7 +3623,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (!downloadedLocatorPassesIntegrity(context, book, locator)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The SD-card reader file is unavailable or failed integrity checks."
+                localFileError = "The selected-folder reader file is unavailable or failed integrity checks."
             )
         }
         if (book.mediaKind == MediaKind.AUDIO) {
@@ -3639,7 +3639,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         } catch (error: Throwable) {
             LocalReaderResolution(
                 file = null,
-                localFileError = error.message ?: "The SD-card reader file could not be opened."
+                localFileError = error.message ?: "The selected-folder reader file could not be opened."
             )
         }
     }

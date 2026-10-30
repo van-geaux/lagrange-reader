@@ -1,19 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- English source strings. Crowdin supplies translated resource files after merge. -->
-    <string name="browse_downloaded_to_sd_card">Downloaded to SD card</string>
+    <string name="browse_downloaded_to_sd_card">Downloaded to selected folder</string>
     <string name="settings_auto_download_review_location">Download location: %1$s</string>
     <string name="settings_download_location_title">Download location</string>
-    <string name="settings_download_location_selected_folder">Selected SD-card folder</string>
+    <string name="settings_download_location_selected_folder">Selected folder</string>
     <string name="settings_download_location_internal">Internal app storage</string>
     <string name="settings_download_location_available">Available %1$s</string>
     <string name="settings_download_location_available_unknown">Folder available; free space is not reported by this provider</string>
     <string name="settings_download_location_permission_revoked">Permission was revoked - choose the folder again</string>
-    <string name="settings_download_location_unavailable">Card or folder unavailable</string>
+    <string name="settings_download_location_unavailable">Selected folder unavailable</string>
     <string name="settings_download_location_existing_stay">Existing downloads stay in their current location.</string>
     <string name="settings_download_location_choose_folder">Choose folder</string>
     <string name="settings_download_location_use_internal">Use internal</string>
     <string name="settings_download_location_new_downloads">New downloads will use %1$s.</string>
     <string name="settings_download_location_new_downloads_internal">New downloads will use internal app storage.</string>
     <string name="settings_download_location_select_failed">Unable to use the selected folder.</string>
+    <string name="settings_download_location_managed_subfolder">New downloads are stored in a Lagrange Reader folder inside this location. Android will ask for access when you choose a folder.</string>
 </resources>

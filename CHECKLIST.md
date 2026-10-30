@@ -17,6 +17,7 @@ This is the active completion and validation checklist. Historical work orders a
 - [x] CBR/CB7 offline opening uses client-side RAR4/RAR5/7z extraction into a cached CBZ; MOBI, AZW, AZW3, and FB2 remain unsupported.
 - [x] Multiple named profiles may use the same provider and normalized server URL; profile-scoped browser state, downloads, and Local books prevent local content from bleeding between accounts ([#305](https://github.com/van-geaux/lagrange-reader/issues/305)).
 - [x] Audiobook playback prefers the `medium=audio` cover endpoint, falls back to the generic book cover, and renders the selected audiobook cover with its square aspect ratio ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).
+- [x] Download location accepts writable internal shared-storage folders as well as mounted SD-card folders through the Android system picker. The selected folder and managed download location remain visible, persisted access is reused for new downloads, and existing downloads remain in place ([#308](https://github.com/van-geaux/lagrange-reader/issues/308)). User-confirmed manual validation covers the selected-folder flow; API 26–28 broad-permission behavior remains documented separately from the SAF grant.
 
 ## Active validation
 
