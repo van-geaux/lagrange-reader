@@ -4272,8 +4272,8 @@ internal fun OptionsScreen(
         }
 if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
             AppPreferenceSwitchRow(
-                title = "Scale Progress by Playback Speed",
-                summary = "Adjusts remaining time and progress bar tracking when listening above 1.0x speed.",
+                title = stringResource(R.string.auto_settings_scale_progress_title),
+                summary = stringResource(R.string.auto_settings_scale_progress_summary),
                 checked = preferences.scaleProgressByPlaybackSpeed,
                 testTag = "options-scale-progress-speed",
                 onCheckedChange = {
@@ -4291,9 +4291,12 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 OrbitEyebrow("Android Auto")
-                Text("Dashboard controls", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Customize playback speed buttons, skip intervals, and steering wheel actions.",
+                    stringResource(R.string.auto_settings_dashboard_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    stringResource(R.string.auto_settings_dashboard_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -4305,10 +4308,13 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                OrbitEyebrow("Android Auto Controls")
-                Text("Steering wheel & skip behavior", style = MaterialTheme.typography.titleLarge)
+                OrbitEyebrow(stringResource(R.string.auto_settings_controls_eyebrow))
                 Text(
-                    "Define whether vehicle skip buttons jump chapters or perform timed skips.",
+                    stringResource(R.string.auto_settings_steering_title),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    stringResource(R.string.auto_settings_steering_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -4317,8 +4323,8 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
         if (subDestination == "android_auto") item(key = "aa-vehicle-skip-mode") {
             // Placeholder or preference toggle for steering wheel skip mode (Chapters vs Time-skip)
             AppPreferenceSwitchRow(
-                title = "Vehicle Skip Buttons Jump Chapters",
-                summary = "When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.",
+                title = stringResource(R.string.auto_settings_vehicle_skip_title),
+                summary = stringResource(R.string.auto_settings_vehicle_skip_summary),
                 checked = false, // Map to your app preference key when ready
                 testTag = "options-aa-vehicle-skip-chapters",
                 onCheckedChange = { /* Save preference */ }

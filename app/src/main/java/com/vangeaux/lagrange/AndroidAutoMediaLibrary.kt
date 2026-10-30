@@ -24,6 +24,8 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import androidx.annotation.DrawableRes
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -43,6 +45,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+/**
+ * Android Auto surfaces are built by pure node builders and a MediaLibraryService. The service
+ * attaches its localized context here; JVM callers keep the English fallbacks.
+ */
+internal object AndroidAutoStrings {
+    @Volatile
+    private var context: Context? = null
+
+    fun attach(context: Context) {
+        this.context = AppLocale.wrap(context.applicationContext)
+    }
+
+    fun get(@StringRes id: Int, fallback: String, vararg args: Any): String =
+        context?.getString(id, *args) ?: fallback
+
+    fun quantity(@PluralsRes id: Int, count: Int, fallback: String, vararg args: Any): String =
+        context?.resources?.getQuantityString(id, count, *args) ?: fallback
+}
 
 internal const val ANDROID_AUTO_ROOT_ID = "auto:root"
 internal const val ANDROID_AUTO_TAB_CONTINUE_ID = "auto:tab:continue"
@@ -280,11 +301,18 @@ internal fun formatAndroidAutoBookSubtitle(book: BookSummary): String {
     seriesLabel?.let(parts::add)
     val progressPercent = book.progressPercent?.takeIf { it > 0f && !book.isRead }
     if (progressPercent != null) {
-        parts += "${progressPercent.toInt().coerceIn(1, 99)}% listened"
+        val percent = progressPercent.toInt().coerceIn(1, 99)
+        parts += AndroidAutoStrings.get(
+            R.string.auto_subtitle_progress_listened,
+            "$percent% listened",
+            percent
+        )
     } else if (book.isDownloaded || "AUDIO" in book.downloadedFormats) {
-        parts += "Downloaded"
+        parts += AndroidAutoStrings.get(R.string.auto_subtitle_downloaded, "Downloaded")
     }
-    return parts.joinToString(" · ").ifBlank { "Audiobook" }
+    return parts.joinToString(" · ").ifBlank {
+        AndroidAutoStrings.get(R.string.auto_subtitle_audiobook, "Audiobook")
+    }
 }
 
 internal fun bookToAndroidAutoNodeSpec(
@@ -323,8 +351,11 @@ internal fun buildAndroidAutoRootNodeSpec(): AndroidAutoNodeSpec = AndroidAutoNo
 internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
     AndroidAutoNodeSpec(
         mediaId = ANDROID_AUTO_TAB_CONTINUE_ID,
-        title = "Home",
-        subtitle = "Active and in-progress audiobooks",
+        title = AndroidAutoStrings.get(R.string.auto_tab_home_title, "Home"),
+        subtitle = AndroidAutoStrings.get(
+            R.string.auto_tab_home_subtitle,
+            "Active and in-progress audiobooks"
+        ),
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
@@ -334,8 +365,11 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
     ),
     AndroidAutoNodeSpec(
         mediaId = ANDROID_AUTO_TAB_DOWNLOADED_ID,
-        title = "Downloaded",
-        subtitle = "Offline audiobooks on this device",
+        title = AndroidAutoStrings.get(R.string.auto_tab_downloaded_title, "Downloaded"),
+        subtitle = AndroidAutoStrings.get(
+            R.string.auto_tab_downloaded_subtitle,
+            "Offline audiobooks on this device"
+        ),
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
@@ -345,8 +379,11 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
     ),
     AndroidAutoNodeSpec(
         mediaId = ANDROID_AUTO_TAB_RECENT_ID,
-        title = "Recent",
-        subtitle = "Recently added and updated audiobooks",
+        title = AndroidAutoStrings.get(R.string.auto_tab_recent_title, "Recent"),
+        subtitle = AndroidAutoStrings.get(
+            R.string.auto_tab_recent_subtitle,
+            "Recently added and updated audiobooks"
+        ),
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
@@ -356,8 +393,11 @@ internal fun buildAndroidAutoRootTabSpecs(): List<AndroidAutoNodeSpec> = listOf(
     ),
     AndroidAutoNodeSpec(
         mediaId = ANDROID_AUTO_TAB_LIBRARIES_ID,
-        title = "Libraries",
-        subtitle = "Browse by library and series",
+        title = AndroidAutoStrings.get(R.string.auto_tab_libraries_title, "Libraries"),
+        subtitle = AndroidAutoStrings.get(
+            R.string.auto_tab_libraries_subtitle,
+            "Browse by library and series"
+        ),
         isBrowsable = true,
         isPlayable = false,
         mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
@@ -447,18 +487,30 @@ internal fun buildAndroidAutoContinueListeningSpecs(
 
     val nodes = mutableListOf<AndroidAutoNodeSpec>()
     if (resolvedActive != null) {
-        nodes += bookToAndroidAutoNodeSpec(resolvedActive, groupTitle = "Now Playing")
+        nodes += bookToAndroidAutoNodeSpec(
+            resolvedActive,
+            groupTitle = AndroidAutoStrings.get(R.string.auto_group_now_playing, "Now Playing")
+        )
         if (resolvedActive.audioChapters.isNotEmpty()) {
             nodes += AndroidAutoNodeSpec(
                 mediaId = AndroidAutoMediaId.BookChapters(
                     bookId = resolvedActive.id,
                     fileId = resolvedActive.fileId
                 ).encode(),
-                title = "Chapters · ${resolvedActive.title}",
-                subtitle = "${resolvedActive.audioChapters.size} chapters",
+                title = AndroidAutoStrings.get(
+                    R.string.auto_chapters_title,
+                    "Chapters · ${resolvedActive.title}",
+                    resolvedActive.title
+                ),
+                subtitle = AndroidAutoStrings.quantity(
+                    R.plurals.auto_chapters_count,
+                    resolvedActive.audioChapters.size,
+                    "${resolvedActive.audioChapters.size} chapters",
+                    resolvedActive.audioChapters.size
+                ),
                 artist = resolvedActive.author,
                 albumTitle = resolvedActive.title,
-                groupTitle = "Now Playing",
+                groupTitle = AndroidAutoStrings.get(R.string.auto_group_now_playing, "Now Playing"),
                 isBrowsable = true,
                 isPlayable = false,
                 mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
@@ -483,7 +535,10 @@ internal fun buildAndroidAutoContinueListeningSpecs(
         .take(maxItems)
 
     inProgress.forEach { book ->
-        nodes += bookToAndroidAutoNodeSpec(book, groupTitle = "In Progress")
+        nodes += bookToAndroidAutoNodeSpec(
+            book,
+            groupTitle = AndroidAutoStrings.get(R.string.auto_group_in_progress, "In Progress")
+        )
     }
 
     if (nodes.isEmpty()) {
@@ -495,7 +550,10 @@ internal fun buildAndroidAutoContinueListeningSpecs(
             )
             .take(maxItems)
         fallback.forEach { book ->
-            nodes += bookToAndroidAutoNodeSpec(book, groupTitle = "Suggested")
+            nodes += bookToAndroidAutoNodeSpec(
+                book,
+                groupTitle = AndroidAutoStrings.get(R.string.auto_group_suggested, "Suggested")
+            )
         }
     }
 
@@ -553,8 +611,13 @@ internal fun buildAndroidAutoLibrariesRootSpecs(
     if (seriesCount > 0) {
         nodes += AndroidAutoNodeSpec(
             mediaId = ANDROID_AUTO_SERIES_ROOT_ID,
-            title = "Series",
-            subtitle = if (seriesCount == 1) "1 audiobook series" else "$seriesCount audiobook series",
+            title = AndroidAutoStrings.get(R.string.auto_series_title, "Series"),
+            subtitle = AndroidAutoStrings.quantity(
+                R.plurals.auto_series_count,
+                seriesCount,
+                "$seriesCount audiobook series",
+                seriesCount
+            ),
             isBrowsable = true,
             isPlayable = false,
             mediaType = MediaMetadata.MEDIA_TYPE_FOLDER_AUDIO_BOOKS,
@@ -567,10 +630,14 @@ internal fun buildAndroidAutoLibrariesRootSpecs(
     displayedLibraries.forEach { library ->
         val count = countByLibrary[library.id]
         val subtitle = when {
-            count != null && count == 1 -> "1 audiobook"
-            count != null && count > 1 -> "$count audiobooks"
+            count != null && count > 0 -> AndroidAutoStrings.quantity(
+                R.plurals.auto_audiobook_count,
+                count,
+                "$count audiobooks",
+                count
+            )
             !library.description.isNullOrBlank() -> library.description
-            else -> "Library"
+            else -> AndroidAutoStrings.get(R.string.auto_library_fallback, "Library")
         }
         nodes += AndroidAutoNodeSpec(
             mediaId = AndroidAutoMediaId.Library(library.id).encode(),
@@ -625,7 +692,12 @@ internal fun buildAndroidAutoSeriesFolderSpecs(
             ).firstOrNull() ?: return@mapNotNull null
             val seriesName = representative.seriesName ?: return@mapNotNull null
             val count = books.size
-            val countLabel = if (count == 1) "1 audiobook" else "$count audiobooks"
+            val countLabel = AndroidAutoStrings.quantity(
+                R.plurals.auto_audiobook_count,
+                count,
+                "$count audiobooks",
+                count
+            )
             val authorLabel = representative.author?.takeIf { it.isNotBlank() }
             AndroidAutoNodeSpec(
                 mediaId = AndroidAutoMediaId.Series(seriesId).encode(),
@@ -719,7 +791,9 @@ internal fun buildAndroidAutoChapterSpecs(
             }
             else -> AndroidAutoCompletionState(AndroidAutoCompletionStatus.NOT_PLAYED)
         }
-        val chapterTitle = chapter.title.sanitizeAudiobookTitle().ifBlank { "Chapter ${index + 1}" }
+        val chapterTitle = chapter.title.sanitizeAudiobookTitle().ifBlank {
+            AndroidAutoStrings.get(R.string.auto_chapter_fallback, "Chapter ${index + 1}", index + 1)
+        }
         val timestampLabel = formatAndroidAutoTimestamp(scaledStartMs)
         val durationLabel = scaledChapterDurationMs?.let { " · ${formatAndroidAutoDuration(it)}" }.orEmpty()
         AndroidAutoNodeSpec(
@@ -730,7 +804,11 @@ internal fun buildAndroidAutoChapterSpecs(
                 startMs = chapter.startMs
             ).encode(),
             title = chapterTitle,
-            subtitle = "Starts at $timestampLabel$durationLabel",
+            subtitle = AndroidAutoStrings.get(
+                R.string.auto_chapter_starts_at,
+                "Starts at $timestampLabel$durationLabel",
+                "$timestampLabel$durationLabel"
+            ),
             artist = book.author,
             albumTitle = book.title,
             isBrowsable = false,
@@ -1244,8 +1322,17 @@ internal class AndroidAutoCatalogBridge private constructor(
                 val active = snapshot.activeBook ?: return@withContext null
                 AndroidAutoNodeSpec(
                     mediaId = ANDROID_AUTO_ACTIVE_CHAPTERS_ID,
-                    title = "Chapters · ${active.title}",
-                    subtitle = "${active.audioChapters.size} chapters",
+                    title = AndroidAutoStrings.get(
+                        R.string.auto_chapters_title,
+                        "Chapters · ${active.title}",
+                        active.title
+                    ),
+                    subtitle = AndroidAutoStrings.quantity(
+                        R.plurals.auto_chapters_count,
+                        active.audioChapters.size,
+                        "${active.audioChapters.size} chapters",
+                        active.audioChapters.size
+                    ),
                     artist = active.author,
                     isBrowsable = true,
                     isPlayable = false,
@@ -1259,8 +1346,17 @@ internal class AndroidAutoCatalogBridge private constructor(
                 val hydrated = hydrateBookChapters(book, snapshot.serverUrl)
                 AndroidAutoNodeSpec(
                     mediaId = mediaId,
-                    title = "Chapters · ${hydrated.title}",
-                    subtitle = "${hydrated.audioChapters.size} chapters",
+                    title = AndroidAutoStrings.get(
+                        R.string.auto_chapters_title,
+                        "Chapters · ${hydrated.title}",
+                        hydrated.title
+                    ),
+                    subtitle = AndroidAutoStrings.quantity(
+                        R.plurals.auto_chapters_count,
+                        hydrated.audioChapters.size,
+                        "${hydrated.audioChapters.size} chapters",
+                        hydrated.audioChapters.size
+                    ),
                     artist = hydrated.author,
                     isBrowsable = true,
                     isPlayable = false,
@@ -1614,12 +1710,14 @@ internal class AndroidAutoCatalogBridge private constructor(
         @Volatile
         private var instance: AndroidAutoCatalogBridge? = null
 
-        fun getInstance(context: Context): AndroidAutoCatalogBridge =
-            instance ?: synchronized(this) {
+        fun getInstance(context: Context): AndroidAutoCatalogBridge {
+            AndroidAutoStrings.attach(context)
+            return instance ?: synchronized(this) {
                 instance ?: AndroidAutoCatalogBridge(
                     context.applicationContext as Application
                 ).also { instance = it }
             }
+        }
     }
 }
 
@@ -1665,7 +1763,13 @@ internal object AndroidAutoSpeedController {
     fun buildCycleSpeedCommandButton(currentSpeed: Float): CommandButton {
         val activePreset = findCurrentPreset(currentSpeed)
         return CommandButton.Builder()
-            .setDisplayName("Playback speed (${activePreset.label})")
+            .setDisplayName(
+                AndroidAutoStrings.get(
+                    R.string.auto_playback_speed,
+                    "Playback speed (${activePreset.label})",
+                    activePreset.label
+                )
+            )
             .setSessionCommand(SessionCommand(ACTION_CYCLE_SPEED, Bundle.EMPTY))
             .setIconResId(activePreset.iconResId)
             .setEnabled(true)
@@ -1684,14 +1788,16 @@ internal fun audiobookAutoMediaButtonPreferences(
         add(
             CommandButton.Builder(CommandButton.ICON_PREVIOUS)
                 .setSessionCommand(audiobookPreviousChapterSessionCommand)
-                .setDisplayName("Previous chapter")
+                .setDisplayName(
+                    AndroidAutoStrings.get(R.string.auto_previous_chapter, "Previous chapter")
+                )
                 .setEnabled(true)
                 .build()
         )
         add(
             CommandButton.Builder(CommandButton.ICON_NEXT)
                 .setSessionCommand(audiobookNextChapterSessionCommand)
-                .setDisplayName("Next chapter")
+                .setDisplayName(AndroidAutoStrings.get(R.string.auto_next_chapter, "Next chapter"))
                 .setEnabled(true)
                 .build()
         )
@@ -2361,7 +2467,10 @@ internal fun onGetAndroidAutoLibraryRoot(
     val rootItem = if (params?.isRecent == true) {
         AndroidAutoNodeSpec(
             mediaId = ANDROID_AUTO_TAB_CONTINUE_ID,
-            title = "Continue Listening",
+            title = AndroidAutoStrings.get(
+                R.string.auto_group_continue_listening,
+                "Continue Listening"
+            ),
             isBrowsable = true,
             isPlayable = false
         ).toMediaItem(svc.packageName)

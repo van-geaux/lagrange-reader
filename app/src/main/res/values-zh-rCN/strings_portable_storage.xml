@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- 简体中文：可移动存储下载位置 -->
+    <string name="browse_downloaded_to_sd_card">已下载到所选文件夹</string>
+    <string name="settings_auto_download_review_location">下载位置：%1$s</string>
+    <string name="settings_download_location_title">下载位置</string>
+    <string name="settings_download_location_selected_folder">所选文件夹</string>
+    <string name="settings_download_location_internal">应用内部存储</string>
+    <string name="settings_download_location_available">可用空间 %1$s</string>
+    <string name="settings_download_location_available_unknown">文件夹可用；此提供商未报告可用空间</string>
+    <string name="settings_download_location_permission_revoked">权限已被撤销 - 请重新选择文件夹</string>
+    <string name="settings_download_location_unavailable">所选文件夹不可用</string>
+    <string name="settings_download_location_existing_stay">现有下载仍保留在原位置。</string>
+    <string name="settings_download_location_choose_folder">选择文件夹</string>
+    <string name="settings_download_location_use_internal">使用内部存储</string>
+    <string name="settings_download_location_new_downloads">新下载将保存到 %1$s。</string>
+    <string name="settings_download_location_new_downloads_internal">新下载将保存到应用内部存储。</string>
+    <string name="settings_download_location_select_failed">无法使用所选文件夹。</string>
+    <string name="settings_download_location_managed_subfolder">新下载将保存在此位置内的 Lagrange Reader 文件夹中。选择文件夹时，Android 会请求访问权限。</string>
+</resources>
