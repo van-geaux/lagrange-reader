@@ -438,6 +438,9 @@ internal class AudiobookMediaSessionCallback(
         if (!isAcceptedAudiobookController(session, serviceProvider(), controller)) {
             return MediaSession.ConnectionResult.reject()
         }
+        // Connection can arrive after a language change; refresh the localized Auto context before
+        // building the custom layout that contains playback button labels.
+        serviceProvider()?.let { AndroidAutoStrings.attach(it) }
         val isAutoController = session.isAutoCompanionController(controller) ||
             session.isAutomotiveController(controller)
         val hasChapters = serviceProvider()?.activeSessionHasChapters() == true
@@ -1458,6 +1461,10 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        // Android Auto custom-layout buttons are built while the library session is created below.
+        // Attach the localized context before that, otherwise "Previous chapter", "Next chapter"
+        // and "Playback speed (...)" are created with the English fallbacks.
+        AndroidAutoStrings.attach(this)
         setMediaNotificationProvider(ReadAlongMediaNotificationProvider(this))
         ensureLibrarySession()
     }

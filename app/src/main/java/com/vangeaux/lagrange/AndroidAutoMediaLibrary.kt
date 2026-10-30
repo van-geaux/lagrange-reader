@@ -2743,6 +2743,7 @@ internal fun ReadiumAudioPlaybackService.applyAndroidAutoPlaybackSpeed(speed: Fl
 internal fun ReadiumAudioPlaybackService.refreshAndroidAutoCustomLayout(
     speedOverride: Float? = null
 ) {
+    AndroidAutoStrings.attach(this)
     val session = mediaLibrarySession ?: return
     val currentSpeed = speedOverride
         ?: activeSession()?.player?.playbackParameters?.speed?.takeIf { it > 0f }
