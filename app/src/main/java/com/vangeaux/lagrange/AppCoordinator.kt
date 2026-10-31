@@ -2528,6 +2528,10 @@ class AppCoordinator internal constructor(
         scope.launch {
             try {
                 readingStatusModule()?.resetBookReadingState(book) ?: repository.resetBookReadingState(book)
+                readerLifecycleModule?.clearEpubReaderPosition(
+                    (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
+                    book
+                )
                 latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 val current = lastBrowserState ?: return@launch

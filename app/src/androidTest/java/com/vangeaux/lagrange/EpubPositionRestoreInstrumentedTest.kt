@@ -9,9 +9,14 @@ import java.io.File
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -132,6 +137,241 @@ class EpubPositionRestoreInstrumentedTest {
     }
 
     @Test
+    fun scopedResumeCleanupPreservesAnotherProfile() = runBlocking {
+        val serverUrl = "https://scope-cleanup.example/base"
+        val firstScope = EpubReaderScope(
+            serverUrl = serverUrl,
+            profileId = "profile-a",
+            providerId = "bookorbit",
+            accountScope = "account-a"
+        )
+        val secondScope = firstScope.copy(profileId = "profile-b", accountScope = "account-b")
+        val fingerprint = epubPublicationFingerprint(epub)
+        val first = epubReaderPositionIdentity(firstScope, "book", "file", epub, fingerprint)
+            .copy(updatedAtMillis = 10L)
+        val second = epubReaderPositionIdentity(secondScope, "book", "file", epub, fingerprint)
+            .copy(updatedAtMillis = 20L)
+        val firstKey = epubReaderPersistenceKey(
+            firstScope.profileId,
+            firstScope.providerId,
+            firstScope.accountScope,
+            firstScope.serverUrl,
+            first.bookId,
+            first.fileId,
+            fingerprint
+        )
+        val secondKey = epubReaderPersistenceKey(
+            secondScope.profileId,
+            secondScope.providerId,
+            secondScope.accountScope,
+            secondScope.serverUrl,
+            second.bookId,
+            second.fileId,
+            fingerprint
+        )
+        val locator = requireNotNull(
+            Locator.fromJSON(
+                JSONObject(
+                    """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"progression":0.5}}"""
+                )
+            )
+        )
+        val positions = EpubReaderPositionStore(context)
+        val locators = ReadiumEpubLocatorStore(context)
+        val ttsPositions = ReadiumEpubTtsPositionStore(context)
+
+        try {
+            assertTrue(positions.importIfAbsent(first))
+            assertTrue(positions.importIfAbsent(second))
+            locators.save(firstKey, locator)
+            locators.save(secondKey, locator)
+            ttsPositions.save(firstKey, locator)
+            ttsPositions.save(secondKey, locator)
+
+            clearEpubResumeStateForScope(context, firstScope)
+
+            assertNull(positions.readExact(first))
+            assertNotNull(positions.readExact(second))
+            assertNull(locators.read(firstKey))
+            assertNotNull(locators.read(secondKey))
+            assertNull(ttsPositions.read(firstKey))
+            assertNotNull(ttsPositions.read(secondKey))
+        } finally {
+            clearEpubResumeStateForScope(context, firstScope)
+            clearEpubResumeStateForScope(context, secondScope)
+        }
+    }
+
+    @Test
+    fun passiveWakeReflowKeepsCanonicalProgressUntilARealPageMoveArrives() = runBlocking {
+        val scope = EpubReaderScope(
+            serverUrl = "https://wake-recovery.example",
+            profileId = "wake-profile-${System.nanoTime()}",
+            providerId = "bookorbit",
+            accountScope = "wake-account"
+        )
+        val bookId = "wake-book-${System.nanoTime()}"
+        val fileId = "wake-file"
+        val fingerprint = epubPublicationFingerprint(epub)
+        val initialLocatorJson =
+            """{"href":"OEBPS/Text/chapter-1.xhtml","type":"application/xhtml+xml","locations":{"progression":0.1690164842185969,"position":14,"totalProgression":0.04887218045112782}}"""
+        val identity = epubReaderPositionIdentity(
+            scope = scope,
+            bookId = bookId,
+            fileId = fileId,
+            file = epub,
+            publicationFingerprint = fingerprint
+        )
+        val seeded = identity.copy(
+            chapterIndex = 0,
+            pageIndex = 12,
+            pageCount = 71,
+            updatedAtMillis = 1_793_337_624_167L,
+            locatorJson = initialLocatorJson,
+            progressPercent = 4.511278f,
+            overallPositionNumber = 13,
+            overallPositionCount = 266,
+            renderedPageLayoutKey = "seeded-layout",
+            renderedPageCounts = listOf(71, 0, 0)
+        )
+        val store = EpubReaderPositionStore(context)
+        assertTrue(store.importIfAbsent(seeded))
+        val intent = ReadiumEpubReaderActivity.createIntent(
+            context = context,
+            file = epub,
+            fileId = fileId,
+            bookId = bookId,
+            title = "Passive wake recovery",
+            readerKey = readerKey,
+            publicationFingerprint = fingerprint,
+            persistenceScope = scope,
+            launchMode = ReaderLaunchMode.NORMAL,
+            initialChapter = 0,
+            initialPage = 0,
+            initialPageCount = 1,
+            initialPercent = null
+        )
+
+        try {
+            ActivityScenario.launch<ReadiumEpubReaderActivity>(intent).use { scenario ->
+                var ready = false
+                for (attempt in 0 until 80) {
+                    scenario.onActivity { activity -> ready = activity.isPublicationReadyForTest() }
+                    if (ready) break
+                    SystemClock.sleep(250)
+                }
+                assertTrue("reader publication did not become ready", ready)
+
+                scenario.moveToState(Lifecycle.State.CREATED)
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                val baseline = requireNotNull(store.readExact(identity))
+                assertCanonicalProgressEquals(seeded, baseline)
+                val passiveLocator = requireNotNull(
+                    Locator.fromJSON(
+                        JSONObject(initialLocatorJson).apply {
+                            getJSONObject("locations").put("progression", 0.1791071724117178)
+                        }
+                    )
+                )
+                scenario.onActivity { activity ->
+                    assertTrue(
+                        activity.applyEpubPaginationForTest(
+                            pageIndex = 12,
+                            pageCount = 67,
+                            locator = passiveLocator
+                        )
+                    )
+                    val displayed = activity.currentProgressStatusForTest()
+                    assertEquals(67, displayed.chapterPageCount)
+                    assertEquals(4.511278f, displayed.completionPercent)
+                    val result = activity.progressResultForTest()
+                    assertEquals(12, result.pageIndex)
+                    assertEquals(71, result.pageCount)
+                    assertEquals(4.511278f, result.percent)
+                    assertEquals(initialLocatorJson, result.locatorJson)
+                }
+                SystemClock.sleep(500)
+                val afterPassive = requireNotNull(store.readExact(identity))
+                assertCanonicalProgressEquals(baseline, afterPassive)
+                assertEquals(baseline.updatedAtMillis, afterPassive.updatedAtMillis)
+                assertEquals(baseline.writerSequence, afterPassive.writerSequence)
+
+                val movedLocator = requireNotNull(
+                    Locator.fromJSON(
+                        JSONObject(initialLocatorJson).apply {
+                            getJSONObject("locations").put("progression", 0.22)
+                        }
+                    )
+                )
+                scenario.onActivity { activity ->
+                    assertTrue(
+                        activity.applyEpubPaginationForTest(
+                            pageIndex = 13,
+                            pageCount = 67,
+                            locator = movedLocator,
+                            authoritativePageMove = true
+                        )
+                    )
+                }
+                scenario.onActivity { activity -> runBlocking { activity.flushPositionForTest() } }
+                val afterMove = requireNotNull(store.readExact(identity))
+                assertEquals(13, afterMove.pageIndex)
+                assertEquals(67, afterMove.pageCount)
+                assertTrue(afterMove.updatedAtMillis > baseline.updatedAtMillis)
+                assertTrue(afterMove.writerSequence > baseline.writerSequence)
+                assertEquals(0.22, afterMove.toEpubCanonicalPosition()?.resourceProgression ?: -1.0, 0.000001)
+                scenario.onActivity { activity ->
+                    val result = activity.progressResultForTest()
+                    assertEquals(13, result.pageIndex)
+                    assertEquals(67, result.pageCount)
+                }
+
+                val delayedPassiveLocator = requireNotNull(
+                    Locator.fromJSON(
+                        JSONObject(initialLocatorJson).apply {
+                            getJSONObject("locations").put("progression", 0.225)
+                        }
+                    )
+                )
+                scenario.onActivity { activity ->
+                    assertTrue(
+                        activity.applyEpubPaginationForTest(
+                            pageIndex = 13,
+                            pageCount = 65,
+                            locator = delayedPassiveLocator
+                        )
+                    )
+                }
+                SystemClock.sleep(500)
+                val afterDelayedPassive = requireNotNull(store.readExact(identity))
+                assertCanonicalProgressEquals(afterMove, afterDelayedPassive)
+                assertEquals(afterMove.updatedAtMillis, afterDelayedPassive.updatedAtMillis)
+                assertEquals(afterMove.writerSequence, afterDelayedPassive.writerSequence)
+
+                lateinit var activity: ReadiumEpubReaderActivity
+                scenario.onActivity { activity = it }
+                withContext(Dispatchers.Main) {
+                    activity.evaluateReaderJavascript(
+                        "document.getElementById('internal-jump').click(); 'clicked';"
+                    )
+                }
+                var linkedPosition: EpubReaderPosition? = null
+                for (attempt in 0 until 40) {
+                    linkedPosition = store.readExact(identity)
+                    if (linkedPosition?.locatorJson?.contains("chapter-2.xhtml") == true) break
+                    SystemClock.sleep(250)
+                }
+                assertTrue(
+                    "internal EPUB link was not persisted through the navigator-owned jump",
+                    linkedPosition?.locatorJson?.contains("chapter-2.xhtml") == true
+                )
+            }
+        } finally {
+            store.removeForBook(scope, bookId)
+        }
+    }
+
+    @Test
     fun aRepaginatedReReportOfTheOldPageDoesNotReplaceNewerReadAloudProgress() {
         launch().use { scenario ->
             val opened = awaitStoredHref("reader did not open on chapter 1") { it.endsWith("chapter-1.xhtml") }
@@ -158,7 +398,11 @@ class EpubPositionRestoreInstrumentedTest {
             )
             scenario.onActivity { activity ->
                 assertTrue("sync must still be pending", activity.isForegroundSyncPendingForTest())
-                activity.recordVisualLocatorForTest(stale)
+                activity.applyEpubPaginationForTest(
+                    pageIndex = activity.currentPageForTest(),
+                    pageCount = activity.currentPageCountForTest(),
+                    locator = stale
+                )
                 assertEquals(
                     "the replayed old page must not be recorded",
                     later.href.toString(),
@@ -223,7 +467,12 @@ class EpubPositionRestoreInstrumentedTest {
             )
             scenario.onActivity { activity ->
                 assertTrue("sync must still be pending", activity.isForegroundSyncPendingForTest())
-                activity.recordVisualLocatorForTest(elsewhere)
+                activity.applyEpubPaginationForTest(
+                    pageIndex = 0,
+                    pageCount = activity.currentPageCountForTest().coerceAtLeast(1),
+                    locator = elsewhere,
+                    authoritativePageMove = true
+                )
                 assertTrue("a real move ends the catch-up", !activity.isForegroundSyncPendingForTest())
             }
             assertEquals(
@@ -295,6 +544,21 @@ class EpubPositionRestoreInstrumentedTest {
     }
 
     private fun locatorJson(json: String): Locator = requireNotNull(Locator.fromJSON(JSONObject(json)))
+
+    private fun assertCanonicalProgressEquals(
+        expected: EpubReaderPosition,
+        actual: EpubReaderPosition
+    ) {
+        assertEquals(expected.chapterIndex, actual.chapterIndex)
+        assertEquals(expected.pageIndex, actual.pageIndex)
+        assertEquals(expected.pageCount, actual.pageCount)
+        assertEquals(expected.locatorJson, actual.locatorJson)
+        assertEquals(expected.progressPercent, actual.progressPercent)
+        assertEquals(expected.overallPositionNumber, actual.overallPositionNumber)
+        assertEquals(expected.overallPositionCount, actual.overallPositionCount)
+        assertEquals(expected.renderedPageLayoutKey, actual.renderedPageLayoutKey)
+        assertEquals(expected.renderedPageCounts, actual.renderedPageCounts)
+    }
 
     @Test
     fun visualPositionsAreRecordedOnlyWhenTheReaderMoves() {
@@ -390,7 +654,10 @@ class EpubPositionRestoreInstrumentedTest {
                     """
                     <html xmlns="http://www.w3.org/1999/xhtml">
                       <head><title>Chapter $index</title></head>
-                      <body><h1>Chapter $index</h1><p>${"Chapter $index reading content. ".repeat(300)}</p></body>
+                      <body><h1>Chapter $index</h1>
+                        ${if (index == 1) """<a id="internal-jump" href="chapter-2.xhtml">Jump to chapter 2</a>""" else ""}
+                        <p>${"Chapter $index reading content. ".repeat(300)}</p>
+                      </body>
                     </html>
                     """
                 )
