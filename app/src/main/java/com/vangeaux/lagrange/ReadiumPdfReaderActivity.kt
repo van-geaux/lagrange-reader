@@ -43,10 +43,12 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.adapter.pdfium.document.PdfiumDocumentFactory
+import org.readium.adapter.pdfium.navigator.PdfiumDocumentFragment
 import org.readium.adapter.pdfium.navigator.PdfiumEngineProvider
 import org.readium.adapter.pdfium.navigator.PdfiumNavigatorFragment
 import org.readium.adapter.pdfium.navigator.PdfiumPreferences
@@ -110,6 +112,13 @@ internal data class ReadiumPdfProgressResult(
     val pageCount: Int,
     val percent: Float?
 )
+
+/**
+ * Readium 3.0.x's PDFium adapter reports its visible zero-based page index one too high.
+ * Keep this correction isolated until the adapter can be upgraded to the fixed release.
+ */
+internal fun pdfiumVisiblePageIndex(reportedPageIndex: Int, pageCount: Int): Int =
+    (reportedPageIndex - 1).coerceIn(0, pageCount - 1)
 
 internal fun readiumReadingProgression(
     readingDirection: LibraryReadingDirection
@@ -182,6 +191,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private var currentPage by mutableStateOf(0)
     private var currentPageCount by mutableStateOf(1)
     private var pageLocators: List<Locator> = emptyList()
+    private var pdfiumPageIndexObserved = false
     private var tapZoneTutorialHasShown = false
     private var tapZoneTutorialHideJob: Job? = null
     private var restoredLocator: Locator? = null
@@ -539,6 +549,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             )
             navigator = fragment
             applyPdfColorInversion()
+            observePdfiumPageIndex(fragment)
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
                     fragment.currentLocator.collect(::updateLocation)
@@ -585,11 +596,45 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     }
 
     private fun updateLocation(locator: Locator) {
-        val index = (locator.locations.position ?: 1) - 1
-        currentPage = index.coerceIn(0, currentPageCount - 1)
+        if (!pdfiumPageIndexObserved) {
+            currentPage = pdfiumVisiblePageIndex(
+                reportedPageIndex = locator.locations.position ?: 1,
+                pageCount = currentPageCount
+            )
+        }
         if (!isPreview) locatorStore.save(readerKey, locator)
         readingSessionReporter.activity(currentProgressPercent())
         updateResult()
+    }
+
+    private fun observePdfiumPageIndex(fragment: PdfiumNavigatorFragment) {
+        val documentFragment = fragment.childFragmentManager.fragments
+            .filterIsInstance<PdfiumDocumentFragment>()
+            .firstOrNull()
+            ?: return
+        val pdfView = documentFragment.view ?: return
+        pdfiumPageIndexObserved = true
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    val visiblePage = (pdfView as? android.view.ViewGroup)
+                        ?.let { view ->
+                            runCatching {
+                                view.javaClass.getMethod("getCurrentPage").invoke(view) as Int
+                            }.getOrNull()
+                        }
+                    if (visiblePage != null) {
+                        val nextPage = visiblePage.coerceIn(0, currentPageCount - 1)
+                        if (nextPage != currentPage) {
+                            currentPage = nextPage
+                            readingSessionReporter.activity(currentProgressPercent())
+                            updateResult()
+                        }
+                    }
+                    delay(100)
+                }
+            }
+        }
     }
 
     private fun currentProgressPercent(): Float = if (currentPageCount <= 1) {
