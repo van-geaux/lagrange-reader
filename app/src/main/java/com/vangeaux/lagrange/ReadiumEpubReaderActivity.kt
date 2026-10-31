@@ -333,6 +333,10 @@ internal fun readiumEpubWordSpacing(wordSpacing: Float): Double = wordSpacing
     .coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING)
     .toDouble()
 
+internal fun readiumEpubParagraphSpacing(paragraphSpacing: Float): Double = paragraphSpacing
+    .coerceIn(DEFAULT_EPUB_PARAGRAPH_SPACING, MAX_EPUB_PARAGRAPH_SPACING)
+    .toDouble()
+
 @OptIn(ExperimentalReadiumApi::class)
 internal fun readiumPreferences(
     theme: EpubReaderTheme,
@@ -352,7 +356,8 @@ internal fun readiumPreferences(
     backgroundTheme: EpubReaderTheme = theme,
     useCustomBackground: Boolean = customBackgroundColor != null,
     useCustomTextColor: Boolean = customTextColor != null,
-    systemDarkMode: Boolean? = null
+    systemDarkMode: Boolean? = null,
+    paragraphSpacing: Float = DEFAULT_EPUB_PARAGRAPH_SPACING
 ): EpubPreferences {
     val activeCustomBackground = customBackgroundColor.takeIf { useCustomBackground }
     val effectiveTheme = activeCustomBackground?.let(::customReaderBackgroundReadiumTheme) ?: backgroundTheme
@@ -378,6 +383,7 @@ internal fun readiumPreferences(
         fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
         lineHeight = readiumEpubLineHeight(lineSpacing),
         wordSpacing = readiumEpubWordSpacing(wordSpacing),
+        paragraphSpacing = readiumEpubParagraphSpacing(paragraphSpacing),
         textAlign = readiumEpubTextAlign(textAlignment),
         hyphens = epubHyphenationActive(textAlignment, hyphenation),
         language = fallbackLanguage?.let(::ReadiumLanguage),
@@ -1545,7 +1551,8 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 readerPreferences.backgroundTheme,
                 readerPreferences.useCustomBackground,
                 readerPreferences.useCustomTextColor,
-                systemDarkMode()
+                systemDarkMode(),
+                readerPreferences.paragraphSpacing
             ),
             paginationListener = paginationListener,
             configuration = EpubNavigatorFragment.Configuration(
@@ -3274,7 +3281,8 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 normalized.backgroundTheme,
                 normalized.useCustomBackground,
                 normalized.useCustomTextColor,
-                systemDarkMode()
+                systemDarkMode(),
+                normalized.paragraphSpacing
             )
         )
         val current = appPreferencesStore.read()

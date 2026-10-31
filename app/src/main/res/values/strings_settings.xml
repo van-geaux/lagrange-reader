@@ -189,6 +189,7 @@
     <string name="settings_remove_custom_font">Remove %1$s</string>
     <string name="settings_line_spacing">Line spacing %1$s</string>
     <string name="settings_word_spacing">Word spacing %1$s</string>
+    <string name="settings_paragraph_spacing">Paragraph spacing %1$s</string>
     <string name="settings_two_page_spread">Two-page spread when unfolded</string>
     <string name="settings_two_page_spread_summary_paginated">On a large screen held horizontally, show two pages side by side</string>
     <string name="settings_two_page_spread_summary_other">Applies to paginated layout on a large screen held horizontally</string>

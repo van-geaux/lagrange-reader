@@ -189,6 +189,7 @@
     <string name="settings_remove_custom_font">移除 %1$s</string>
     <string name="settings_line_spacing">行间距 %1$s</string>
     <string name="settings_word_spacing">词间距 %1$s</string>
+    <string name="settings_paragraph_spacing">段落间距 %1$s</string>
     <string name="settings_two_page_spread">展开时双页显示</string>
     <string name="settings_two_page_spread_summary_paginated">在横向握持的大屏幕上并排显示两页</string>
     <string name="settings_two_page_spread_summary_other">适用于横向握持大屏幕上的分页布局</string>

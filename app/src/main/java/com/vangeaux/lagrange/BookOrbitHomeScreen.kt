@@ -6712,6 +6712,22 @@ internal fun ReaderConfigurationControls(
                 modifier = Modifier.testTag("$testTagPrefix-word-spacing")
             )
         }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                stringResource(
+                    R.string.settings_paragraph_spacing,
+                    formatEpubParagraphSpacing(value.paragraphSpacing)
+                ),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Slider(
+                value = value.paragraphSpacing,
+                onValueChange = { onPreferencesChange(value.copy(paragraphSpacing = it)) },
+                valueRange = DEFAULT_EPUB_PARAGRAPH_SPACING..MAX_EPUB_PARAGRAPH_SPACING,
+                steps = 19,
+                modifier = Modifier.testTag("$testTagPrefix-paragraph-spacing")
+            )
+        }
         EpubTypesettingSettings(value, testTagPrefix, onPreferencesChange)
     }
     if (format != ReaderConfigurationFormat.COMIC) {

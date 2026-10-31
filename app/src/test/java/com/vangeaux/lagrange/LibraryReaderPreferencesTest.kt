@@ -37,6 +37,7 @@ class LibraryReaderPreferencesTest {
             fontScale = 1.3f,
             lineSpacing = 1.4f,
             wordSpacing = 0.4f,
+            paragraphSpacing = 0.7f,
             preferServerProgressOnReopen = true,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
@@ -118,6 +119,7 @@ class LibraryReaderPreferencesTest {
                 fontScale = 2.5f,
                 lineSpacing = 3f,
                 wordSpacing = 2f,
+                paragraphSpacing = 3f,
                 padding = EpubPaddingPercentages(-1f, 101f, 25f, 50f),
                 pdfPageGapDp = -10f,
                 comicPageGapDp = 100f
@@ -128,6 +130,10 @@ class LibraryReaderPreferencesTest {
         assertEquals(MAX_EPUB_FONT_SCALE, initial.readerPreferencesFor("manga").fontScale)
         assertEquals(MAX_EPUB_LINE_SPACING, initial.readerPreferencesFor("manga").lineSpacing)
         assertEquals(MAX_EPUB_WORD_SPACING, initial.readerPreferencesFor("manga").wordSpacing)
+        assertEquals(
+            MAX_EPUB_PARAGRAPH_SPACING,
+            initial.readerPreferencesFor("manga").paragraphSpacing
+        )
         assertEquals(EpubPaddingPercentages(0f, 100f, 25f, 50f), initial.readerPreferencesFor("manga").padding)
         assertEquals(0f, initial.readerPreferencesFor("manga").pdfPageGapDp)
         assertEquals(MAX_READER_PAGE_GAP_DP, initial.readerPreferencesFor("manga").comicPageGapDp)
@@ -149,6 +155,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(EpubReaderFontFamily.PUBLISHER_DEFAULT, decoded.fontFamily)
         assertEquals(DEFAULT_EPUB_LINE_SPACING, decoded.lineSpacing)
         assertEquals(DEFAULT_EPUB_WORD_SPACING, decoded.wordSpacing)
+        assertEquals(DEFAULT_EPUB_PARAGRAPH_SPACING, decoded.paragraphSpacing)
         assertFalse(decoded.preferServerProgressOnReopen)
         assertFalse(decoded.volumeButtonPageNavigation)
     }
@@ -289,6 +296,16 @@ class LibraryReaderPreferencesTest {
         assertEquals(
             MAX_EPUB_WORD_SPACING.toDouble(),
             readiumEpubWordSpacing(2f),
+            0.0001
+        )
+    }
+
+    @Test
+    fun `EPUB paragraph spacing maps to Readium rem spacing and clamps`() {
+        assertEquals(0.7, readiumEpubParagraphSpacing(0.7f), 0.0001)
+        assertEquals(
+            MAX_EPUB_PARAGRAPH_SPACING.toDouble(),
+            readiumEpubParagraphSpacing(3f),
             0.0001
         )
     }

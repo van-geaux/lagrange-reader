@@ -486,10 +486,15 @@ class ReadiumEpubOpenInstrumentedTest {
     @OptIn(ExperimentalReadiumApi::class)
     @Test
     fun mapsExistingAppearanceToReadiumPreferences() {
-        val preferences = readiumPreferences(EpubReaderTheme.Dark, fontScale = 1.2f)
+        val preferences = readiumPreferences(
+            EpubReaderTheme.Dark,
+            fontScale = 1.2f,
+            paragraphSpacing = 0.8f
+        )
 
         assertEquals(Theme.DARK, preferences.theme)
         assertEquals(1.2, requireNotNull(preferences.fontSize), 0.0001)
+        assertEquals(0.8, requireNotNull(preferences.paragraphSpacing), 0.0001)
         assertEquals(0.0, requireNotNull(preferences.pageMargins), 0.0001)
         assertEquals(ColumnCount.ONE, preferences.columnCount)
         assertEquals(false, preferences.scroll)
