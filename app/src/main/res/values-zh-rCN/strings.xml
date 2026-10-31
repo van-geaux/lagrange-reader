@@ -19,6 +19,9 @@
     <string name="common_close">关闭</string>
     <string name="common_cancel">取消</string>
     <string name="common_continue">继续</string>
+    <string name="browse_expected_download_size">预计下载大小：%1$s</string>
+    <string name="browse_expected_download_size_calculating">预计下载大小：计算中…</string>
+    <string name="browse_expected_download_size_unknown">预计下载大小：大小不可用</string>
     <string name="common_sign_in">登录</string>
     <string name="common_change_server">更换服务器</string>
     <string name="common_dismiss_message">关闭提示</string>

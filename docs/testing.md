@@ -56,6 +56,7 @@ On Home, Library, Search, Series, Authors, Genre, and Local books, verify:
 - Local books shows active/failed Downloads rows only when needed;
 - for Komga, Library → Browse shows paginated books from the selected library rather than Series cards, More → Series remains visible while the initial Library catalog is deferred, and tapping a letter represented beyond the first Series page opens the target page without walking through all preceding Series pages;
 - for Kavita, Library → Browse retains its Series-oriented fallback because the provider does not expose a native library book catalog;
+- for series/library bulk downloads, verify the selection sheet uses `Download series` or `Download library` as its primary action, shows the selected file count with the expected aggregate size, and the subsequent confirmation uses `Continue` before dispatch;
 - `Clear` and `Clear all` remove failed state without cancelling active transfers;
 - force-closing during a transfer restores a failed row with `Retry` and `Clear`;
 - a failed first download stays out of Local books;

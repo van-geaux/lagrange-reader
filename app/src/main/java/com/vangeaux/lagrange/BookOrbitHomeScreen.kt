@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -707,10 +708,13 @@ private fun SeriesFileSelectionDialog(
     groupingMode: SeriesGroupingMode,
     onGroupingModeChange: (SeriesGroupingMode) -> Unit,
     selectedFileIds: Set<String>,
+    fileSizes: Map<String, Long?> = emptyMap(),
+    fileSizesLoading: Boolean = false,
     onSelectedFileIdsChange: (Set<String>) -> Unit,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
-    title: String? = null
+    title: String? = null,
+    confirmLabel: Int = R.string.common_continue
 ) {
     val libraryNames = remember(libraries) { libraries.associate { it.id to it.name } }
     val groups = remember(candidates, libraryNames) {
@@ -735,6 +739,7 @@ private fun SeriesFileSelectionDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.9f)
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -751,6 +756,24 @@ private fun SeriesFileSelectionDialog(
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            val selectedBooks = candidates.filter {
+                seriesFileIsSelectable(it) && selectedFileIds.contains(it.fileId)
+            }
+            val knownSizes = selectedBooks.mapNotNull { book ->
+                book.fileId?.let(fileSizes::get)
+            }
+            Text(
+                when {
+                    fileSizesLoading -> stringResource(R.string.browse_expected_download_size_calculating)
+                    knownSizes.size == selectedBooks.size ->
+                        stringResource(
+                            R.string.browse_expected_download_size,
+                            formatByteSize(knownSizes.sumOf { it })
+                        )
+                    else -> stringResource(R.string.browse_expected_download_size_unknown)
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = { onSelectedFileIdsChange(selectableIds) },
@@ -765,7 +788,7 @@ private fun SeriesFileSelectionDialog(
                 SeriesGroupingControls(groupingMode, onGroupingModeChange)
             }
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 groups.forEach { group ->
@@ -818,7 +841,7 @@ private fun SeriesFileSelectionDialog(
                 onClick = onConfirm,
                 enabled = selectedCount > 0,
                 modifier = Modifier.fillMaxWidth().testTag("bulk-download-continue")
-            ) { Text(stringResource(R.string.common_continue)) }
+            ) { Text(stringResource(confirmLabel)) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -2130,6 +2153,7 @@ internal fun NativeLibraryBrowserScreen(
                     } else {
                         { seriesId -> smartScopeSeriesDetailLoader(selectedSmartScope!!.id, seriesId) }
                     },
+                    bookDetailLoader = bookDetailLoader,
                     onBookSelected = { selectedBook = it },
                     onDeleteLocalCopy = requestLocalDelete,
                     onDeleteLocalCopies = onDeleteLocalCopies,
@@ -8299,6 +8323,7 @@ private fun LibraryContentScreen(
     if (showLibraryFileSelection) {
         SeriesFileSelectionDialog(
             title = stringResource(R.string.browse_select_library_downloads),
+            confirmLabel = R.string.browse_download_library,
             candidates = libraryDownloadCandidates,
             libraries = state.libraries,
             groupingMode = SeriesGroupingMode.NONE,
@@ -8349,7 +8374,7 @@ private fun LibraryContentScreen(
                         onBulkDownload?.invoke(libraryDownloadScopeLabel, libraryFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-library-step2")
-                ) { Text(stringResource(R.string.browse_download_library)) }
+                ) { Text(stringResource(R.string.common_continue)) }
             },
             dismissButton = {
                 TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text(stringResource(R.string.common_cancel)) }
@@ -12952,6 +12977,7 @@ private fun SeriesDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (String) -> SeriesDetailInfo?,
+    bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     onBookSelected: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
@@ -13018,6 +13044,8 @@ private fun SeriesDetails(
     var seriesFrozenSelection by remember(seriesKey) { mutableStateOf<List<BookSummary>>(emptyList()) }
     var showSeriesDownloadConfirm by remember(seriesKey) { mutableStateOf(false) }
     var pendingSeriesLocalDeletes by remember(seriesKey) { mutableStateOf<List<BookSummary>?>(null) }
+    var seriesFileSizes by remember(seriesKey) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
+    var seriesFileSizesLoading by remember(seriesKey) { mutableStateOf(false) }
     val seriesLocalCopies = localCopiesForBulkAction(
         books = seriesDownloadCandidates,
         localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
@@ -13037,6 +13065,17 @@ private fun SeriesDetails(
         progressByFileId = downloadState?.downloadProgressByFileId.orEmpty(),
         completedFileIds = seriesLocalCopies.mapNotNullTo(mutableSetOf()) { it.fileId }
     )
+    LaunchedEffect(showSeriesFileSelection, seriesDownloadCandidates) {
+        if (!showSeriesFileSelection) return@LaunchedEffect
+        val candidates = seriesDownloadCandidates.filter { it.fileId != null }
+        seriesFileSizesLoading = candidates.isNotEmpty()
+        seriesFileSizes = candidates.associate { book ->
+            requireNotNull(book.fileId) to runCatching {
+                bookDetailLoader(book)?.totalSizeBytes
+            }.getOrNull()
+        }
+        seriesFileSizesLoading = false
+    }
     if (showSeriesFileSelection) {
         SeriesFileSelectionDialog(
             candidates = seriesDownloadCandidates,
@@ -13044,6 +13083,9 @@ private fun SeriesDetails(
             groupingMode = groupingMode,
             onGroupingModeChange = onGroupingModeChange,
             selectedFileIds = seriesSelectedFileIds,
+            fileSizes = seriesFileSizes,
+            fileSizesLoading = seriesFileSizesLoading,
+            confirmLabel = R.string.browse_download_series,
             onSelectedFileIdsChange = { seriesSelectedFileIds = it },
             onDismissRequest = { showSeriesFileSelection = false },
             onConfirm = {
@@ -13074,7 +13116,7 @@ private fun SeriesDetails(
                         onBulkDownload?.invoke(seriesDownloadScopeLabel, seriesFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-series")
-                ) { Text(stringResource(R.string.browse_download_series)) }
+                ) { Text(stringResource(R.string.common_continue)) }
             },
             dismissButton = {
                 TextButton(onClick = { showSeriesDownloadConfirm = false }) { Text(stringResource(R.string.common_cancel)) }
