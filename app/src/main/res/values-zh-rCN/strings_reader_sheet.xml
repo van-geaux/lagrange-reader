@@ -16,13 +16,12 @@
     <string name="sheet_custom_background_summary">自定义 EPUB 页面背景（RGB）</string>
     <string name="sheet_custom_background_default">默认</string>
     <string name="sheet_custom_background_dialog_title">自定义背景颜色</string>
-    <string name="sheet_custom_background_red">红色 (R)</string>
-    <string name="sheet_custom_background_green">绿色 (G)</string>
-    <string name="sheet_custom_background_blue">蓝色 (B)</string>
+    <string name="sheet_custom_background_hex">十六进制颜色 (#RRGGBB)</string>
+    <string name="sheet_custom_background_wheel_description">用于选择色相和饱和度的色轮</string>
     <string name="sheet_custom_background_preview">预览</string>
     <string name="sheet_custom_background_apply">应用</string>
     <string name="sheet_custom_background_reset">恢复默认</string>
-    <string name="sheet_custom_background_invalid">请输入 0 到 255 之间的数值。</string>
+    <string name="sheet_custom_background_invalid">请输入 6 位十六进制颜色值，例如 #A1B2C3。</string>
     <string name="sheet_text_color">文字颜色</string>
     <string name="sheet_text_color_default">默认</string>
     <string name="sheet_text_color_summary">跟随阅读背景或使用自定义颜色</string>

@@ -130,10 +130,11 @@ Reader chrome (top bar, option sheets, dialogs) intentionally remains on `theme`
 **Reading background** (`backgroundTheme`, custom)
 
 - A preset chip row plus a **Custom** chip.
-- First **Custom** selection with no retained color: opens the RGB dialog immediately.
+- First **Custom** selection with no retained color: opens the color-picker dialog immediately.
 - Applying the dialog activates the custom background and an inline “custom color” row appears
   below the chips.
-- The inline row reopens the RGB dialog for later edits.
+- The inline row reopens the color-picker dialog for later edits. The color wheel supports
+  interactive hue/saturation picking, and a `#RRGGBB` field supports exact color entry.
 - Selecting a preset deactivates custom mode and hides the inline row, but retains the RGB value.
 - Selecting **Custom** again reactivates the retained value without opening the dialog; the inline
   row returns.
@@ -142,20 +143,22 @@ Reader chrome (top bar, option sheets, dialogs) intentionally remains on `theme`
 **Text color**
 
 - Two chips: **Default** and **Custom**.
-- **Custom** with no retained color opens the RGB dialog; applying it activates custom text and
-  shows the inline text-color row.
-- **Custom** with a retained color reactivates it; the inline row can reopen the dialog.
+- **Custom** with no retained color opens the color-picker dialog; applying it activates custom text
+  and shows the inline text-color row.
+- **Custom** with a retained color reactivates it; the inline row can reopen the dialog. The wheel
+  and `#RRGGBB` field edit the text color.
 - **Default** hides the row and uses the resolution rules above; the retained RGB is kept, so
   switching back to Custom restores it.
-- The dialog preview uses the active page background and the default/custom text color.
+- The dialog preview uses the active page background and the default/custom text color. Preview,
+  Reset, Cancel, and Apply remain available in both color dialogs.
 
 ### Settings → Library
 
 Reader options and **Options → Library → reader profile** use shared controls:
 
 - `ReaderAppearanceSettings` — Menu & options and Reading background blocks, including the custom
-  background dialog/state;
-- `ReaderTextColorSettings` — Default/Custom text color and the RGB dialog.
+  background color-picker dialog/state;
+- `ReaderTextColorSettings` — Default/Custom text color and the color-picker dialog.
 
 The Library editor also gained the previously missing volume-page-navigation, page-progress, and
 PDF facing-page controls. Reading direction, tap zones, font size, layout modes, margins, spread,

@@ -16,9 +16,6 @@ import kotlin.math.pow
  * Keep this file free of Android framework dependencies so it can be unit-tested on the JVM.
  */
 
-internal const val CUSTOM_READER_BACKGROUND_MIN_COMPONENT = 0
-internal const val CUSTOM_READER_BACKGROUND_MAX_COMPONENT = 255
-
 /** Text this dark is used on light custom backgrounds (matches the built-in light reader text). */
 internal const val CUSTOM_READER_BACKGROUND_DARK_TEXT_ARGB: Long = 0xFF1F1C17L
 
@@ -31,20 +28,12 @@ internal const val CUSTOM_READER_BACKGROUND_LIGHT_TEXT_ARGB: Long = 0xFFECE4D8L
  */
 internal const val CUSTOM_READER_BACKGROUND_DARK_TEXT_LUMINANCE = 0.1791
 
-internal fun parseRgbComponent(value: String): Int? {
-    val trimmed = value.trim()
-    if (trimmed.isEmpty() || trimmed.length > 3) return null
-    if (trimmed.any { !it.isDigit() }) return null
-    return trimmed.toIntOrNull()
-        ?.takeIf { it in CUSTOM_READER_BACKGROUND_MIN_COMPONENT..CUSTOM_READER_BACKGROUND_MAX_COMPONENT }
-}
-
-/** Composes an opaque ARGB colour from validated RGB components, or null when any is invalid. */
-internal fun customReaderBackgroundColor(red: Int, green: Int, blue: Int): Int? {
-    if (red !in CUSTOM_READER_BACKGROUND_MIN_COMPONENT..CUSTOM_READER_BACKGROUND_MAX_COMPONENT) return null
-    if (green !in CUSTOM_READER_BACKGROUND_MIN_COMPONENT..CUSTOM_READER_BACKGROUND_MAX_COMPONENT) return null
-    if (blue !in CUSTOM_READER_BACKGROUND_MIN_COMPONENT..CUSTOM_READER_BACKGROUND_MAX_COMPONENT) return null
-    return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
+internal fun parseCustomReaderHex(value: String): Int? {
+    val hex = value.trim().removePrefix("#")
+    if (hex.length != 6 || hex.any { it !in '0'..'9' && it !in 'a'..'f' && it !in 'A'..'F' }) {
+        return null
+    }
+    return hex.toIntOrNull(16)?.let { 0xFF000000.toInt() or it }
 }
 
 /** Strips any alpha so stored colours are always opaque RGB. */

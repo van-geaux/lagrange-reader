@@ -7,24 +7,12 @@ import org.junit.Test
 
 class ReaderCustomBackgroundTest {
     @Test
-    fun `parses valid rgb components and rejects malformed values`() {
-        assertEquals(0, parseRgbComponent("0"))
-        assertEquals(255, parseRgbComponent("255"))
-        assertEquals(7, parseRgbComponent(" 7 "))
-        assertNull(parseRgbComponent(""))
-        assertNull(parseRgbComponent("256"))
-        assertNull(parseRgbComponent("-1"))
-        assertNull(parseRgbComponent("12a"))
-        assertNull(parseRgbComponent("1234"))
-    }
-
-    @Test
-    fun `composes an opaque color only when every component is valid`() {
-        assertEquals(0xFFFF0000.toInt(), customReaderBackgroundColor(255, 0, 0))
-        assertEquals(0xFF0A141E.toInt(), customReaderBackgroundColor(10, 20, 30))
-        assertNull(customReaderBackgroundColor(256, 0, 0))
-        assertNull(customReaderBackgroundColor(0, -1, 0))
-        assertNull(customReaderBackgroundColor(0, 0, 300))
+    fun `parses six digit hex colors with or without a hash prefix`() {
+        assertEquals(0xFF0A141E.toInt(), parseCustomReaderHex("#0A141E"))
+        assertEquals(0xFFABCDEF.toInt(), parseCustomReaderHex("abcdef"))
+        assertNull(parseCustomReaderHex("#12345"))
+        assertNull(parseCustomReaderHex("1234567"))
+        assertNull(parseCustomReaderHex("#12G456"))
     }
 
     @Test
