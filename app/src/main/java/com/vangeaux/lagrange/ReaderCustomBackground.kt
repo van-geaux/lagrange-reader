@@ -1,9 +1,11 @@
 package com.vangeaux.lagrange
 
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 
 /**
  * Custom EPUB page background support.
@@ -34,6 +36,52 @@ internal fun parseCustomReaderHex(value: String): Int? {
         return null
     }
     return hex.toIntOrNull(16)?.let { 0xFF000000.toInt() or it }
+}
+
+internal data class ReaderHsvColor(
+    val hue: Float,
+    val saturation: Float,
+    val brightness: Float
+)
+
+internal fun readerColorFromHsv(hue: Float, saturation: Float, brightness: Float): Int {
+    val normalizedHue = ((hue % 360f) + 360f) % 360f
+    val normalizedSaturation = saturation.coerceIn(0f, 1f)
+    val normalizedBrightness = brightness.coerceIn(0f, 1f)
+    val chroma = normalizedBrightness * normalizedSaturation
+    val hueSection = normalizedHue / 60f
+    val secondary = chroma * (1f - abs(hueSection % 2f - 1f))
+    val (red, green, blue) = when (hueSection.toInt()) {
+        0 -> Triple(chroma, secondary, 0f)
+        1 -> Triple(secondary, chroma, 0f)
+        2 -> Triple(0f, chroma, secondary)
+        3 -> Triple(0f, secondary, chroma)
+        4 -> Triple(secondary, 0f, chroma)
+        else -> Triple(chroma, 0f, secondary)
+    }
+    val offset = normalizedBrightness - chroma
+    fun channel(value: Float): Int = ((value + offset) * 255f).roundToInt().coerceIn(0, 255)
+    return (0xFF shl 24) or (channel(red) shl 16) or (channel(green) shl 8) or channel(blue)
+}
+
+internal fun readerColorToHsv(color: Int): ReaderHsvColor {
+    val red = ((color shr 16) and 0xFF) / 255f
+    val green = ((color shr 8) and 0xFF) / 255f
+    val blue = (color and 0xFF) / 255f
+    val maximum = max(red, max(green, blue))
+    val minimum = min(red, min(green, blue))
+    val delta = maximum - minimum
+    val hue = when {
+        delta == 0f -> 0f
+        maximum == red -> 60f * (((green - blue) / delta) % 6f)
+        maximum == green -> 60f * (((blue - red) / delta) + 2f)
+        else -> 60f * (((red - green) / delta) + 4f)
+    }.let { if (it < 0f) it + 360f else it }
+    return ReaderHsvColor(
+        hue = hue,
+        saturation = if (maximum == 0f) 0f else delta / maximum,
+        brightness = maximum
+    )
 }
 
 /** Strips any alpha so stored colours are always opaque RGB. */

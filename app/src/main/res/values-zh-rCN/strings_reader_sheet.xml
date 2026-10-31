@@ -18,6 +18,7 @@
     <string name="sheet_custom_background_dialog_title">自定义背景颜色</string>
     <string name="sheet_custom_background_hex">十六进制颜色 (#RRGGBB)</string>
     <string name="sheet_custom_background_wheel_description">用于选择色相和饱和度的色轮</string>
+    <string name="sheet_custom_background_brightness">亮度</string>
     <string name="sheet_custom_background_preview">预览</string>
     <string name="sheet_custom_background_apply">应用</string>
     <string name="sheet_custom_background_reset">恢复默认</string>

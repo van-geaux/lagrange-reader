@@ -6814,16 +6814,14 @@ private fun ReaderSpreadSettings(
 
 @Composable
 private fun ReaderColorWheel(
-    selectedColor: Int,
+    hue: Float,
+    saturation: Float,
     description: String,
     testTag: String,
-    onColorSelected: (Int) -> Unit
+    onColorSelected: (Float, Float) -> Unit
 ) {
     val wheelSize = remember { mutableStateOf(IntSize.Zero) }
     val currentOnColorSelected by rememberUpdatedState(onColorSelected)
-    val hsv = remember(selectedColor) {
-        FloatArray(3).also { android.graphics.Color.colorToHSV(selectedColor, it) }
-    }
     val hueColors = remember {
         listOf(
             Color.Red,
@@ -6844,19 +6842,16 @@ private fun ReaderColorWheel(
             val dx = position.x - centerX
             val dy = position.y - centerY
             val radius = minOf(width, height) / 2f
-            val saturation = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
-            val hue = ((Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())) + 360.0) % 360.0)
+            val wheelSaturation = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
+            val wheelHue = ((Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())) + 360.0) % 360.0)
                 .toFloat()
-            currentOnColorSelected(
-                android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, 1f))
-            )
+            currentOnColorSelected(wheelHue, wheelSaturation)
         }
     }
 
     Canvas(
         modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
+            .size(308.dp)
             .onSizeChanged { wheelSize.value = it }
             .pointerInput(Unit) {
                 detectTapGestures(onTap = selectColorAt)
@@ -6889,18 +6884,18 @@ private fun ReaderColorWheel(
             radius = radius,
             center = center
         )
-        val angle = Math.toRadians(hsv[0].toDouble())
+        val angle = Math.toRadians(hue.toDouble())
         val indicatorCenter = Offset(
-            center.x + cos(angle).toFloat() * radius * hsv[1],
-            center.y + sin(angle).toFloat() * radius * hsv[1]
+            center.x + cos(angle).toFloat() * radius * saturation,
+            center.y + sin(angle).toFloat() * radius * saturation
         )
-        drawCircle(Color.Black, radius = 11.dp.toPx(), center = indicatorCenter)
-        drawCircle(Color.White, radius = 8.dp.toPx(), center = indicatorCenter)
+        drawCircle(Color.Black, radius = 8.8.dp.toPx(), center = indicatorCenter)
+        drawCircle(Color.White, radius = 6.4.dp.toPx(), center = indicatorCenter)
         drawCircle(
             color = Color.Black,
-            radius = 8.dp.toPx(),
+            radius = 6.4.dp.toPx(),
             center = indicatorCenter,
-            style = Stroke(width = 1.dp.toPx())
+            style = Stroke(width = 0.7.dp.toPx())
         )
     }
 }
@@ -6917,7 +6912,10 @@ private fun ReaderColorPickerDialog(
     previewContent: @Composable (Int?) -> Unit
 ) {
     val startingColor = initialColor ?: 0xFFFFFFFF.toInt()
-    var wheelColor by remember(initialColor) { mutableIntStateOf(startingColor) }
+    val initialHsv = remember(initialColor) { readerColorToHsv(startingColor) }
+    var hue by remember(initialColor) { mutableFloatStateOf(initialHsv.hue) }
+    var saturation by remember(initialColor) { mutableFloatStateOf(initialHsv.saturation) }
+    var brightness by remember(initialColor) { mutableFloatStateOf(initialHsv.brightness) }
     var hexValue by remember(initialColor) {
         mutableStateOf(customReaderBackgroundHex(startingColor))
     }
@@ -6932,15 +6930,47 @@ private fun ReaderColorPickerDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                ReaderColorWheel(
-                    selectedColor = wheelColor,
-                    description = stringResource(R.string.sheet_custom_background_wheel_description),
-                    testTag = wheelTestTag,
-                    onColorSelected = { selected ->
-                        wheelColor = selected
-                        hexValue = customReaderBackgroundHex(selected)
-                    }
-                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ReaderColorWheel(
+                        hue = hue,
+                        saturation = saturation,
+                        description = stringResource(R.string.sheet_custom_background_wheel_description),
+                        testTag = wheelTestTag,
+                        onColorSelected = { selectedHue, selectedSaturation ->
+                            hue = selectedHue
+                            saturation = selectedSaturation
+                            val selected = readerColorFromHsv(hue, saturation, brightness)
+                            hexValue = customReaderBackgroundHex(selected)
+                        }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.sheet_custom_background_brightness),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Slider(
+                        value = brightness,
+                        onValueChange = { selectedBrightness ->
+                            brightness = selectedBrightness
+                            val selected = readerColorFromHsv(hue, saturation, brightness)
+                            hexValue = customReaderBackgroundHex(selected)
+                        },
+                        valueRange = 0f..1f,
+                        steps = 99,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("$wheelTestTag-brightness")
+                    )
+                    Text("${(brightness * 100).roundToInt()}%")
+                }
                 OutlinedTextField(
                     value = hexValue,
                     onValueChange = { entered ->
@@ -6951,7 +6981,12 @@ private fun ReaderColorPickerDialog(
                             .take(6)
                             .uppercase()
                         hexValue = normalized
-                        parseCustomReaderHex(normalized)?.let { wheelColor = it }
+                        parseCustomReaderHex(normalized)?.let { enteredColor ->
+                            val hsv = readerColorToHsv(enteredColor)
+                            hue = hsv.hue
+                            saturation = hsv.saturation
+                            brightness = hsv.brightness
+                        }
                     },
                     label = { Text(stringResource(R.string.sheet_custom_background_hex)) },
                     prefix = { Text("#") },

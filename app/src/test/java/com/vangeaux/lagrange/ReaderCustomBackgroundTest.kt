@@ -16,6 +16,31 @@ class ReaderCustomBackgroundTest {
     }
 
     @Test
+    fun `brightness slider ranges from black to full intensity`() {
+        assertEquals(0xFF000000.toInt(), readerColorFromHsv(0f, 1f, 0f))
+        assertEquals(0xFF800000.toInt(), readerColorFromHsv(0f, 1f, 0.5f))
+        assertEquals(0xFFFF0000.toInt(), readerColorFromHsv(0f, 1f, 1f))
+    }
+
+    @Test
+    fun `brightness changes intensity without changing wheel hue or saturation`() {
+        val color = readerColorFromHsv(210f, 0.8f, 0.5f)
+        val hsv = readerColorToHsv(color)
+
+        assertEquals(210f, hsv.hue, 0.5f)
+        assertEquals(0.8f, hsv.saturation, 0.01f)
+        assertEquals(0.5f, hsv.brightness, 0.01f)
+    }
+
+    @Test
+    fun `hex color entry restores slider brightness`() {
+        val color = requireNotNull(parseCustomReaderHex("#336699"))
+        val hsv = readerColorToHsv(color)
+
+        assertEquals(0.6f, hsv.brightness, 0.01f)
+    }
+
+    @Test
     fun `stored colors are normalized to opaque rgb`() {
         assertEquals(0xFF102030.toInt(), normalizedCustomReaderBackground(0x80102030.toInt()))
         assertEquals(0xFF102030.toInt(), normalizedCustomReaderBackground(0x102030))

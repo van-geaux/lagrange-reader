@@ -134,7 +134,8 @@ Reader chrome (top bar, option sheets, dialogs) intentionally remains on `theme`
 - Applying the dialog activates the custom background and an inline “custom color” row appears
   below the chips.
 - The inline row reopens the color-picker dialog for later edits. The color wheel supports
-  interactive hue/saturation picking, and a `#RRGGBB` field supports exact color entry.
+  interactive hue/saturation picking, a 0–100% brightness slider supports darker or lighter
+  variants, and a `#RRGGBB` field supports exact color entry.
 - Selecting a preset deactivates custom mode and hides the inline row, but retains the RGB value.
 - Selecting **Custom** again reactivates the retained value without opening the dialog; the inline
   row returns.
@@ -146,7 +147,7 @@ Reader chrome (top bar, option sheets, dialogs) intentionally remains on `theme`
 - **Custom** with no retained color opens the color-picker dialog; applying it activates custom text
   and shows the inline text-color row.
 - **Custom** with a retained color reactivates it; the inline row can reopen the dialog. The wheel
-  and `#RRGGBB` field edit the text color.
+  and brightness slider adjust the text color, while the `#RRGGBB` field supports exact entry.
 - **Default** hides the row and uses the resolution rules above; the retained RGB is kept, so
   switching back to Custom restores it.
 - The dialog preview uses the active page background and the default/custom text color. Preview,
