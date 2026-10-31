@@ -29,6 +29,36 @@ import org.json.JSONObject
 
 class HomeShelfTest {
     @Test
+    fun `provider On Deck suppresses stale active and completed books`() {
+        val unread = seriesBook("unread", 1.0, status = BookReadStatus.UNREAD)
+        val wanted = seriesBook("wanted", 2.0, status = BookReadStatus.WANT_TO_READ)
+        val onHold = seriesBook("on-hold", 3.0, status = BookReadStatus.ON_HOLD)
+        val abandoned = seriesBook("abandoned", 4.0, status = BookReadStatus.ABANDONED)
+        val reading = seriesBook("reading", 5.0, status = BookReadStatus.READING)
+        val rereading = seriesBook("rereading", 6.0, status = BookReadStatus.REREADING)
+        val readFlag = seriesBook("read-flag", 7.0, status = BookReadStatus.UNREAD, isRead = true)
+        val readStatus = seriesBook("read-status", 8.0, status = BookReadStatus.READ)
+        val skimmed = seriesBook("skimmed", 9.0, status = BookReadStatus.SKIMMED)
+
+        assertEquals(
+            listOf(unread, wanted, onHold, abandoned),
+            visibleProviderOnDeckBooks(
+                listOf(
+                    unread,
+                    wanted,
+                    onHold,
+                    abandoned,
+                    reading,
+                    rereading,
+                    readFlag,
+                    readStatus,
+                    skimmed
+                )
+            )
+        )
+    }
+
+    @Test
     fun `komga book search uses the native list endpoint and payload`() {
         assertEquals(
             "/api/v1/books/list?page=0&size=100&sort=metadata.title,asc",
