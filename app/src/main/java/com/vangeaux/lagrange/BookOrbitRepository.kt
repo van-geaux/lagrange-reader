@@ -4452,11 +4452,11 @@ internal object BookOrbitPayloadParser {
                     progressPercent
                         ?.takeIf { it > 0f }
                         ?.let { "${formatProgressValue(it)}%" }
-                        ?: readingProgress.progressLabel(mediaKind)
+                        ?: readingProgress.progressLabel()
                 }
                 val progressPositionMs = readingProgress.progressPositionMs()
                     .takeUnless { suppressUnreadReadingActivity }
-                val progressPageIndex = readingProgress.progressPageIndex(mediaKind)
+                val progressPageIndex = readingProgress.progressPageIndex()
                     .takeUnless { suppressUnreadReadingActivity }
                 val lastReadAtMillis = if (suppressUnreadReadingActivity) {
                     null
@@ -5168,7 +5168,7 @@ internal object BookOrbitPayloadParser {
     private fun BookSummary.mergeReaderProgress(progress: JSONObject): BookSummary {
         val percentage = progress.progressPercent()?.let(::normalizeStoredProgressPercent)
         val positionMs = progress.progressPositionMs()
-        val pageIndex = progress.progressPageIndex(mediaKind)
+        val pageIndex = progress.progressPageIndex()
         val label = when {
             percentage != null -> "${formatProgressValue(percentage)}%"
             pageIndex != null -> "Page ${pageIndex + 1}"
@@ -5184,10 +5184,10 @@ internal object BookOrbitPayloadParser {
         )
     }
 
-    private fun JSONObject?.progressLabel(mediaKind: MediaKind? = null): String? {
+    private fun JSONObject?.progressLabel(): String? {
         this ?: return null
         progressPercent()?.let { return "${formatProgressValue(normalizeProgressValue(it))}%" }
-        progressPageIndex(mediaKind)?.let { return "Page ${it + 1}" }
+        progressPageIndex()?.let { return "Page ${it + 1}" }
         progressPositionMs()?.let { return formatDurationLabel(it) }
         opt("currentFileId")?.toString()?.takeIf { it.isNotBlank() }?.let { return "File $it" }
         return null
@@ -5215,18 +5215,14 @@ internal object BookOrbitPayloadParser {
         return (seconds * 1000.0).toLong().coerceAtLeast(0L)
     }
 
-    private fun JSONObject?.progressPageIndex(mediaKind: MediaKind? = null): Int? {
+    private fun JSONObject?.progressPageIndex(): Int? {
         this ?: return null
         val pageNumber = when (val value = opt("pageNumber")) {
             is Number -> value.toInt()
             is String -> value.toIntOrNull()
             else -> null
         } ?: return null
-        return if (mediaKind == MediaKind.EPUB) {
-            (pageNumber - 1).coerceAtLeast(0)
-        } else {
-            pageNumber.coerceAtLeast(0)
-        }
+        return (pageNumber - 1).coerceAtLeast(0)
     }
 
     private fun JSONObject.stringValue(vararg keys: String): String? {

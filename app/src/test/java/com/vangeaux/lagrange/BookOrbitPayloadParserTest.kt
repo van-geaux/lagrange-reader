@@ -678,7 +678,7 @@ class BookOrbitPayloadParserTest {
 
         assertEquals("0.38%", books[0].progressLabel)
         assertEquals(0.375f, books[0].progressPercent)
-        assertEquals("Page 10", books[1].progressLabel)
+        assertEquals("Page 9", books[1].progressLabel)
     }
 
     @Test
@@ -1499,7 +1499,7 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
-    fun `parseReaderProgress preserves upstream zero based pdf page numbers`() {
+    fun `parseReaderProgress converts BookOrbit one based pdf page numbers`() {
         val book = BookSummary(
             libraryId = "lib-progress",
             id = "pdf-progress",
@@ -1513,7 +1513,7 @@ class BookOrbitPayloadParserTest {
             payload = """[{"fileId":"pdf-file","percentage":63.5,"pageNumber":9}]"""
         )
 
-        assertEquals(9, hydrated.progressPageIndex)
+        assertEquals(8, hydrated.progressPageIndex)
     }
 
     @Test(expected = UserFacingException::class)
