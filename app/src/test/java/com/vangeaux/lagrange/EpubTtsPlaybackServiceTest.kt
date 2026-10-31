@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
 import android.support.v4.media.session.PlaybackStateCompat
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -173,6 +175,24 @@ class EpubTtsPlaybackServiceTest {
 
         assertFalse(EpubTtsAccountSession.isCurrent(beforeLogout))
         assertTrue(EpubTtsAccountSession.isCurrent(EpubTtsAccountSession.currentEpoch()))
+    }
+
+    @Test
+    fun `natural TTS completion reports one hundred percent`() {
+        assertEquals(100f, epubTtsProgressPercentForPlaybackState(87.5f, completed = true))
+        assertEquals(87.5f, epubTtsProgressPercentForPlaybackState(87.5f, completed = false))
+    }
+
+    @Test
+    fun `natural TTS completion waits for older progress before its final update`() = runBlocking {
+        val order = mutableListOf<String>()
+        val pending = launch { order += "pending" }
+
+        awaitEpubTtsCompletionProgress(listOf(pending)) {
+            launch { order += "complete" }
+        }
+
+        assertEquals(listOf("pending", "complete"), order)
     }
 
     private infix fun Long.hasAction(action: Long): Boolean = this and action != 0L

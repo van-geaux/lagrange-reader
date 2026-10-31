@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,6 +89,7 @@ internal data class EpubTtsSessionSpec(
     val bookId: String?,
     val fileId: String?,
     val filePath: String,
+    val publicationFingerprint: String? = null,
     val title: String,
     val initialLocator: Locator?,
     val selectionText: String? = null,
@@ -188,6 +190,55 @@ internal fun epubTtsNotificationDetail(
     }
 }
 
+internal fun epubTtsServerProgressPercent(
+    locator: Locator,
+    chapterIndex: Int,
+    chapterCount: Int,
+    positionIndex: EpubContentPositionIndex?
+): Float = epubTtsServerProgressPercent(
+    position = locator.toEpubCanonicalPosition(),
+    chapterIndex = chapterIndex,
+    chapterCount = chapterCount,
+    positionIndex = positionIndex?.canonical
+)
+
+internal fun epubTtsServerProgressPercent(
+    position: EpubCanonicalPosition,
+    chapterIndex: Int,
+    chapterCount: Int,
+    positionIndex: EpubCanonicalPositionIndex?
+): Float {
+    val overall = positionIndex?.let { readiumOverallPosition(position, it) }
+    return readiumOverallPercent(
+        // A live totalProgression is not trustworthy enough for server synchronization. Use the
+        // bounded canonical index when available, otherwise fall back to chapter/resource progress.
+        totalProgression = null,
+        resourceProgression = position.resourceProgression,
+        chapterIndex = chapterIndex,
+        chapterCount = chapterCount,
+        overallPosition = overall
+    )
+}
+
+internal fun epubTtsProgressPercentForPlaybackState(
+    calculatedPercent: Float,
+    completed: Boolean
+): Float = if (completed) 100f else calculatedPercent.coerceIn(0f, 100f)
+
+internal suspend fun awaitEpubTtsCompletionProgress(
+    pendingProgress: List<Job>,
+    queueCompletion: () -> Job?
+) {
+    pendingProgress.joinAll()
+    queueCompletion()?.join()
+}
+
+internal fun boundedEpubTtsServerLocatorJson(locator: Locator): String? =
+    boundedEpubTtsServerLocatorJson(locator.toJSON().toString())
+
+internal fun boundedEpubTtsServerLocatorJson(locatorJson: String?): String? =
+    boundedReaderLocatorJson(locatorJson)
+
 /** Owns EPUB speech independently of any Activity so rotation, lock and screen-off are harmless. */
 internal fun ttsSelectionMatches(
     currentSelector: String?,
@@ -212,6 +263,7 @@ class EpubTtsPlaybackService : Service() {
     private var openingJob: Job? = null
     private var playbackJob: Job? = null
     private var locationJob: Job? = null
+    private var positionIndexJob: Job? = null
     private val progressJobs = java.util.Collections.synchronizedSet(mutableSetOf<Job>())
     private var activeSpec: EpubTtsSessionSpec? = null
     private var preparedOwnerToken: String? = null
@@ -222,6 +274,7 @@ class EpubTtsPlaybackService : Service() {
     private var lastQueuedAtMillis = 0L
     private var lastQueuedPercent: Float? = null
     private var lastQueuedChapter = -1
+    private var contentPositionIndex: EpubContentPositionIndex? = null
     private val playbackWakeLock by lazy {
         (getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -519,10 +572,22 @@ class EpubTtsPlaybackService : Service() {
         }
         promoteToForeground(spec.title, isPlaying = false)
         openingJob = scope.launch {
+            val sourceFile = File(spec.filePath)
+            val verifiedFingerprint = withContext(Dispatchers.IO) {
+                verifiedEpubPublicationFingerprint(sourceFile)
+            }
+            if (
+                verifiedFingerprint == null ||
+                (spec.publicationFingerprint != null &&
+                    spec.publicationFingerprint != verifiedFingerprint)
+            ) {
+                failSession(requestGeneration, EpubTtsFailureKind.GENERIC)
+                return@launch
+            }
             val opened = when (
                 val result = openReadiumEpub(
                     this@EpubTtsPlaybackService,
-                    File(spec.filePath),
+                    sourceFile,
                     ttsImageSettings = spec.settings.images
                 )
             ) {
@@ -531,6 +596,14 @@ class EpubTtsPlaybackService : Service() {
                     failSession(requestGeneration, EpubTtsFailureKind.GENERIC)
                     return@launch
                 }
+            }
+            val fingerprintAfterOpen = withContext(Dispatchers.IO) {
+                verifiedEpubPublicationFingerprint(sourceFile)
+            }
+            if (fingerprintAfterOpen != verifiedFingerprint) {
+                opened.close()
+                failSession(requestGeneration, EpubTtsFailureKind.GENERIC)
+                return@launch
             }
             if (!isSessionCurrent(spec, requestGeneration)) {
                 opened.close()
@@ -585,6 +658,17 @@ class EpubTtsPlaybackService : Service() {
             seekTtsToSelection(created, spec.initialLocator, spec.selectionText)
             publication = opened
             navigator = created
+            positionIndexJob = scope.launch {
+                val index = loadBoundedEpubContentPositionIndex(
+                    context = applicationContext,
+                    sourceFile = sourceFile,
+                    readingOrderHrefs = opened.readingOrder.map { it.url().toString() },
+                    sourceFingerprint = verifiedFingerprint
+                )
+                if (isSessionCurrent(spec, requestGeneration) && publication === opened) {
+                    contentPositionIndex = index
+                }
+            }
             // Language or voice settings changed while preparing only reached activeSpec; the
             // navigator was built from the spec captured at the start, so bring it up to date.
             val current = activeSpec?.takeIf { it.ownerToken == spec.ownerToken } ?: spec
@@ -670,6 +754,25 @@ class EpubTtsPlaybackService : Service() {
                         failSession(requestGeneration, kind)
                     }
                     TtsNavigator.State.Ended -> {
+                        locationJob?.cancelAndJoin()
+                        locationJob = null
+                        val pendingProgress = synchronized(progressJobs) { progressJobs.toList() }
+                        awaitEpubTtsCompletionProgress(pendingProgress) {
+                            if (!isSessionCurrent(spec, requestGeneration)) return@awaitEpubTtsCompletionProgress null
+                            val finalLocator = binder.state.value.locator
+                                ?: active.location.value.utteranceLocator
+                            queueServerProgress(
+                                spec = spec,
+                                openedPublication = openedPublication,
+                                locator = finalLocator,
+                                force = true,
+                                completed = true
+                            )
+                        }
+                        if (!isSessionCurrent(spec, requestGeneration)) {
+                            closeStaleSession(spec)
+                            return@collect
+                        }
                         ReadiumEpubTtsPositionStore(applicationContext).remove(spec.readerKey)
                         closeSession(
                             removeNotification = true,
@@ -730,20 +833,24 @@ class EpubTtsPlaybackService : Service() {
         spec: EpubTtsSessionSpec,
         openedPublication: Publication,
         locator: Locator,
-        force: Boolean = false
-    ) {
-        if (!isSpecCurrent(spec)) return
-        val currentBookId = spec.bookId?.takeIf { it.isNotBlank() } ?: return
-        val currentFileId = spec.fileId?.takeIf { it.isNotBlank() } ?: return
+        force: Boolean = false,
+        completed: Boolean = false
+    ): Job? {
+        if (!isSpecCurrent(spec)) return null
+        val currentBookId = spec.bookId?.takeIf { it.isNotBlank() } ?: return null
+        val currentFileId = spec.fileId?.takeIf { it.isNotBlank() } ?: return null
         val chapter = openedPublication.readingOrder.indexOfFirst { link ->
             link.url().isEquivalent(locator.href.removeFragment())
         }
-        if (chapter < 0) return
-        val percent = readiumOverallPercent(
-            totalProgression = locator.locations.totalProgression,
-            resourceProgression = locator.locations.progression,
-            chapterIndex = chapter,
-            chapterCount = openedPublication.readingOrder.size
+        if (chapter < 0) return null
+        val percent = epubTtsProgressPercentForPlaybackState(
+            calculatedPercent = epubTtsServerProgressPercent(
+                locator = locator,
+                chapterIndex = chapter,
+                chapterCount = openedPublication.readingOrder.size,
+                positionIndex = contentPositionIndex
+            ),
+            completed = completed
         )
         val now = System.currentTimeMillis()
         if (!force && !shouldQueueEpubTtsProgress(
@@ -754,7 +861,7 @@ class EpubTtsPlaybackService : Service() {
                 percent = percent,
                 chapter = chapter
             )
-        ) return
+        ) return null
         lastQueuedAtMillis = now
         lastQueuedPercent = percent
         lastQueuedChapter = chapter
@@ -770,7 +877,7 @@ class EpubTtsPlaybackService : Service() {
                         format = "epub",
                         mediaKind = MediaKind.EPUB,
                         localPath = spec.filePath,
-                        readerLocatorJson = locator.toJSON().toString()
+                        readerLocatorJson = boundedEpubTtsServerLocatorJson(locator)
                     ),
                     position = 0L,
                     pageIndex = chapter,
@@ -784,6 +891,7 @@ class EpubTtsPlaybackService : Service() {
         }
         progressJobs += job
         job.invokeOnCompletion { progressJobs -= job }
+        return job
     }
 
     private fun failSession(requestGeneration: Long, kind: EpubTtsFailureKind) {
@@ -794,12 +902,15 @@ class EpubTtsPlaybackService : Service() {
         playbackJob = null
         locationJob?.cancel()
         locationJob = null
+        positionIndexJob?.cancel()
+        positionIndexJob = null
         val failedNavigator = navigator
         navigator = null
         failedNavigator?.close()
         updatePlaybackWakeLock(isPlaying = false)
         publication?.close()
         publication = null
+        contentPositionIndex = null
         binder.publish {
             it.copy(
                 isPreparing = false,
@@ -866,6 +977,8 @@ class EpubTtsPlaybackService : Service() {
         playbackJob = null
         locationJob?.cancel()
         locationJob = null
+        positionIndexJob?.cancel()
+        positionIndexJob = null
         val pendingProgress = synchronized(progressJobs) { progressJobs.toList() }
         pendingProgress.forEach(Job::cancel)
         val closingNavigator = navigator
@@ -874,6 +987,7 @@ class EpubTtsPlaybackService : Service() {
         updatePlaybackWakeLock(isPlaying = false)
         publication?.close()
         publication = null
+        contentPositionIndex = null
         activeSpec = null
         closingSpec?.let { spec ->
             LocalBookReaderLeaseStore(applicationContext).release(

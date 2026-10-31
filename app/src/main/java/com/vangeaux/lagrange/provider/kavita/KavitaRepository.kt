@@ -103,6 +103,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         } finally {
             clearAccountLocalState(
                 profileId = profileId,
+                readerScope = null,
                 automaticPolicy = automaticPolicy,
                 removeServerUrl = true
             )
@@ -112,6 +113,9 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     override suspend fun clearSession() {
         val serverUrl = runCatching { getServerUrl() }.getOrNull()
         val profileId = runCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val readerScope = runCatching {
+            resolveEpubReaderScope(appContext, serverUrl)
+        }.getOrNull()
         val automaticPolicy = runCatching {
             activeAutomaticDownloadPolicy(profileId, serverUrl)
         }.getOrNull()
@@ -131,6 +135,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
             }
             clearAccountLocalState(
                 profileId = profileId,
+                readerScope = readerScope,
                 automaticPolicy = automaticPolicy,
                 removeServerUrl = false
             )
@@ -139,6 +144,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
 
     private suspend fun clearAccountLocalState(
         profileId: String?,
+        readerScope: EpubReaderScope?,
         automaticPolicy: AutomaticDownloadPolicy?,
         removeServerUrl: Boolean
     ) = withContext(NonCancellable) {
@@ -150,11 +156,13 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
             },
             KavitaCleanupAction("browser snapshot") { browserSnapshotStore.clear() },
             KavitaCleanupAction("home snapshot") { homeSnapshotStore.clear() },
-            KavitaCleanupAction("series catalog snapshot") { seriesSnapshotStore.clear() },
-            KavitaCleanupAction("reader positions") { EpubReaderPositionStore(appContext).clear() },
-            KavitaCleanupAction("locators") { ReadiumEpubLocatorStore(appContext).clear() },
-            KavitaCleanupAction("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
+            KavitaCleanupAction("series catalog snapshot") { seriesSnapshotStore.clear() }
         )
+        readerScope?.let { scope ->
+            actions += KavitaCleanupAction("EPUB resume state") {
+                clearEpubResumeStateForScope(appContext, scope)
+            }
+        }
         profileId?.let { activeProfileId ->
             actions += KavitaCleanupAction("active account scope") {
                 AuthenticatedAccountScopeStore(appContext).deactivate(activeProfileId)
