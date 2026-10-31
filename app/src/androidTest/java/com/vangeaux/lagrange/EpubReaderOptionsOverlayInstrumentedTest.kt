@@ -201,7 +201,9 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
-        composeRule.onNodeWithText("Fonts").assertIsDisplayed()
+        composeRule.onNodeWithText("Fonts")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("reader-options-reading-font-family-dropdown")
             .performScrollTo()
             .performClick()
@@ -218,6 +220,10 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .onNodeWithTag("reader-options-reading-word-spacing")
             .performScrollTo()
             .performTouchInput { swipeRight() }
+        composeRule
+            .onNodeWithTag("reader-options-reading-paragraph-spacing")
+            .performScrollTo()
+            .performTouchInput { swipeRight() }
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, profile.value.fontFamily)
@@ -225,6 +231,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(1.3f, profile.value.fontScale)
             assertTrue(profile.value.lineSpacing > 1.2f)
             assertTrue(profile.value.wordSpacing > 0.2f)
+            assertTrue(profile.value.paragraphSpacing > DEFAULT_EPUB_PARAGRAPH_SPACING)
             assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
             assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
