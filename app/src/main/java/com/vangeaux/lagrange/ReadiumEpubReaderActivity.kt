@@ -957,9 +957,13 @@ internal fun readiumPreferences(
         backgroundColor = ReadiumColor(effectiveBackground),
         textColor = ReadiumColor(effectiveTextColor),
         theme = when (effectiveTheme) {
-            EpubReaderTheme.Light -> ReadiumTheme.LIGHT
-            EpubReaderTheme.Sepia -> ReadiumTheme.SEPIA
-            EpubReaderTheme.Dark, EpubReaderTheme.OledBlack -> ReadiumTheme.DARK
+            EpubReaderTheme.Light, EpubReaderTheme.Fern, EpubReaderTheme.Arctic -> ReadiumTheme.LIGHT
+            EpubReaderTheme.Sepia, EpubReaderTheme.DarkerSepia -> ReadiumTheme.SEPIA
+            EpubReaderTheme.Dark,
+            EpubReaderTheme.Midnight,
+            EpubReaderTheme.AmberNight,
+            EpubReaderTheme.DarkMoss,
+            EpubReaderTheme.OledBlack -> ReadiumTheme.DARK
         },
         fontSize = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE).toDouble(),
         lineHeight = readiumEpubLineHeight(lineSpacing),

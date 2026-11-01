@@ -52,7 +52,12 @@ class EpubOledActivityInstrumentedTest {
         val epub = File(context.cacheDir, "oled-${System.nanoTime()}.epub")
         val readerKey = "oled-epub-${System.nanoTime()}"
         writeEpub(epub)
-        useProfile(LibraryReaderPreferences(theme = EpubReaderTheme.OledBlack))
+        useProfile(
+            LibraryReaderPreferences(
+                theme = EpubReaderTheme.OledBlack,
+                backgroundTheme = EpubReaderTheme.OledBlack
+            )
+        )
         try {
             launchEpub(epub, readerKey).use { scenario ->
                 awaitEpubReady(scenario, readerKey)

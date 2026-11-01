@@ -962,7 +962,10 @@ internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
 )
 
 internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean =
-    this != EpubReaderTheme.Dark && this != EpubReaderTheme.OledBlack
+    isLightCustomReaderBackground(backgroundColor)
+
+internal fun EpubReaderTheme.usesDarkReaderChrome(): Boolean =
+    !isLightCustomReaderBackground(backgroundColor)
 
 internal data class EpubReaderProgressStatus(
     val completionPercent: Float,
@@ -1641,7 +1644,7 @@ internal fun ReaderLightweightChrome(
     val colors = remember(theme) {
         if (theme.isOled()) {
             oledReaderColorScheme()
-        } else if (theme == EpubReaderTheme.Dark) {
+        } else if (theme.usesDarkReaderChrome()) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -2024,6 +2027,33 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
         surfaceVariant = 0xFFE4D4B9.toInt(),
         outline = 0xFF796A57.toInt()
     )
+    EpubReaderTheme.DarkerSepia -> EpubReaderOptionsPalette(
+        container = 0xFFE6CEA9.toInt(),
+        content = 0xFF2E2014.toInt(),
+        mutedContent = 0xFF6B553D.toInt(),
+        accent = 0xFF704214.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFD6BC94.toInt(),
+        outline = 0xFF62513B.toInt()
+    )
+    EpubReaderTheme.Fern -> EpubReaderOptionsPalette(
+        container = 0xFFDFF0E0.toInt(),
+        content = 0xFF0F2A14.toInt(),
+        mutedContent = 0xFF3E5A42.toInt(),
+        accent = 0xFF286A36.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFC9E2CC.toInt(),
+        outline = 0xFF48694D.toInt()
+    )
+    EpubReaderTheme.Arctic -> EpubReaderOptionsPalette(
+        container = 0xFFE8F0F8.toInt(),
+        content = 0xFF0D1B2A.toInt(),
+        mutedContent = 0xFF40556B.toInt(),
+        accent = 0xFF2457A6.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFD5E1EE.toInt(),
+        outline = 0xFF52677D.toInt()
+    )
     EpubReaderTheme.Dark -> EpubReaderOptionsPalette(
         container = 0xFF181512.toInt(),
         content = 0xFFECE4D8.toInt(),
@@ -2032,6 +2062,33 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
         onAccent = 0xFF10284D.toInt(),
         surfaceVariant = 0xFF2B2723.toInt(),
         outline = 0xFF8B8175.toInt()
+    )
+    EpubReaderTheme.Midnight -> EpubReaderOptionsPalette(
+        container = 0xFF121C33.toInt(),
+        content = 0xFFE2E8F0.toInt(),
+        mutedContent = 0xFFADB9CA.toInt(),
+        accent = 0xFF9CC4FF.toInt(),
+        onAccent = 0xFF10284D.toInt(),
+        surfaceVariant = 0xFF202D48.toInt(),
+        outline = 0xFF8492A8.toInt()
+    )
+    EpubReaderTheme.AmberNight -> EpubReaderOptionsPalette(
+        container = 0xFF14100A.toInt(),
+        content = 0xFFFAD08A.toInt(),
+        mutedContent = 0xFFD2B57B.toInt(),
+        accent = 0xFFFAD08A.toInt(),
+        onAccent = 0xFF14100A.toInt(),
+        surfaceVariant = 0xFF2B2418.toInt(),
+        outline = 0xFFA8946C.toInt()
+    )
+    EpubReaderTheme.DarkMoss -> EpubReaderOptionsPalette(
+        container = 0xFF0A1A0A.toInt(),
+        content = 0xFF90C090.toInt(),
+        mutedContent = 0xFF9ABD9A.toInt(),
+        accent = 0xFFA8D98A.toInt(),
+        onAccent = 0xFF102410.toInt(),
+        surfaceVariant = 0xFF172B17.toInt(),
+        outline = 0xFF75A075.toInt()
     )
     EpubReaderTheme.OledBlack -> EpubReaderOptionsPalette(
         container = OLED_BLACK_ARGB,
@@ -2066,7 +2123,7 @@ internal fun EpubReaderOptionsBottomSheet(
         val palette = preferences.theme.readerOptionsPalette()
         if (preferences.theme.isOled()) {
             oledReaderColorScheme()
-        } else if (preferences.theme == EpubReaderTheme.Dark) {
+        } else if (preferences.theme.usesDarkReaderChrome()) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -3028,12 +3085,17 @@ private const val EPUB_READER_BRIDGE = "BookOrbitReader"
 internal val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,
+    EpubReaderTheme.DarkerSepia,
+    EpubReaderTheme.Fern,
+    EpubReaderTheme.Arctic,
     EpubReaderTheme.Dark,
+    EpubReaderTheme.Midnight,
+    EpubReaderTheme.AmberNight,
+    EpubReaderTheme.DarkMoss,
     EpubReaderTheme.OledBlack
 )
 
 enum class EpubReaderTheme(
-    val label: String,
     @StringRes val labelRes: Int,
     val backgroundColor: Int,
     val backgroundCss: String,
@@ -3041,7 +3103,6 @@ enum class EpubReaderTheme(
     val linkCss: String
 ) {
     Light(
-        label = "Light",
         labelRes = R.string.label_theme_light,
         backgroundColor = 0xFFF7F4EE.toInt(),
         backgroundCss = "#F7F4EE",
@@ -3049,23 +3110,62 @@ enum class EpubReaderTheme(
         linkCss = "#2457A6"
     ),
     Sepia(
-        label = "Sepia",
         labelRes = R.string.label_theme_sepia,
         backgroundColor = 0xFFF1E6D2.toInt(),
         backgroundCss = "#F1E6D2",
         foregroundCss = "#3B2E1E",
         linkCss = "#7A4B00"
     ),
+    DarkerSepia(
+        labelRes = R.string.label_theme_darker_sepia,
+        backgroundColor = 0xFFE6CEA9.toInt(),
+        backgroundCss = "#E6CEA9",
+        foregroundCss = "#2E2014",
+        linkCss = "#704214"
+    ),
+    Fern(
+        labelRes = R.string.label_theme_fern,
+        backgroundColor = 0xFFDFF0E0.toInt(),
+        backgroundCss = "#DFF0E0",
+        foregroundCss = "#0F2A14",
+        linkCss = "#286A36"
+    ),
+    Arctic(
+        labelRes = R.string.label_theme_arctic,
+        backgroundColor = 0xFFE8F0F8.toInt(),
+        backgroundCss = "#E8F0F8",
+        foregroundCss = "#0D1B2A",
+        linkCss = "#2457A6"
+    ),
     Dark(
-        label = "Dark",
         labelRes = R.string.label_theme_dark,
         backgroundColor = 0xFF181512.toInt(),
         backgroundCss = "#181512",
         foregroundCss = "#ECE4D8",
         linkCss = "#8DB5FF"
     ),
+    Midnight(
+        labelRes = R.string.label_theme_midnight,
+        backgroundColor = 0xFF121C33.toInt(),
+        backgroundCss = "#121C33",
+        foregroundCss = "#E2E8F0",
+        linkCss = "#9CC4FF"
+    ),
+    AmberNight(
+        labelRes = R.string.label_theme_amber_night,
+        backgroundColor = 0xFF14100A.toInt(),
+        backgroundCss = "#14100A",
+        foregroundCss = "#FAD08A",
+        linkCss = "#FAD08A"
+    ),
+    DarkMoss(
+        labelRes = R.string.label_theme_dark_moss,
+        backgroundColor = 0xFF0A1A0A.toInt(),
+        backgroundCss = "#0A1A0A",
+        foregroundCss = "#90C090",
+        linkCss = "#A8D98A"
+    ),
     OledBlack(
-        label = "OLED black",
         labelRes = R.string.label_theme_oled_black,
         backgroundColor = 0xFF000000.toInt(),
         backgroundCss = "#000000",

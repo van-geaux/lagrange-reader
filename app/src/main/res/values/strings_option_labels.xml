@@ -3,7 +3,13 @@
     <!-- Reader theme labels -->
     <string name="label_theme_light">Light</string>
     <string name="label_theme_sepia">Sepia</string>
+    <string name="label_theme_darker_sepia">Darker Sepia</string>
+    <string name="label_theme_fern">Fern</string>
+    <string name="label_theme_arctic">Arctic</string>
     <string name="label_theme_dark">Dark</string>
+    <string name="label_theme_midnight">Midnight</string>
+    <string name="label_theme_amber_night">Amber Night</string>
+    <string name="label_theme_dark_moss">Dark Moss</string>
     <string name="label_theme_oled_black">OLED black</string>
 
     <!-- Reading direction -->
