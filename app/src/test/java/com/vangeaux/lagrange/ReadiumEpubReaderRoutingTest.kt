@@ -204,6 +204,39 @@ class ReadiumEpubReaderRoutingTest {
         assertFalse(shouldOpenEpubImageViewer(""))
     }
 
+
+    @Test
+    fun continuousChapterTransitionCommitsOnlyWhenTheIndicatorIsFull() {
+        assertFalse(shouldCommitContinuousChapterTransition(0.99f))
+        assertFalse(shouldCommitContinuousChapterTransition(1f, 74L))
+        assertTrue(shouldCommitContinuousChapterTransition(1f))
+        assertTrue(shouldCommitContinuousChapterTransition(1f, 75L))
+        assertTrue(shouldCommitContinuousChapterTransition(1.2f))
+    }
+
+    @Test
+    fun continuousScrollBlocksOnlyHorizontalSwipeNavigation() {
+        assertTrue(continuousScrollBlocksHorizontalSwipe(ReaderLayoutMode.CONTINUOUS))
+        assertFalse(continuousScrollBlocksHorizontalSwipe(ReaderLayoutMode.PAGINATED))
+    }
+
+    @Test
+    fun continuousBoundaryBridgeIsInstalledOnlyForContinuousLayout() {
+        val paginated = epubCurrentDocumentInstallScript("gesture", continuousScroll = false)
+        val continuous = epubCurrentDocumentInstallScript("gesture", continuousScroll = true)
+
+        assertFalse(paginated.contains(EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER))
+        assertTrue(continuous.contains(EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER))
+        assertTrue(continuous.contains("event.preventDefault()"))
+        assertTrue(continuous.contains("clientX - state.startX"))
+        assertTrue(continuous.contains("state.direction = 'previous'"))
+        assertTrue(continuous.contains("const atTop"))
+        assertTrue(continuous.contains("state.armedAt"))
+        assertTrue(continuous.contains("armedDurationMillis"))
+
+        assertTrue(continuous.contains("pull: state.pull"))
+    }
+
     @Test
     fun noIndexProgressIgnoresUntrustedReadiumTotalAndUsesChapterResourceFallback() {
         assertEquals(

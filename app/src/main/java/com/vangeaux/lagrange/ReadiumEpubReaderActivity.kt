@@ -46,6 +46,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +58,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -1635,10 +1643,162 @@ internal fun readiumEpubImageColorOverrideScript(): String = """
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
+internal const val EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER =
+    "bookorbit-continuous-chapter-boundary"
+private const val EPUB_CONTINUOUS_CHAPTER_BOUNDARY_PROBE_SCRIPT =
+    "(function(){const k='__bookorbitContinuousChapterBoundary';const v=window[k]||null;window[k]=null;return v;})()"
+
+internal const val CONTINUOUS_CHAPTER_PULL_THRESHOLD_PX = 160f
+internal const val CONTINUOUS_CHAPTER_TRANSITION_MIN_DWELL_MILLIS = 75L
+
+
+internal fun continuousScrollBlocksHorizontalSwipe(layoutMode: ReaderLayoutMode): Boolean =
+    layoutMode == ReaderLayoutMode.CONTINUOUS
+
+private class ContinuousScrollReaderContainer(context: Context) : FrameLayout(context) {
+    var blockHorizontalSwipe = false
+    private var horizontalGestureIntercepted = false
+    private var downX = 0f
+    private var downY = 0f
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                horizontalGestureIntercepted = false
+                downX = event.x
+                downY = event.y
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!horizontalGestureIntercepted && blockHorizontalSwipe) {
+                    val deltaX = event.x - downX
+                    val deltaY = event.y - downY
+                    if (kotlin.math.abs(deltaX) > touchSlop && kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY)) {
+                        horizontalGestureIntercepted = true
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val intercepted = horizontalGestureIntercepted
+                horizontalGestureIntercepted = false
+                return intercepted
+            }
+        }
+        return horizontalGestureIntercepted
+    }
+}
+
+internal fun shouldCommitContinuousChapterTransition(progress: Float): Boolean = progress >= 1f
+internal fun shouldCommitContinuousChapterTransition(
+    progress: Float,
+    armedDurationMillis: Long
+): Boolean = progress >= 1f && armedDurationMillis >= CONTINUOUS_CHAPTER_TRANSITION_MIN_DWELL_MILLIS
+
+internal fun epubContinuousChapterBoundaryGestureScript(): String = """
+    (function() {
+      const marker = '$EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER';
+      const stateKey = '__bookorbitContinuousChapterBoundaryState';
+      const eventKey = '__bookorbitContinuousChapterBoundary';
+      const threshold = $CONTINUOUS_CHAPTER_PULL_THRESHOLD_PX;
+      const state = window[stateKey] || { installed: false };
+      state.enabled = true;
+      if (state.installed) return marker;
+      state.installed = true;
+      state.active = false;
+      state.startX = 0;
+      state.startY = 0;
+      state.pull = 0;
+      state.direction = null;
+      state.armedAt = null;
+
+      window[stateKey] = state;
+      const atBottom = () => {
+        const root = document.scrollingElement || document.documentElement;
+        return root.scrollTop + window.innerHeight >= root.scrollHeight - 2;
+      };
+      const atTop = () => {
+        const root = document.scrollingElement || document.documentElement;
+        return root.scrollTop <= 2;
+      };
+      const publish = (phase) => {
+        const armedDurationMillis = state.armedAt === null
+          ? 0
+          : Math.max(0, performance.now() - state.armedAt);
+        window[eventKey] = JSON.stringify({
+          marker,
+          phase,
+          direction: state.direction,
+          progress: Math.min(1, Math.max(0, state.pull / threshold)),
+          pull: state.pull,
+          armedDurationMillis
+        });
+      };
+      document.addEventListener('touchstart', (event) => {
+        if (!state.enabled) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+        state.active = false;
+        state.direction = null;
+        state.startX = touch.clientX;
+        state.startY = touch.clientY;
+        state.pull = 0;
+        state.armedAt = null;
+
+      }, { passive: true });
+      document.addEventListener('touchmove', (event) => {
+        if (!state.enabled) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+        const deltaX = touch.clientX - state.startX;
+        const deltaY = touch.clientY - state.startY;
+        if (Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+          event.preventDefault();
+          return;
+        }
+        const pull = state.startY - touch.clientY;
+        const downwardPull = touch.clientY - state.startY;
+        if (!state.active && pull > 8 && atBottom()) {
+          state.active = true;
+          state.direction = 'next';
+        } else if (!state.active && downwardPull > 8 && atTop()) {
+          state.active = true;
+          state.direction = 'previous';
+        }
+        if (!state.active) return;
+        const directedPull = state.direction === 'previous' ? downwardPull : pull;
+        state.pull = Math.max(state.pull, directedPull);
+        if (state.pull >= threshold && state.armedAt === null) state.armedAt = performance.now();
+        publish('progress');
+        event.preventDefault();
+      }, { passive: false });
+      document.addEventListener('touchend', () => {
+        if (!state.enabled) return;
+        if (!state.active) return;
+        publish('release');
+        state.active = false;
+        state.direction = null;
+        state.pull = 0;
+        state.armedAt = null;
+
+      }, { passive: true });
+      document.addEventListener('touchcancel', () => {
+        if (!state.enabled) return;
+        if (!state.active) return;
+        publish('cancel');
+        state.active = false;
+        state.direction = null;
+        state.pull = 0;
+        state.armedAt = null;
+
+      }, { passive: true });
+      return marker;
+    })();
+""".trimIndent()
 
 internal fun epubCurrentDocumentInstallScript(
     gestureScript: String,
-    oledText: Boolean = false
+    oledText: Boolean = false,
+    continuousScroll: Boolean? = null
 ): String = buildString {
     append(readiumEpubImageColorOverrideScript())
     if (oledText) {
@@ -1647,22 +1807,65 @@ internal fun epubCurrentDocumentInstallScript(
     }
     append("\n")
     append(gestureScript)
+    if (continuousScroll == true) {
+        append("\n")
+        append(epubContinuousChapterBoundaryGestureScript())
+    } else if (continuousScroll == false) {
+        append("\nwindow.__bookorbitContinuousChapterBoundaryState && " +
+            "(window.__bookorbitContinuousChapterBoundaryState.enabled = false);")
+    }
 }
 
 internal suspend fun runEpubCurrentDocumentBridgeLoop(
     installScript: () -> String,
     evaluateJavascript: suspend (String) -> String?,
     onGesture: (String) -> Unit,
-    pollIntervalMillis: Long = 250L
+    onBoundaryGesture: ((String) -> Unit)? = null,
+    pollIntervalMillis: Long = 16L,
+    installIntervalMillis: Long = 250L
 ) {
+    var lastInstallAt = Long.MIN_VALUE
     while (currentCoroutineContext().isActive) {
-        runCatching { evaluateJavascript(installScript()) }
+        val now = SystemClock.elapsedRealtime()
+        if (lastInstallAt == Long.MIN_VALUE || now - lastInstallAt >= installIntervalMillis) {
+            runCatching { evaluateJavascript(installScript()) }
+            lastInstallAt = now
+        }
         val event = runCatching {
             evaluateJavascript(EPUB_IMAGE_GESTURE_PROBE_SCRIPT)
                 ?.let(::decodeJavascriptString)
         }.getOrNull()
         if (event != null) onGesture(event)
+        val boundaryEvent = onBoundaryGesture?.let {
+            runCatching {
+                evaluateJavascript(EPUB_CONTINUOUS_CHAPTER_BOUNDARY_PROBE_SCRIPT)
+                    ?.let(::decodeJavascriptString)
+            }.getOrNull()
+        }
+        if (boundaryEvent != null) onBoundaryGesture(boundaryEvent)
         delay(pollIntervalMillis)
+    }
+}
+
+@Composable
+internal fun ContinuousChapterTransitionProgress(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val progressDescription = stringResource(R.string.epub_continuous_chapter_loading)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = { progress.coerceIn(0f, 1f) },
+            modifier = Modifier
+                .testTag("epub-continuous-chapter-progress")
+                .semantics { contentDescription = progressDescription },
+            color = androidx.compose.ui.graphics.Color.White
+        )
     }
 }
 
@@ -1962,6 +2165,8 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
+    private lateinit var continuousChapterProgressView: ComposeView
+
     private lateinit var tapZoneTutorialView: ComposeView
     private lateinit var mediaOverlayView: ComposeView
     private lateinit var ttsView: ComposeView
@@ -2014,6 +2219,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var currentRenderedOverallPosition by mutableStateOf<EpubOverallPosition?>(null)
     private var latestReaderLocator: Locator? = null
     private var renderedEndPosition: EpubCanonicalPosition? = null
+    private var pendingContinuousPreviousChapterEndHref: String? = null
     private var persistedPositionIdentity: EpubReaderPosition? = null
     private var lastCanonicalPosition: EpubReaderPosition? = null
     private val passiveRecoveryGuard = EpubPassiveRecoveryGuard()
@@ -2033,6 +2239,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var readingSessionEnded = false
     private var readerExitPlaybackClosed = false
     private var epubImageGestureJob: Job? = null
+    private var continuousChapterTransitionProgress by mutableStateOf(0f)
+    private var continuousChapterTransitionActive by mutableStateOf(false)
+
     private var epubImageViewer by mutableStateOf<Pair<Int, Bitmap>?>(null)
     private lateinit var mediaOverlayPlayback: EpubMediaOverlayPlaybackViewModel
     private var mediaOverlayPlaylist by mutableStateOf(emptyList<EpubMediaOverlayClip>())
@@ -2449,8 +2658,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        readerContainer = FrameLayout(this).apply {
+        readerContainer = ContinuousScrollReaderContainer(this).apply {
             id = readerContainerId
+            blockHorizontalSwipe = continuousScrollBlocksHorizontalSwipe(epubLayoutMode)
             setBackgroundColor(readerContentBackgroundColor(readerPreferences))
         }
         readerViewport.addView(
@@ -2491,6 +2701,28 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 )
             )
         }
+        continuousChapterProgressView = ComposeView(this).apply {
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            setContent {
+                EpubReaderMaterialTheme(selectedTheme) {
+                    if (continuousChapterTransitionActive) {
+                        ContinuousChapterTransitionProgress(
+                            progress = continuousChapterTransitionProgress,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+        }
+        readerViewport.addView(
+            continuousChapterProgressView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(96),
+                Gravity.BOTTOM
+            )
+        )
         footerView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
@@ -2968,6 +3200,14 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 fragment.currentLocator.collect { locator ->
                     if (rendererHealthConfirmed) {
                         recordVisualLocator(locator)
+                        pendingContinuousPreviousChapterEndHref?.let { targetHref ->
+                            if (targetHref == locator.href.removeFragment().toString()) {
+                                pendingContinuousPreviousChapterEndHref = null
+                                val endLocator = locator.copyWithLocations(progression = 1.0)
+                                expectSemanticReaderMovement(endLocator)
+                                if (!fragment.go(endLocator)) cancelExpectedReaderMovement()
+                            }
+                        }
                         pendingAnnotationReanchor?.let { target ->
                             pendingAnnotationReanchor = null
                             if (locator != target) {
@@ -3949,20 +4189,88 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
         // OLED in-page styling is fixed per navigator: switching into or out of OLED recreates.
-        val installScript = epubCurrentDocumentInstallScript(
-            gestureScript,
-            oledText = selectedTheme.isOled()
-        )
+        val installScript = {
+            epubCurrentDocumentInstallScript(
+                gestureScript,
+                oledText = selectedTheme.isOled(),
+                continuousScroll = epubLayoutMode == ReaderLayoutMode.CONTINUOUS
+            )
+        }
         epubImageGestureJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 runEpubCurrentDocumentBridgeLoop(
                     installScript = {
-                        installScript + "\n" + epubDocumentLanguageScript(bookLanguageOverride)
+                        installScript() + "\n" + epubDocumentLanguageScript(bookLanguageOverride)
                     },
                     evaluateJavascript = fragment::evaluateJavascript,
-                    onGesture = { event -> handleEpubImageGesture(fragment, event) }
+                    onGesture = { event -> handleEpubImageGesture(fragment, event) },
+                    onBoundaryGesture = { event -> handleContinuousChapterBoundaryGesture(event) }
                 )
             }
+        }
+    }
+
+    private fun handleContinuousChapterBoundaryGesture(event: String) {
+        if (epubLayoutMode != ReaderLayoutMode.CONTINUOUS || isPreview) {
+            return
+        }
+        val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
+        if (payload.optString("marker") != EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER) return
+        val phase = payload.optString("phase")
+        val direction = payload.optString("direction", "next")
+        val progress = payload.optDouble("progress", 0.0).toFloat()
+        val pullDistance = payload.optDouble("pull", 0.0).toFloat()
+        val armedDurationMillis = payload.optLong("armedDurationMillis", 0L)
+
+        when (phase) {
+            "progress" -> {
+                continuousChapterTransitionProgress = progress.coerceIn(0f, 1f)
+                continuousChapterTransitionActive = true
+                val pullOffset = pullDistance.coerceIn(
+                    0f,
+                    CONTINUOUS_CHAPTER_PULL_THRESHOLD_PX
+                ) * 0.75f
+                readerContainer.translationY = if (direction == "previous") pullOffset else -pullOffset
+                (continuousChapterProgressView.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                    params.gravity = if (direction == "previous") Gravity.TOP else Gravity.BOTTOM
+                    continuousChapterProgressView.layoutParams = params
+                }
+                continuousChapterProgressView.visibility = View.VISIBLE
+                continuousChapterProgressView.bringToFront()
+            }
+            "release" -> {
+                if (shouldCommitContinuousChapterTransition(progress, armedDurationMillis)) {
+                    advanceContinuousChapter(direction)
+                } else {
+                    resetContinuousChapterTransition()
+                }
+            }
+            "cancel" -> resetContinuousChapterTransition()
+        }
+    }
+
+    private fun advanceContinuousChapter(direction: String) {
+        val openedPublication = publication
+        val activeNavigator = navigator
+        val chapterOffset = if (direction == "previous") -1 else 1
+        val targetLink = openedPublication?.readingOrder?.getOrNull(currentChapter + chapterOffset)
+        if (openedPublication == null || activeNavigator == null || targetLink == null) {
+            resetContinuousChapterTransition()
+            return
+        }
+        pendingContinuousPreviousChapterEndHref = targetLink.url().toString().takeIf { direction == "previous" }
+        resetContinuousChapterTransition()
+        expectPageOrChapterReaderMovement()
+        endForegroundSync()
+        if (!activeNavigator.go(targetLink)) cancelExpectedReaderMovement()
+    }
+
+    private fun resetContinuousChapterTransition() {
+        continuousChapterTransitionProgress = 0f
+        continuousChapterTransitionActive = false
+        if (::readerContainer.isInitialized) readerContainer.translationY = 0f
+        if (::continuousChapterProgressView.isInitialized) {
+            continuousChapterProgressView.visibility = View.GONE
         }
     }
 
@@ -4935,6 +5243,8 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         fontScale = normalized.fontScale
         readingDirection = normalized.readingDirection
         epubLayoutMode = normalized.epubLayoutMode
+        (readerContainer as? ContinuousScrollReaderContainer)?.blockHorizontalSwipe =
+            continuousScrollBlocksHorizontalSwipe(epubLayoutMode)
         // Paginated preference submission can reflow Readium, but changing appearance is not reading.
         beginPassiveRendererRecovery()
         syncProgressFooter()

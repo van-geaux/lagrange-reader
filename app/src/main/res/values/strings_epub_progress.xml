@@ -8,6 +8,7 @@
     <string name="chrome_progress_a11y_continuous_summary">Book completion %1$d percent; chapter %2$d of %3$d; %4$s</string>
     <string name="chrome_progress_a11y_continuous_summary_without_overall">Book completion %1$d percent; chapter %2$d of %3$d</string>
     <string name="epub_reader_preparing">Preparing EPUB reader…</string>
+    <string name="epub_continuous_chapter_loading">Loading next chapter</string>
     <string name="epub_open_error_file_changed">The EPUB file changed while it was being opened. Please try again.</string>
     <string name="epub_renderer_start_failed">The EPUB renderer did not start. Close and reopen the book. If this keeps happening, restart the device.</string>
     <string name="epub_progress_save_failed">The latest reading position could not be saved. Please try closing the reader again.</string>
