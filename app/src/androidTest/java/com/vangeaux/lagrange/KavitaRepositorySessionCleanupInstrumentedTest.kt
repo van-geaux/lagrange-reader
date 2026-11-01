@@ -7,7 +7,9 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,10 +22,11 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().context
     private val profileId = "profile-kavita-cleanup-${System.nanoTime()}"
     private val serverUrl = "https://kavita-cleanup-${System.nanoTime()}.example"
-    private val readerKey = "kavita-cleanup-reader-${System.nanoTime()}"
+    private lateinit var readerKey: String
     private val bookId = "cleanup-book"
     private val fileId = "cleanup-file"
     private lateinit var repository: KavitaRepository
+    private lateinit var scope: EpubReaderScope
 
     @Before
     fun setUp() = runBlocking<Unit> {
@@ -37,10 +40,20 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
         repository = KavitaRepository(context)
         repository.setServerUrl(serverUrl)
         repository.setSelectedLibraryId("library-1")
-        AuthenticatedAccountScopeStore(context).writeAuthoritative(
+        val accountScope = AuthenticatedAccountScopeStore(context).writeAuthoritative(
             profileId = profileId,
             providerId = PROVIDER_KAVITA,
             principal = "id:cleanup-user"
+        )
+        scope = EpubReaderScope(serverUrl, profileId, PROVIDER_KAVITA, accountScope)
+        readerKey = epubReaderPersistenceKey(
+            profileId = profileId,
+            providerId = PROVIDER_KAVITA,
+            accountScope = accountScope,
+            serverUrl = serverUrl,
+            bookId = bookId,
+            fileId = fileId,
+            publicationFingerprint = "cleanup-fingerprint"
         )
         seedAccountOwnedState()
     }
@@ -70,11 +83,16 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
     }
 
     @Test
-    fun clearServerPurgesAccountOwnedStateButKeepsProfileLanguageChoice() = runBlocking<Unit> {
+    fun clearServerPreservesScopedResumeForProfileSwitch() = runBlocking<Unit> {
         repository.clearServer()
 
         assertNull(repository.getServerUrl())
-        assertAccountOwnedStateCleared()
+        assertNull(repository.getSelectedLibraryId())
+        assertNull(BrowserSnapshotStore(context).read(serverUrl))
+        assertTrue(EpubReaderPositionStore(context).readAll(scope).isNotEmpty())
+        assertNotNull(ReadiumEpubLocatorStore(context).read(readerKey))
+        assertNotNull(ReadiumEpubTtsPositionStore(context).read(readerKey))
+        assertNull(AuthenticatedAccountScopeStore(context).read(profileId))
         assertEquals("de", EpubBookLanguageStore(context, profileId).read(readerKey))
     }
 
@@ -84,7 +102,7 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
             selectedLibraryId = "library-1",
             libraries = listOf(LibrarySummary("library-1", "Private library"))
         )
-        EpubReaderPositionStore(context).save(
+        assertTrue(EpubReaderPositionStore(context).importIfAbsent(
             EpubReaderPosition(
                 serverUrl = serverUrl,
                 bookId = bookId,
@@ -92,9 +110,13 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
                 chapterIndex = 1,
                 pageIndex = 2,
                 pageCount = 3,
-                updatedAtMillis = 123L
+                updatedAtMillis = 123L,
+                profileId = profileId,
+                providerId = PROVIDER_KAVITA,
+                accountScope = scope.accountScope,
+                publicationFingerprint = "cleanup-fingerprint"
             )
-        )
+        ))
         val locator = requireNotNull(
             Locator.fromJSON(
                 JSONObject(
@@ -106,10 +128,7 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
         ReadiumEpubTtsPositionStore(context).save(readerKey, locator)
         EpubBookLanguageStore(context, profileId).save(readerKey, "de")
 
-        assertEquals(
-            2,
-            EpubReaderPositionStore(context).read(serverUrl, bookId, fileId)?.pageIndex
-        )
+        assertTrue(EpubReaderPositionStore(context).readAll(scope).isNotEmpty())
         assertEquals("library-1", repository.getSelectedLibraryId())
         assertEquals("de", EpubBookLanguageStore(context, profileId).read(readerKey))
     }
@@ -117,7 +136,7 @@ class KavitaRepositorySessionCleanupInstrumentedTest {
     private suspend fun assertAccountOwnedStateCleared() {
         assertNull(repository.getSelectedLibraryId())
         assertNull(BrowserSnapshotStore(context).read(serverUrl))
-        assertNull(EpubReaderPositionStore(context).read(serverUrl, bookId, fileId))
+        assertTrue(EpubReaderPositionStore(context).readAll(scope).isEmpty())
         assertNull(ReadiumEpubLocatorStore(context).read(readerKey))
         assertNull(ReadiumEpubTtsPositionStore(context).read(readerKey))
         assertNull(AuthenticatedAccountScopeStore(context).read(profileId))

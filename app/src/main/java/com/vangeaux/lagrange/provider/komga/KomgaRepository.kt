@@ -123,7 +123,6 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             authModule.clearRuntimeSession()
             browserSnapshotStore.clear()
         } finally {
-            clearUnscopedEpubResumeState()
             profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
             pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
         }
@@ -131,6 +130,9 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
 
     override suspend fun clearSession() {
         val profileId = komgaRunCatching { ServerProfileStore(appContext).activeId() }.getOrNull()
+        val readerScope = komgaRunCatching {
+            resolveEpubReaderScope(appContext, getServerUrl())
+        }.getOrNull()
         val automaticPolicy = komgaRunCatching { activeAutomaticDownloadPolicy(profileId) }.getOrNull()
         try {
             // Per-book languages are kept per profile across profile switches; sign-out forgets them.
@@ -138,16 +140,17 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             authModule.clearSession()
             browserSnapshotStore.clear()
         } finally {
-            clearUnscopedEpubResumeState()
+            clearScopedEpubResumeState(readerScope)
             profileId?.let { AuthenticatedAccountScopeStore(appContext).deactivate(it) }
             pauseAutomaticDownloadsForInactiveProfile(automaticPolicy)
         }
     }
 
-    private suspend fun clearUnscopedEpubResumeState() {
-        bestEffortResumeCleanup("reader positions") { EpubReaderPositionStore(appContext).clear() }
-        bestEffortResumeCleanup("locators") { ReadiumEpubLocatorStore(appContext).clear() }
-        bestEffortResumeCleanup("TTS positions") { ReadiumEpubTtsPositionStore(appContext).clear() }
+    private suspend fun clearScopedEpubResumeState(scope: EpubReaderScope?) {
+        if (scope == null) return
+        bestEffortResumeCleanup("resume state") {
+            clearEpubResumeStateForScope(appContext, scope)
+        }
     }
 
     private suspend fun bestEffortResumeCleanup(
@@ -159,7 +162,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w("KomgaRepository", "Unable to clear unscoped EPUB $name", error)
+            Log.w("KomgaRepository", "Unable to clear scoped EPUB $name", error)
         }
     }
 

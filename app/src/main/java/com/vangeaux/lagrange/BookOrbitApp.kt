@@ -119,6 +119,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -156,6 +157,7 @@ import org.json.JSONTokener
 import java.io.File
 import java.net.URI
 import java.util.Locale
+import java.util.UUID
 import java.util.zip.ZipFile
 import kotlin.math.roundToInt
 
@@ -769,12 +771,56 @@ private fun ReaderScreen(
         if (readerFile == null || !readerFile.exists()) {
             ReaderMessage(stringResource(R.string.shell_reader_epub_unpreparable))
         } else {
-            ReadiumEpubReaderLauncher(
+            val context = LocalContext.current
+            val activeProfile = remember(readerFile, state.book.id, state.book.fileId) {
+                ServerProfileStore(context).active()
+            }
+            val accountScope = activeProfile?.id?.let { AuthenticatedAccountScopeStore(context).read(it) }
+            val readerAccountScope = remember(activeProfile?.id, accountScope) {
+                accountScope ?: "unresolved-${UUID.randomUUID()}"
+            }
+            val persistenceScope = activeProfile?.let { profile ->
+                accountScope?.let { account ->
+                    EpubReaderScope(
+                        serverUrl = normalizeServerUrl(profile.serverUrl) ?: profile.serverUrl,
+                        profileId = profile.id,
+                        providerId = profile.providerId,
+                        accountScope = account
+                    )
+                }
+            }
+            val publicationFingerprint by produceState<String?>(
+                initialValue = null,
+                readerFile.absolutePath,
+                readerFile.length(),
+                readerFile.lastModified()
+            ) {
+                value = withContext(Dispatchers.IO) {
+                    runCatching { epubPublicationFingerprint(readerFile) }.getOrDefault("")
+                }
+            }
+            val unavailableFingerprint = remember(readerFile.absolutePath) {
+                "unavailable-${UUID.randomUUID()}"
+            }
+            val resolvedFingerprint = publicationFingerprint
+            if (resolvedFingerprint == null) {
+                ReaderMessage(stringResource(R.string.epub_reader_preparing))
+            } else ReadiumEpubReaderLauncher(
                 file = readerFile,
                 fileId = state.book.fileId,
                 bookId = state.book.id,
                 title = state.book.title,
-                readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+                readerKey = epubReaderPersistenceKey(
+                    profile = activeProfile,
+                    accountScope = readerAccountScope,
+                    bookId = state.book.id,
+                    fileId = state.book.fileId,
+                    file = readerFile,
+                    publicationFingerprint = resolvedFingerprint.takeIf(String::isNotBlank)
+                        ?: unavailableFingerprint
+                ),
+                publicationFingerprint = resolvedFingerprint.takeIf(String::isNotBlank),
+                persistenceScope = persistenceScope.takeIf { resolvedFingerprint.isNotBlank() },
                 libraryId = state.book.libraryId,
                 launchMode = state.launchMode,
                 initialChapter = if (isPreview) 0 else state.pageIndex,
@@ -924,8 +970,9 @@ internal data class EpubReaderProgressStatus(
     val chapterCount: Int,
     val chapterPageNumber: Int,
     val chapterPageCount: Int,
-    val bookPageNumber: Int?,
-    val bookPageCount: Int?
+    val overallPositionNumber: Int?,
+    val overallPositionCount: Int?,
+    val layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED
 )
 
 internal fun epubReaderProgressStatus(
@@ -933,56 +980,88 @@ internal fun epubReaderProgressStatus(
     chapterCount: Int,
     pageIndex: Int,
     pageCount: Int,
-    chapterPageCounts: List<Int>? = null
+    completionPercent: Float = 0f,
+    overallPositionNumber: Int? = null,
+    overallPositionCount: Int? = null,
+    layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED
 ): EpubReaderProgressStatus {
     val safeChapterCount = chapterCount.coerceAtLeast(1)
     val safeChapterIndex = chapterIndex.coerceIn(0, safeChapterCount - 1)
     val safePageCount = pageCount.coerceAtLeast(1)
     val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
-    val measuredPageCounts = chapterPageCounts
-        ?.takeIf { it.size == safeChapterCount }
-        ?.map { it.coerceAtLeast(1) }
-        ?.toMutableList()
-        ?.also { it[safeChapterIndex] = safePageCount }
-    val bookPageCount = measuredPageCounts?.sum()
-    val bookPageNumber = measuredPageCounts?.let { counts ->
-        (counts.take(safeChapterIndex).sum() + safePageIndex + 1)
-            .coerceIn(1, bookPageCount ?: 1)
-    }
-    val chapterProgress = (safePageIndex + 1f) / safePageCount
-    val bookProgress = if (bookPageNumber != null && bookPageCount != null) {
-        bookPageNumber.toFloat() / bookPageCount
-    } else {
-        (safeChapterIndex + chapterProgress) / safeChapterCount
-    }.coerceIn(0f, 1f)
+    val safeOverallCount = overallPositionCount?.takeIf { it > 0 }
+    val safeOverallNumber = overallPositionNumber
+        ?.takeIf { safeOverallCount != null }
+        ?.coerceIn(1, requireNotNull(safeOverallCount))
     return EpubReaderProgressStatus(
-        completionPercent = bookProgress * 100f,
+        completionPercent = completionPercent.takeIf { it.isFinite() }?.coerceIn(0f, 100f) ?: 0f,
         chapterNumber = safeChapterIndex + 1,
         chapterCount = safeChapterCount,
         chapterPageNumber = safePageIndex + 1,
         chapterPageCount = safePageCount,
-        bookPageNumber = bookPageNumber,
-        bookPageCount = bookPageCount
+        overallPositionNumber = safeOverallNumber,
+        overallPositionCount = safeOverallCount,
+        layoutMode = layoutMode
     )
 }
 
-internal fun EpubReaderProgressStatus.displayText(): String =
-    "${completionPercent.roundToInt()}% · Chapter $chapterNumber/$chapterCount · " +
-        "Page $chapterPageNumber/$chapterPageCount · " +
-        if (bookPageNumber != null && bookPageCount != null) {
-            "Book $bookPageNumber/$bookPageCount"
-        } else {
-            "Book pages calculating…"
-        }
+internal fun epubReaderPersistenceKey(
+    profile: ServerProfile?,
+    accountScope: String?,
+    bookId: String,
+    fileId: String?,
+    file: File,
+    publicationFingerprint: String = epubPublicationFingerprint(file)
+): String = epubReaderPersistenceKey(
+    profileId = profile?.id.orEmpty(),
+    providerId = profile?.providerId.orEmpty(),
+    accountScope = accountScope.orEmpty(),
+    serverUrl = profile?.serverUrl.orEmpty(),
+    bookId = bookId,
+    fileId = fileId,
+    publicationFingerprint = publicationFingerprint
+)
 
-internal fun EpubReaderProgressStatus.accessibilityText(): String =
-    "Book completion ${completionPercent.roundToInt()} percent; chapter $chapterNumber of $chapterCount; " +
-        "chapter page $chapterPageNumber of $chapterPageCount; " +
-        if (bookPageNumber != null && bookPageCount != null) {
-            "book page $bookPageNumber of $bookPageCount"
-        } else {
-            "whole-book pages are calculating"
-        }
+internal fun epubReaderPersistenceKey(
+    profileId: String,
+    providerId: String,
+    accountScope: String,
+    serverUrl: String,
+    bookId: String,
+    fileId: String?,
+    publicationFingerprint: String
+): String = epubReaderPersistenceScopePrefix(
+    profileId = profileId,
+    providerId = providerId,
+    accountScope = accountScope,
+    serverUrl = serverUrl
+) + unambiguousPersistenceKey(
+    bookId,
+    fileId.orEmpty(),
+    publicationFingerprint
+)
+
+internal fun EpubReaderProgressStatus.displayText(): String = buildList {
+    add("${completionPercent.roundToInt()}%")
+    add("Chapter $chapterNumber/$chapterCount")
+    if (layoutMode == ReaderLayoutMode.PAGINATED) {
+        add("Page $chapterPageNumber/$chapterPageCount")
+    }
+    if (overallPositionNumber != null && overallPositionCount != null) {
+        add("Overall $overallPositionNumber/$overallPositionCount")
+    }
+}.joinToString(" · ")
+
+internal fun EpubReaderProgressStatus.accessibilityText(): String = buildList {
+    add("Book completion ${completionPercent.roundToInt()} percent")
+    add("chapter $chapterNumber of $chapterCount")
+    if (layoutMode == ReaderLayoutMode.PAGINATED) {
+        add("chapter page $chapterPageNumber of $chapterPageCount")
+    }
+    if (overallPositionNumber != null && overallPositionCount != null) {
+        add("overall page $overallPositionNumber of $overallPositionCount")
+    }
+}.joinToString("; ")
 
 @Composable
 private fun AudioReader(
@@ -1094,42 +1173,93 @@ internal fun EpubReaderProgressFooter(
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            val bookPages = if (status.bookPageNumber != null && status.bookPageCount != null) {
+            val overallPosition = if (
+                status.overallPositionNumber != null && status.overallPositionCount != null
+            ) {
                 stringResource(
                     R.string.chrome_progress_book_pages,
-                    status.bookPageNumber,
-                    status.bookPageCount
+                    status.overallPositionNumber,
+                    status.overallPositionCount
                 )
             } else {
-                stringResource(R.string.chrome_progress_book_pages_calculating)
+                null
             }
-            val bookPagesAccessibility = if (status.bookPageNumber != null && status.bookPageCount != null) {
+            val overallPositionAccessibility = if (
+                status.overallPositionNumber != null && status.overallPositionCount != null
+            ) {
                 stringResource(
                     R.string.chrome_progress_a11y_book_pages,
-                    status.bookPageNumber,
-                    status.bookPageCount
+                    status.overallPositionNumber,
+                    status.overallPositionCount
                 )
             } else {
-                stringResource(R.string.chrome_progress_a11y_book_pages_calculating)
+                null
             }
-            val displayText = stringResource(
-                R.string.chrome_progress_summary,
-                status.completionPercent.roundToInt(),
-                status.chapterNumber,
-                status.chapterCount,
-                status.chapterPageNumber,
-                status.chapterPageCount,
-                bookPages
-            )
-            val accessibilityText = stringResource(
-                R.string.chrome_progress_a11y_summary,
-                status.completionPercent.roundToInt(),
-                status.chapterNumber,
-                status.chapterCount,
-                status.chapterPageNumber,
-                status.chapterPageCount,
-                bookPagesAccessibility
-            )
+            val paginated = status.layoutMode == ReaderLayoutMode.PAGINATED
+            val displayText = when {
+                paginated && overallPosition != null -> stringResource(
+                    R.string.chrome_progress_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount,
+                    overallPosition
+                )
+                paginated -> stringResource(
+                    R.string.chrome_progress_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount
+                )
+                overallPosition != null -> stringResource(
+                    R.string.chrome_progress_continuous_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    overallPosition
+                )
+                else -> stringResource(
+                    R.string.chrome_progress_continuous_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount
+                )
+            }
+            val accessibilityText = when {
+                paginated && overallPositionAccessibility != null -> stringResource(
+                    R.string.chrome_progress_a11y_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount,
+                    overallPositionAccessibility
+                )
+                paginated -> stringResource(
+                    R.string.chrome_progress_a11y_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount
+                )
+                overallPositionAccessibility != null -> stringResource(
+                    R.string.chrome_progress_a11y_continuous_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    overallPositionAccessibility
+                )
+                else -> stringResource(
+                    R.string.chrome_progress_a11y_continuous_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount
+                )
+            }
             Text(
                 text = displayText,
                 modifier = Modifier.semantics {

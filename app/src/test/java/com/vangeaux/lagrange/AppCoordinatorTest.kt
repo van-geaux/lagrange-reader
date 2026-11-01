@@ -1,6 +1,8 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.core.ActiveReaderSession
 import com.vangeaux.lagrange.core.ProviderSessionModule
+import com.vangeaux.lagrange.core.ReaderLifecycleModule
 import com.vangeaux.lagrange.provider.resolveProviderHomeShelfModule
 import java.io.File
 import java.io.IOException
@@ -2908,6 +2910,55 @@ class AppCoordinatorTest {
         assertFalse(reset.isRead)
         assertEquals(0, browser.browserState.debugPendingProgressCount)
         assertTrue(browser.browserState.message.orEmpty().contains("reset its progress"))
+    }
+
+    @Test
+    fun `removing currently reading clears provider neutral EPUB position`() = runTest {
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            pendingProgressCountResult = 0
+        )
+        val cleared = mutableListOf<Pair<String, BookSummary>>()
+        val lifecycle = object : ReaderLifecycleModule {
+            override suspend fun saveActiveReader(
+                serverUrl: String,
+                book: BookSummary,
+                launchMode: ReaderLaunchMode
+            ) = Unit
+
+            override suspend fun clearActiveReader() = Unit
+
+            override suspend fun readActiveReaderSession(serverUrl: String): ActiveReaderSession? = null
+
+            override suspend fun saveEpubReaderPosition(serverUrl: String, book: BookSummary) = Unit
+
+            override suspend fun clearEpubReaderPosition(serverUrl: String, book: BookSummary) {
+                cleared += serverUrl to book
+            }
+
+            override suspend fun restoreEpubReaderPosition(
+                serverUrl: String,
+                state: ReaderState
+            ): ReaderState = state
+        }
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            readerLifecycleModule = lifecycle
+        )
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(book)
+            )
+        )
+
+        coordinator.removeFromCurrentlyReading(book)
+        advanceUntilIdle()
+
+        assertEquals(listOf(serverUrl to book), cleared)
     }
 
     @Test

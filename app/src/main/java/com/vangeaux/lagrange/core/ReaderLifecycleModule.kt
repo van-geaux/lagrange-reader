@@ -35,5 +35,7 @@ interface ReaderLifecycleModule {
 
     suspend fun saveEpubReaderPosition(serverUrl: String, book: BookSummary)
 
+    suspend fun clearEpubReaderPosition(serverUrl: String, book: BookSummary) = Unit
+
     suspend fun restoreEpubReaderPosition(serverUrl: String, state: ReaderState): ReaderState
 }

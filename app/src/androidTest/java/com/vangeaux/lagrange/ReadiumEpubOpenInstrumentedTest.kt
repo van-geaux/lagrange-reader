@@ -364,6 +364,26 @@ class ReadiumEpubOpenInstrumentedTest {
     }
 
     @Test
+    fun oversizedInitialLocatorIsNotPlacedInReaderIntent() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val oversized = "x".repeat(MAX_SAVED_READER_LOCATOR_BYTES + 1)
+        val intent = ReadiumEpubReaderActivity.createIntent(
+            context = context,
+            file = File(context.cacheDir, "readium-oversized-locator.epub"),
+            title = "Oversized locator",
+            readerKey = "oversized-locator",
+            launchMode = ReaderLaunchMode.NORMAL,
+            initialChapter = 0,
+            initialPage = 0,
+            initialLocatorJson = oversized
+        )
+
+        assertTrue(
+            intent.extras?.keySet()?.none { key -> intent.extras?.get(key) == oversized } == true
+        )
+    }
+
+    @Test
     fun opensEpubWithBitmapOnlySvgCover() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val epub = File(context.cacheDir, "readium-svg-cover.epub")
@@ -379,7 +399,10 @@ class ReadiumEpubOpenInstrumentedTest {
             val locator = requireNotNull(publication.locatorFromLink(publication.readingOrder.first()))
                 .copyWithLocations(progression = 0.4, totalProgression = 0.4)
             val locatorKey = "instrumented-${System.nanoTime()}"
-            ReadiumEpubLocatorStore(context).save(locatorKey, locator)
+            context.getSharedPreferences("readium_epub_locations", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString(locatorKey, locator.toJSON().toString())
+                .commit()
             assertEquals(locator, ReadiumEpubLocatorStore(context).read(locatorKey))
             val cover = requireNotNull(publication.cover())
             assertTrue(cover.width > 0)
@@ -823,17 +846,19 @@ class ReadiumEpubOpenInstrumentedTest {
 
     private fun awaitEpubLocator(
         scenario: ActivityScenario<ReadiumEpubReaderActivity>,
-        context: android.content.Context,
-        readerKey: String
+        @Suppress("UNUSED_PARAMETER") context: android.content.Context,
+        @Suppress("UNUSED_PARAMETER") readerKey: String
     ): org.readium.r2.shared.publication.Locator {
         repeat(40) {
             var ready = false
+            var current: org.readium.r2.shared.publication.Locator? = null
             scenario.onActivity { activity ->
-                ready = activity.supportFragmentManager
-                    .findFragmentByTag("readium_epub_navigator") is EpubNavigatorFragment
+                val navigator = activity.supportFragmentManager
+                    .findFragmentByTag("readium_epub_navigator") as? EpubNavigatorFragment
+                ready = navigator != null
+                current = navigator?.currentLocator?.value
             }
-            val locator = ReadiumEpubLocatorStore(context).read(readerKey)
-            if (ready && locator != null) return locator
+            if (ready && current != null) return requireNotNull(current)
             SystemClock.sleep(250)
         }
         error("EPUB navigator and locator did not become ready")

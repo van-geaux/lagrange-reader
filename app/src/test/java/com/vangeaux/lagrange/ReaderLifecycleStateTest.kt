@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,9 +40,60 @@ class ReaderLifecycleStateTest {
     }
 
     @Test
+    fun `saved locator JSON is capped before entering instance state`() {
+        assertEquals("{}", boundedReaderLocatorJson("{}"))
+        assertEquals(null, boundedReaderLocatorJson("x".repeat(MAX_SAVED_READER_LOCATOR_BYTES + 1)))
+    }
+
+    @Test
     fun `configuration stop does not pause the reading session`() {
         assertFalse(shouldPauseReadingSession(isChangingConfigurations = true))
         assertTrue(shouldPauseReadingSession(isChangingConfigurations = false))
+    }
+
+    @Test
+    fun `canonical position with null locator clears stale active locator`() {
+        val book = BookSummary(
+            libraryId = "library",
+            id = "book",
+            fileId = null,
+            title = "Book",
+            mediaKind = MediaKind.EPUB,
+            progressPercent = 25f,
+            progressPageIndex = 1,
+            readerPageIndex = 2,
+            readerPageCount = 8,
+            readerLocatorJson = "{\"href\":\"stale.xhtml\"}"
+        )
+        val state = ReaderState(
+            book = book,
+            pageIndex = 1,
+            readerPageIndex = 2,
+            initialLocatorJson = "{\"href\":\"older.xhtml\"}"
+        )
+        val canonical = EpubReaderPosition(
+            serverUrl = "https://example.test",
+            bookId = book.id,
+            fileId = null,
+            chapterIndex = 4,
+            pageIndex = 5,
+            pageCount = 9,
+            updatedAtMillis = 1L,
+            locatorJson = null,
+            progressPercent = 60f
+        )
+
+        val restored = applyCanonicalEpubReaderPosition(state, canonical)
+
+        assertNull(restored.initialLocatorJson)
+        assertNull(restored.book.readerLocatorJson)
+        assertEquals(4, restored.pageIndex)
+        assertEquals(4, restored.book.progressPageIndex)
+        assertEquals(5, restored.readerPageIndex)
+        assertEquals(5, restored.book.readerPageIndex)
+        assertEquals(9, restored.book.readerPageCount)
+        assertEquals(60f, restored.progressPercent)
+        assertEquals(60f, restored.book.progressPercent)
     }
 
     @Test

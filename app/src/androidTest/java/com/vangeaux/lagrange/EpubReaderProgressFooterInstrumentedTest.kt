@@ -12,13 +12,15 @@ class EpubReaderProgressFooterInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun footerShowsCompletionChapterPageAndLayoutDerivedBookPages() {
+    fun footerShowsCompletionChapterPageAndStableOverallPosition() {
         val status = epubReaderProgressStatus(
             chapterIndex = 2,
             chapterCount = 10,
             pageIndex = 3,
             pageCount = 12,
-            chapterPageCounts = List(10) { 12 }
+            completionPercent = 22.689f,
+            overallPositionNumber = 28,
+            overallPositionCount = 120
         )
 
         composeRule.setContent {
@@ -31,12 +33,12 @@ class EpubReaderProgressFooterInstrumentedTest {
         }
 
         composeRule
-            .onNodeWithText("23% · Chapter 3/10 · Page 4/12 · Book 28/120")
+            .onNodeWithText("23% · Chapter 3/10 · Page 4/12 · Overall 28/120")
             .assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription(
                 "Book completion 23 percent; chapter 3 of 10; chapter page 4 of 12; " +
-                    "book page 28 of 120"
+                    "overall page 28 of 120"
             )
             .assertIsDisplayed()
     }
