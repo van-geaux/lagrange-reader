@@ -6,6 +6,16 @@ import org.junit.Test
 
 class EpubReaderOptionsPaletteTest {
     @Test
+    fun `new preset themes use their requested foreground and background colors`() {
+        assertThemeColors(EpubReaderTheme.DarkerSepia, "#2E2014", "#E6CEA9")
+        assertThemeColors(EpubReaderTheme.Fern, "#0F2A14", "#DFF0E0")
+        assertThemeColors(EpubReaderTheme.Arctic, "#0D1B2A", "#E8F0F8")
+        assertThemeColors(EpubReaderTheme.Midnight, "#E2E8F0", "#121C33")
+        assertThemeColors(EpubReaderTheme.AmberNight, "#FAD08A", "#14100A")
+        assertThemeColors(EpubReaderTheme.DarkMoss, "#90C090", "#0A1A0A")
+    }
+
+    @Test
     fun `reader option palettes keep text and actions readable in every theme`() {
         EpubReaderTheme.values().forEach { theme ->
             val palette = theme.readerOptionsPalette()
@@ -36,6 +46,11 @@ class EpubReaderOptionsPaletteTest {
             "${theme.label} $role contrast was $ratio",
             ratio >= MINIMUM_NORMAL_TEXT_CONTRAST
         )
+    }
+
+    private fun assertThemeColors(theme: EpubReaderTheme, foreground: String, background: String) {
+        assertEquals(foreground, theme.foregroundCss)
+        assertEquals(background, theme.backgroundCss)
     }
 
     private fun contrastRatio(first: Int, second: Int): Double {

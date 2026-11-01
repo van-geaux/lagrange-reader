@@ -26,13 +26,26 @@ internal class EpubReaderThemeStore(context: Context) {
 internal fun epubReaderThemeStorageValue(theme: EpubReaderTheme): String = when (theme) {
     EpubReaderTheme.Light -> "light"
     EpubReaderTheme.Sepia -> "sepia"
+    EpubReaderTheme.DarkerSepia -> "darker_sepia"
+    EpubReaderTheme.Fern -> "fern"
+    EpubReaderTheme.Arctic -> "arctic"
     EpubReaderTheme.Dark -> "dark"
+    EpubReaderTheme.Midnight -> "midnight"
+    EpubReaderTheme.AmberNight -> "amber_night"
+    EpubReaderTheme.DarkMoss -> "dark_moss"
     EpubReaderTheme.OledBlack -> "oled_black"
 }
 
 internal fun epubReaderThemeFromStorage(value: String?): EpubReaderTheme = when (value?.trim()?.lowercase()) {
     "light" -> EpubReaderTheme.Light
+    "darker_sepia" -> EpubReaderTheme.DarkerSepia
+    "fern" -> EpubReaderTheme.Fern
+    "arctic" -> EpubReaderTheme.Arctic
     "dark" -> EpubReaderTheme.Dark
+    "midnight" -> EpubReaderTheme.Midnight
+    "amber_night" -> EpubReaderTheme.AmberNight
+    "dark_moss" -> EpubReaderTheme.DarkMoss
     "oled_black" -> EpubReaderTheme.OledBlack
+    "sepia" -> EpubReaderTheme.Sepia
     else -> EpubReaderTheme.Sepia
 }
