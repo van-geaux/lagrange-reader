@@ -2966,7 +2966,6 @@ internal val EPUB_THEME_OPTIONS = listOf(
 )
 
 enum class EpubReaderTheme(
-    val label: String,
     @StringRes val labelRes: Int,
     val backgroundColor: Int,
     val backgroundCss: String,
@@ -2974,7 +2973,6 @@ enum class EpubReaderTheme(
     val linkCss: String
 ) {
     Light(
-        label = "Light",
         labelRes = R.string.label_theme_light,
         backgroundColor = 0xFFF7F4EE.toInt(),
         backgroundCss = "#F7F4EE",
@@ -2982,7 +2980,6 @@ enum class EpubReaderTheme(
         linkCss = "#2457A6"
     ),
     Sepia(
-        label = "Sepia",
         labelRes = R.string.label_theme_sepia,
         backgroundColor = 0xFFF1E6D2.toInt(),
         backgroundCss = "#F1E6D2",
@@ -2990,7 +2987,6 @@ enum class EpubReaderTheme(
         linkCss = "#7A4B00"
     ),
     DarkerSepia(
-        label = "Darker Sepia",
         labelRes = R.string.label_theme_darker_sepia,
         backgroundColor = 0xFFE6CEA9.toInt(),
         backgroundCss = "#E6CEA9",
@@ -2998,7 +2994,6 @@ enum class EpubReaderTheme(
         linkCss = "#704214"
     ),
     Fern(
-        label = "Fern",
         labelRes = R.string.label_theme_fern,
         backgroundColor = 0xFFDFF0E0.toInt(),
         backgroundCss = "#DFF0E0",
@@ -3006,7 +3001,6 @@ enum class EpubReaderTheme(
         linkCss = "#286A36"
     ),
     Arctic(
-        label = "Arctic",
         labelRes = R.string.label_theme_arctic,
         backgroundColor = 0xFFE8F0F8.toInt(),
         backgroundCss = "#E8F0F8",
@@ -3014,7 +3008,6 @@ enum class EpubReaderTheme(
         linkCss = "#2457A6"
     ),
     Dark(
-        label = "Dark",
         labelRes = R.string.label_theme_dark,
         backgroundColor = 0xFF181512.toInt(),
         backgroundCss = "#181512",
@@ -3022,7 +3015,6 @@ enum class EpubReaderTheme(
         linkCss = "#8DB5FF"
     ),
     Midnight(
-        label = "Midnight",
         labelRes = R.string.label_theme_midnight,
         backgroundColor = 0xFF121C33.toInt(),
         backgroundCss = "#121C33",
@@ -3030,7 +3022,6 @@ enum class EpubReaderTheme(
         linkCss = "#9CC4FF"
     ),
     AmberNight(
-        label = "Amber Night",
         labelRes = R.string.label_theme_amber_night,
         backgroundColor = 0xFF14100A.toInt(),
         backgroundCss = "#14100A",
@@ -3038,7 +3029,6 @@ enum class EpubReaderTheme(
         linkCss = "#FAD08A"
     ),
     DarkMoss(
-        label = "Dark Moss",
         labelRes = R.string.label_theme_dark_moss,
         backgroundColor = 0xFF0A1A0A.toInt(),
         backgroundCss = "#0A1A0A",
@@ -3046,7 +3036,6 @@ enum class EpubReaderTheme(
         linkCss = "#A8D98A"
     ),
     OledBlack(
-        label = "OLED black",
         labelRes = R.string.label_theme_oled_black,
         backgroundColor = 0xFF000000.toInt(),
         backgroundCss = "#000000",

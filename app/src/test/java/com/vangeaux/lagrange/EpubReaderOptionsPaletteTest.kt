@@ -43,7 +43,7 @@ class EpubReaderOptionsPaletteTest {
     ) {
         val ratio = contrastRatio(foreground, background)
         assertTrue(
-            "${theme.label} $role contrast was $ratio",
+            "${theme.name} $role contrast was $ratio",
             ratio >= MINIMUM_NORMAL_TEXT_CONTRAST
         )
     }
