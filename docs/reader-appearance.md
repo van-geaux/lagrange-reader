@@ -130,6 +130,9 @@ Reader chrome (top bar, option sheets, dialogs) intentionally remains on `theme`
 **Reading background** (`backgroundTheme`, custom)
 
 - A preset chip row plus a **Custom** chip.
+- The OLED black preset also turns links, rules and text selection white on the page. That page
+  style follows this row, not Menu & options, and is dropped while a custom background or custom
+  text colour is active.
 - First **Custom** selection with no retained color: opens the color-picker dialog immediately.
 - Applying the dialog activates the custom background and an inline “custom color” row appears
   below the chips.
