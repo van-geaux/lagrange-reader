@@ -10,6 +10,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -243,6 +244,20 @@ private class AudiobookMediaNotificationProvider(
 ) : DefaultMediaNotificationProvider(context) {
     /** The service context is not wrapped by [AppLocale]; the application context carries its locale. */
     private val appContext: Context = context.applicationContext
+
+    init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            appContext.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
+                NotificationChannel(
+                    DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID,
+                    appContext.getString(
+                        DefaultMediaNotificationProvider.DEFAULT_CHANNEL_NAME_RESOURCE_ID
+                    ),
+                    NotificationManager.IMPORTANCE_LOW
+                )
+            )
+        }
+    }
 
     override fun getMediaButtons(
         mediaSession: MediaSession,
@@ -1307,6 +1322,14 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     }
                 )
                 wrappedPlayer.addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        this@ReadiumAudioPlaybackService.onUpdateNotification(librarySession, true)
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        this@ReadiumAudioPlaybackService.onUpdateNotification(librarySession, true)
+                    }
+
                     override fun onPlaybackParametersChanged(
                         playbackParameters: androidx.media3.common.PlaybackParameters
                     ) {
@@ -1316,6 +1339,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 })
                 librarySessionPlayer = wrappedPlayer
                 librarySession.setPlayer(wrappedPlayer)
+                wrappedPlayer.notifyTimelineAndMetadataChanged()
                 val currentSpeed = engine.player.playbackParameters.speed.takeIf { it > 0f }
                     ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
                 librarySession.setCustomLayout(
@@ -1334,6 +1358,12 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     aggregateDurationMs
                 ).also { session ->
                     mutableSession.value = session
+                    libraryScope.launch {
+                        delay(500)
+                        if (mutableSession.value === session) {
+                            onUpdateNotification(session.mediaSession, true)
+                        }
+                    }
                     preloadSessionCoverBytes(this@ReadiumAudioPlaybackService, session) {
                         mutableSession.value === session
                     }
@@ -1480,6 +1510,46 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
     override fun onGetSession(
         controllerInfo: MediaSession.ControllerInfo
     ): MediaLibrarySession? = ensureLibrarySession()
+
+    override fun onUpdateNotification(
+        session: MediaSession,
+        startInForegroundRequired: Boolean
+    ) {
+        super.onUpdateNotification(session, startInForegroundRequired)
+        if (
+            session.id == LIBRARY_SESSION_ID &&
+            !session.player.currentTimeline.isEmpty
+        ) {
+            publishAudiobookNotification(session)
+        }
+    }
+
+    private fun publishAudiobookNotification(session: MediaSession) {
+        val metadata = session.player.mediaMetadata
+        val notification = NotificationCompat.Builder(
+            this,
+            DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
+        )
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(metadata.displayTitle ?: getString(R.string.app_name))
+            .setContentText(metadata.artist ?: metadata.albumTitle)
+            .setContentIntent(createSessionActivityIntent())
+            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setOnlyAlertOnce(true)
+            .setOngoing(session.player.isPlaying)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setStyle(
+                androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(session.getSessionCompatToken())
+            )
+            .build()
+        ServiceCompat.startForeground(
+            this,
+            DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+        )
+    }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
