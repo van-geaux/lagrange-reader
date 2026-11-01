@@ -104,12 +104,13 @@ On an unfolded foldable or a large landscape tablet:
 
 ### OLED EPUB theme
 
-Automated coverage: `EpubOledThemeTest` (JVM); `EpubOledWebViewInstrumentedTest` (connected).
+Automated coverage: `EpubOledThemeTest` (JVM); `EpubOledWebViewInstrumentedTest`, `EpubOledActivityInstrumentedTest` (connected).
 
 - Choosing `OLED black` shows pure white text and links on pure black.
 - The following are all black, with white primary content and hairline edges: the status-bar strip, reader chrome, options sheet, chapter list, TTS/read-along panels, and system dialogs.
 - Text selection is white with black text, and illustrations keep their original colours.
-- Switching into or out of OLED reopens the reader at the same position.
+- Switching the Menu & options theme into or out of OLED reopens the reader at the same position.
+- White links, rules and selection belong to the OLED black reading background: with OLED menus over a Light, Sepia or custom page, links keep that page's colours. Changing the reading background into or out of OLED black switches them without reopening the book.
 - PDF and comics are unaffected.
 
 ### EPUB text alignment and hyphenation
