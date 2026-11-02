@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit, Komga, and Kavita.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0)
+[![Version 2.1.2](https://img.shields.io/badge/version-2.1.2-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.2)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 [![Downloads](https://img.shields.io/github/downloads/van-geaux/lagrange-reader/total?label=Downloads&logo=github)](https://github.com/van-geaux/lagrange-reader/releases)
 
