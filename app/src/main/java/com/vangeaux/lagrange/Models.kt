@@ -594,7 +594,8 @@ data class SeriesCatalogPage(
     val items: List<SeriesSummary> = emptyList(),
     val total: Int? = null,
     val page: Int? = null,
-    val size: Int? = null
+    val size: Int? = null,
+    val jumpIndex: List<SeriesSummary>? = null
 )
 
 data class SmartScope(
@@ -807,8 +808,10 @@ data class HomeShelfPreferences(
 data class HomeShelfData(
     val booksBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
     val seriesBySection: Map<HomeSection, List<BookSummary>> = emptyMap(),
+    val hiddenSections: Set<HomeSection> = emptySet(),
     val isServerProvided: Boolean = false,
-    val isAggregatedAcrossLibraries: Boolean = false
+    val isAggregatedAcrossLibraries: Boolean = false,
+    val deferInitialCatalogLoad: Boolean = false
 ) {
     fun providesBooks(section: HomeSection): Boolean =
         isServerProvided || booksBySection.containsKey(section)

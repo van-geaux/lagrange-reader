@@ -385,7 +385,7 @@ class BookDownloadWorker(
                     storageScopeId,
                     AutomaticDownloadStatus(
                         state = AutomaticDownloadRunState.PAUSED,
-                        message = "Automatic downloads are paused until the selected SD-card folder is available."
+                        message = "Automatic downloads are paused until the selected folder is available."
                     )
                 )
                 return Result.retry()
@@ -596,7 +596,7 @@ class BookDownloadWorker(
                     AutomaticDownloadStatus(
                         state = AutomaticDownloadRunState.PAUSED,
                         message = storage.message
-                            ?: "Automatic downloads are paused until the selected SD-card folder is available."
+                            ?: "Automatic downloads are paused until the selected folder is available."
                     )
                 )
                 Result.retry()
@@ -608,7 +608,7 @@ class BookDownloadWorker(
                     workDataOf(
                         KEY_OUTCOME to OUTCOME_FAILED,
                         KEY_ERROR_MESSAGE to (
-                            storage.message ?: "The selected SD-card folder is unavailable."
+                            storage.message ?: "The selected folder is unavailable."
                         )
                     )
                 )

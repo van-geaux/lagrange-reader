@@ -16,8 +16,16 @@ internal class LibraryDirectionalNavigationAdapter(
     private val onMenu: () -> Unit = {},
     /** Called before a tap-zone page turn and when a swipe starts: deliberate moves by the reader. */
     private val onPageTurn: () -> Unit = {},
+    /** Called when a tap-zone turn is rejected at a publication boundary. */
+    private val onPageTurnCancelled: () -> Unit = {},
+    /** Called once Readium has distinguished a swipe from an ordinary touch. */
+    private val onSwipeStarted: () -> Unit = {},
+    /** Called when Readium reports the end of an observed swipe gesture. */
+    private val onSwipeFinished: (horizontalOffset: Float) -> Unit = {},
     private val animatedTransition: Boolean = true
 ) : InputListener {
+    private var swipeInProgress = false
+
     override fun onTap(event: TapEvent): Boolean {
         val width = navigator.publicationView.width.toFloat().takeIf { it > 0f } ?: return false
         val height = navigator.publicationView.height.toFloat().takeIf { it > 0f } ?: return false
@@ -34,11 +42,15 @@ internal class LibraryDirectionalNavigationAdapter(
         ) {
             ReaderTapZoneAction.PREVIOUS -> {
                 onPageTurn()
-                navigator.goBackward(animatedTransition)
+                navigator.goBackward(animatedTransition).also { moved ->
+                    if (!moved) onPageTurnCancelled()
+                }
             }
             ReaderTapZoneAction.NEXT -> {
                 onPageTurn()
-                navigator.goForward(animatedTransition)
+                navigator.goForward(animatedTransition).also { moved ->
+                    if (!moved) onPageTurnCancelled()
+                }
             }
             ReaderTapZoneAction.MENU -> {
                 onMenu()
@@ -48,7 +60,18 @@ internal class LibraryDirectionalNavigationAdapter(
     }
 
     override fun onDrag(event: DragEvent): Boolean {
-        if (event.type == DragEvent.Type.Start) onPageTurn()
+        when (event.type) {
+            DragEvent.Type.Start -> {
+                swipeInProgress = true
+                onSwipeStarted()
+                onPageTurn()
+            }
+            DragEvent.Type.End -> if (swipeInProgress) {
+                swipeInProgress = false
+                onSwipeFinished(event.offset.x)
+            }
+            DragEvent.Type.Move -> Unit
+        }
         // Observed only: the navigator still performs the swipe itself.
         return false
     }

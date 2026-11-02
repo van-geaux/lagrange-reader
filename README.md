@@ -9,7 +9,7 @@
 An offline-first Android reader for BookOrbit, Komga, and Kavita.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0)
+[![Version 2.1.2](https://img.shields.io/badge/version-2.1.2-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.2)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 [![Downloads](https://img.shields.io/github/downloads/van-geaux/lagrange-reader/total?label=Downloads&logo=github)](https://github.com/van-geaux/lagrange-reader/releases)
 
@@ -156,7 +156,9 @@ The configured provider may retain or log normal server-side request information
 
 ## Android permissions
 
-Lagrange requests only the permissions needed for networking, media playback, and playback notifications:
+Lagrange uses Android's Storage Access Framework when you choose a download folder. The system folder picker grants read/write access to that selected tree, and Lagrange persists the grant for later downloads. On Android 8.0–9 (API 26–28), the app also declares the legacy shared-storage permission needed by direct file-export features, but selected-folder downloads continue to use the user-approved folder grant rather than broad filesystem access.
+
+Lagrange requests only the permissions needed for networking, media playback, playback notifications, and the legacy direct-export path:
 
 | Permission | Why it is requested |
 | --- | --- |
@@ -165,8 +167,9 @@ Lagrange requests only the permissions needed for networking, media playback, an
 | `FOREGROUND_SERVICE` | Keep audiobook playback running in a foreground service when the app is backgrounded. |
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Declare that the foreground service is used for media playback under current Android rules. |
 | `POST_NOTIFICATIONS` | Show audiobook playback controls and other user-visible notifications on Android versions that require notification permission. |
+| `WRITE_EXTERNAL_STORAGE` (API 26–28) | Save exported cover images on older Android versions when the user explicitly starts a direct file export. It is not used as the permission mechanism for a selected download folder. |
 
-The app does not request location, contacts, camera, microphone, phone, SMS, storage-wide, or advertising-ID permissions.
+The app does not request location, contacts, camera, microphone, phone, SMS, `MANAGE_EXTERNAL_STORAGE`, all-files access, or advertising-ID permissions.
 
 ## Roadmap
 

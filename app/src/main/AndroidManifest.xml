@@ -42,6 +42,11 @@
             android:exported="false"
             android:theme="@style/Theme.BookOrbit.Reader" />
         <activity
+            android:name=".SoftwareRenderedEpubReaderActivity"
+            android:exported="false"
+            android:hardwareAccelerated="false"
+            android:theme="@style/Theme.BookOrbit.Reader" />
+        <activity
             android:name=".ReadiumComicReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.BookOrbit.Reader" />

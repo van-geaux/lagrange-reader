@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android Auto browsing and playback surfaces -->
+    <string name="auto_tab_home_title">Home</string>
+    <string name="auto_tab_home_subtitle">Active and in-progress audiobooks</string>
+    <string name="auto_tab_downloaded_title">Downloaded</string>
+    <string name="auto_tab_downloaded_subtitle">Offline audiobooks on this device</string>
+    <string name="auto_tab_recent_title">Recent</string>
+    <string name="auto_tab_recent_subtitle">Recently added and updated audiobooks</string>
+    <string name="auto_tab_libraries_title">Libraries</string>
+    <string name="auto_tab_libraries_subtitle">Browse by library and series</string>
+    <string name="auto_group_now_playing">Now Playing</string>
+    <string name="auto_group_in_progress">In Progress</string>
+    <string name="auto_group_suggested">Suggested</string>
+    <string name="auto_group_continue_listening">Continue Listening</string>
+    <string name="auto_chapters_title">Chapters · %1$s</string>
+    <plurals name="auto_chapters_count">
+        <item quantity="one">%1$d chapter</item>
+        <item quantity="other">%1$d chapters</item>
+    </plurals>
+    <string name="auto_chapter_fallback">Chapter %1$d</string>
+    <string name="auto_chapter_starts_at">Starts at %1$s</string>
+    <string name="auto_series_title">Series</string>
+    <plurals name="auto_series_count">
+        <item quantity="one">%1$d audiobook series</item>
+        <item quantity="other">%1$d audiobook series</item>
+    </plurals>
+    <string name="auto_library_fallback">Library</string>
+    <plurals name="auto_audiobook_count">
+        <item quantity="one">%1$d audiobook</item>
+        <item quantity="other">%1$d audiobooks</item>
+    </plurals>
+    <string name="auto_subtitle_progress_listened">%1$d%% listened</string>
+    <string name="auto_subtitle_downloaded">Downloaded</string>
+    <string name="auto_subtitle_audiobook">Audiobook</string>
+    <string name="auto_playback_speed">Playback speed (%1$s)</string>
+    <string name="auto_previous_chapter">Previous chapter</string>
+    <string name="auto_next_chapter">Next chapter</string>
+    <string name="auto_settings_scale_progress_title">Scale Progress by Playback Speed</string>
+    <string name="auto_settings_scale_progress_summary">Adjusts remaining time and progress bar tracking when listening above 1.0x speed.</string>
+    <string name="auto_settings_controls_eyebrow">Android Auto Controls</string>
+    <string name="auto_settings_dashboard_title">Dashboard controls</string>
+    <string name="auto_settings_dashboard_summary">Customize playback speed buttons, skip intervals, and steering wheel actions.</string>
+    <string name="auto_settings_steering_title">Steering wheel &amp; skip behavior</string>
+    <string name="auto_settings_steering_summary">Define whether vehicle skip buttons jump chapters or perform timed skips.</string>
+    <string name="auto_settings_vehicle_skip_title">Vehicle Skip Buttons Jump Chapters</string>
+    <string name="auto_settings_vehicle_skip_summary">When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.</string>
+</resources>

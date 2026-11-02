@@ -142,6 +142,7 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
     }
 
     val cache: CacheModule = object : CacheModule {
+        override val offlineCacheAvailable: Boolean = false
         override suspend fun loadCachedBrowserState() = repository.loadCachedBrowserState()
         override suspend fun loadStorageUsage() = repository.loadStorageUsage()
         override suspend fun clearAppCache() = repository.clearAppCache()
@@ -154,6 +155,8 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
 
     val featureAvailability = ProviderFeatureAvailability(
         serverHostedSignIn = true,
+        libraryBookCatalog = true,
+        seriesCatalog = true,
         achievements = false,
         statistics = false,
         smartScopes = false,

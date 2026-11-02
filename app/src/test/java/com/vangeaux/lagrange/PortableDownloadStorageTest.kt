@@ -21,6 +21,24 @@ class PortableDownloadStorageTest {
     }
 
     @Test
+    fun `primary phone storage is accepted without a removable volume`() {
+        assertTrue(isSupportedDownloadVolume("primary", removableVolumeAvailable = false))
+        assertTrue(isSupportedDownloadVolume("PRIMARY", removableVolumeAvailable = false))
+    }
+
+    @Test
+    fun `mounted removable storage remains accepted`() {
+        assertTrue(isSupportedDownloadVolume("1234-ABCD", removableVolumeAvailable = true))
+    }
+
+    @Test
+    fun `unknown or missing storage volumes are rejected`() {
+        assertFalse(isSupportedDownloadVolume(null, removableVolumeAvailable = true))
+        assertFalse(isSupportedDownloadVolume("", removableVolumeAvailable = true))
+        assertFalse(isSupportedDownloadVolume("1234-ABCD", removableVolumeAvailable = false))
+    }
+
+    @Test
     fun `content locators compare as opaque document identities`() {
         val first = "content://provider/document/card%3ABooks%2Fone.epub"
         val second = "content://provider/document/card%3ABooks%2Ftwo.epub"

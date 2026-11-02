@@ -36,19 +36,21 @@ internal fun boundedReaderLocatorJson(json: String?): String? = json
     ?.takeIf { it.toByteArray(Charsets.UTF_8).size <= MAX_SAVED_READER_LOCATOR_BYTES }
 
 internal fun Bundle.readReaderLocator(): Locator? = getString(STATE_READER_LOCATOR)
+    ?.let(::boundedReaderLocatorJson)
     ?.let { saved -> runCatching { Locator.fromJSON(JSONObject(saved)) }.getOrNull() }
 
 internal fun Bundle.putReaderLocator(locator: Locator?) {
     locator ?: return
-    putString(STATE_READER_LOCATOR, locator.toJSON().toString())
+    boundedReaderLocatorJson(locator.toJSON().toString())?.let { putString(STATE_READER_LOCATOR, it) }
 }
 
 internal fun Bundle.readEpubTtsLocator(): Locator? = getString(STATE_EPUB_TTS_LOCATOR)
+    ?.let(::boundedReaderLocatorJson)
     ?.let { saved -> runCatching { Locator.fromJSON(JSONObject(saved)) }.getOrNull() }
 
 internal fun Bundle.putEpubTtsLocator(locator: Locator?) {
     locator ?: return
-    putString(STATE_EPUB_TTS_LOCATOR, locator.toJSON().toString())
+    boundedReaderLocatorJson(locator.toJSON().toString())?.let { putString(STATE_EPUB_TTS_LOCATOR, it) }
 }
 
 internal enum class ReaderRestoreAction { OPEN, REOPEN }

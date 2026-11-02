@@ -116,10 +116,13 @@ internal class DownloadStorageSelectionStore(context: Context) {
         require(DocumentsContract.isTreeUri(treeUri)) { "Choose a writable folder." }
         val volumeId = documentVolumeId(treeUri)
         require(
-            !volumeId.isNullOrBlank() &&
-                !volumeId.equals("primary", ignoreCase = true) &&
-                removableVolumeDirectory(appContext, volumeId) != null
-        ) { "Choose a folder on a mounted removable SD card." }
+            isSupportedDownloadVolume(
+                volumeId = volumeId,
+                removableVolumeAvailable = volumeId?.let {
+                    removableVolumeDirectory(appContext, it) != null
+                } == true
+            )
+        ) { "Choose a writable folder on phone storage or a mounted removable SD card." }
         val resolver = appContext.contentResolver
         resolver.takePersistableUriPermission(
             treeUri,
@@ -214,7 +217,11 @@ internal class DownloadStorageSelectionStore(context: Context) {
         }
         if (availability(selection) != PortableStorageAvailability.AVAILABLE) return null
         val volumeId = selection.volumeId?.takeIf(String::isNotBlank) ?: return null
-        val candidate = removableVolumeDirectory(appContext, volumeId) ?: return null
+        val candidate = if (volumeId.equals("primary", ignoreCase = true)) {
+            Environment.getExternalStorageDirectory()
+        } else {
+            removableVolumeDirectory(appContext, volumeId) ?: return null
+        }
         return runCatching { StatFs(candidate.absolutePath).availableBytes.coerceAtLeast(0L) }
             .getOrNull()
     }
@@ -277,7 +284,7 @@ internal class LocalDownloadAccess(private val context: Context) {
 
     fun openInput(locator: String): InputStream = when {
         locator.isContentLocator() -> resolver.openInputStream(Uri.parse(locator))
-            ?: throw PortableStorageUnavailableException("The SD-card file is unavailable.")
+            ?: throw PortableStorageUnavailableException("The selected storage file is unavailable.")
         else -> File(locator).inputStream()
     }
 
@@ -333,7 +340,7 @@ internal class LocalDownloadAccess(private val context: Context) {
         synchronized(PortableReaderCacheCoordinator.monitor) {
             if (!locator.isContentLocator()) return File(locator)
             val size = length(locator)
-            if (size <= 0L) throw PortableStorageUnavailableException("The SD-card file is unavailable.")
+            if (size <= 0L) throw PortableStorageUnavailableException("The selected storage file is unavailable.")
             val extension = portableFileExtension(formatHint)
             val identity = portableReaderCacheIdentity(fileId, locator, size)
             val directory = File(appContext.cacheDir, "portable-reader").apply { mkdirs() }
@@ -369,7 +376,7 @@ internal class LocalDownloadAccess(private val context: Context) {
                 maximumRetainedBytes = PORTABLE_READER_CACHE_MAX_RETAINED_BYTES,
                 reserveBytes = PORTABLE_READER_FREE_MARGIN_BYTES
             ) ?: throw UserFacingException(
-                "This book is stored on the SD card, but there is not enough internal working space to open it."
+                "This book is stored in the selected folder, but there is not enough internal working space to open it."
             )
             evictions.forEach { name ->
                 val candidate = File(directory, name)
@@ -387,7 +394,7 @@ internal class LocalDownloadAccess(private val context: Context) {
             }.getOrDefault(0L)
             if (availableAfterEviction < portableSaturatingAdd(size, PORTABLE_READER_FREE_MARGIN_BYTES)) {
                 throw UserFacingException(
-                    "This book is stored on the SD card, but there is not enough internal working space to open it."
+                    "This book is stored in the selected folder, but there is not enough internal working space to open it."
                 )
             }
             val staged = File(directory, ".$identity.${UUID.randomUUID()}.part")
@@ -396,7 +403,7 @@ internal class LocalDownloadAccess(private val context: Context) {
                     FileOutputStream(staged).use { output -> input.copyTo(output) }
                 }
                 if (staged.length() != size) {
-                    throw PortableStorageUnavailableException("The SD-card file changed while it was being opened.")
+                    throw PortableStorageUnavailableException("The selected folder was unavailable or changed while it was being opened.")
                 }
                 atomicReplaceDownloadedFile(staged, target)
                 directory.listFiles()?.forEach { candidate ->
@@ -463,28 +470,28 @@ internal class PortableDownloadWriter(private val context: Context) {
         when (selectionStore.availability(selection)) {
             PortableStorageAvailability.AVAILABLE -> Unit
             PortableStorageAvailability.PERMISSION_REVOKED -> throw PortableStorageUnavailableException(
-                "Access to the selected SD-card folder was revoked. Choose the folder again in Downloads & Offline."
+                "Access to the selected folder was revoked. Choose the folder again in Downloads & Offline."
             )
             else -> throw PortableStorageUnavailableException(
-                "The selected SD-card folder is unavailable. Reinsert the card or choose another download location."
+                "The selected folder is unavailable. Choose another download location."
             )
         }
         val rootUri = Uri.parse(requireNotNull(selection.managedDirectoryUri))
         val root = DocumentFile.fromSingleUri(appContext, rootUri)
-            ?: throw PortableStorageUnavailableException("The selected SD-card folder is unavailable.")
+            ?: throw PortableStorageUnavailableException("The selected folder is unavailable.")
         if (!root.exists() || !root.isDirectory || !root.canRead() || !root.canWrite()) {
-            throw PortableStorageUnavailableException("The selected SD-card folder is unavailable.")
+            throw PortableStorageUnavailableException("The selected folder is unavailable.")
         }
         val scopeName = "account-${sha256Hex(storageScopeId).take(20)}"
         val existingScope = findPortableChild(appContext, rootUri, scopeName)
         val scope = when {
             existingScope == null -> createPortableDirectory(appContext, rootUri, scopeName)
                 ?: throw PortableStorageUnavailableException(
-                    "Lagrange could not create an account folder on the SD card."
+                    "Lagrange could not create an account folder in the selected folder."
                 )
             existingScope.isDirectory -> existingScope
             else -> throw PortableStorageUnavailableException(
-                "The SD-card download folder contains an invalid account entry."
+                "The selected download folder contains an invalid account entry."
             )
         }
         val filenameExtension = portableFileExtension(filename)
@@ -498,7 +505,7 @@ internal class PortableDownloadWriter(private val context: Context) {
         // persisting the renamed URI; it remains invisible to Lagrange until verification and
         // record commit complete.
         val stage = createPortableFile(appContext, scope.uri, portableMimeType(extension), finalName)
-            ?: throw PortableStorageUnavailableException("Lagrange could not create a download on the SD card.")
+            ?: throw PortableStorageUnavailableException("Lagrange could not create a download in the selected folder.")
         return PortableDownloadTarget(
             treeUri = requireNotNull(selection.treeUri),
             storageRootUri = rootUri.toString(),
@@ -514,9 +521,9 @@ internal class PortableDownloadWriter(private val context: Context) {
             resolver.openOutputStream(Uri.parse(target.stageUri), "wt")
         } catch (error: IOException) {
             throw PortableStorageUnavailableException(
-                "The SD card refused the download write."
+                "The selected folder refused the download write."
             ).also { it.addSuppressed(error) }
-        } ?: throw PortableStorageUnavailableException("The SD card refused the download write.")
+        } ?: throw PortableStorageUnavailableException("The selected folder refused the download write.")
         return output.asPortableDownloadOutput()
     }
 
@@ -525,14 +532,14 @@ internal class PortableDownloadWriter(private val context: Context) {
 
     fun openStageInput(target: PortableDownloadTarget): InputStream =
         resolver.openInputStream(Uri.parse(target.stageUri))
-            ?: throw PortableStorageUnavailableException("The staged SD-card download is unavailable.")
+            ?: throw PortableStorageUnavailableException("The staged selected-folder download is unavailable.")
 
     fun publish(target: PortableDownloadTarget): String {
         requireCurrentSelection(target)
         val stage = DocumentFile.fromSingleUri(appContext, Uri.parse(target.stageUri))
-            ?: throw PortableStorageUnavailableException("The staged SD-card download is unavailable.")
+            ?: throw PortableStorageUnavailableException("The staged selected-folder download is unavailable.")
         if (!stage.exists() || !stage.isFile) {
-            throw PortableStorageUnavailableException("The staged SD-card download is unavailable.")
+            throw PortableStorageUnavailableException("The staged selected-folder download is unavailable.")
         }
         return stage.uri.toString()
     }
@@ -586,7 +593,7 @@ internal class PortableDownloadWriter(private val context: Context) {
             )
         }
         if (selectionStore.availability(selection) != PortableStorageAvailability.AVAILABLE) {
-            throw PortableStorageUnavailableException("The selected SD-card folder is unavailable.")
+            throw PortableStorageUnavailableException("The selected folder is unavailable.")
         }
     }
 }
@@ -703,7 +710,7 @@ internal suspend fun downloadBookToPortableStorage(
                 totalBytes != null && availableBefore != null &&
                 totalBytes > (availableBefore - PORTABLE_WRITE_FREE_MARGIN_BYTES).coerceAtLeast(0L)
             ) {
-                throw LocalBookStorageLimitException("The SD card does not have enough free space for this download.")
+                throw LocalBookStorageLimitException("The selected folder does not have enough free space for this download.")
             }
             val (capacity, initialAllowance) = runBlocking {
                 AutomaticDownloadStorage.prepareTransfer(
@@ -755,7 +762,7 @@ internal suspend fun downloadBookToPortableStorage(
                             physicalFree - count < PORTABLE_WRITE_FREE_MARGIN_BYTES
                         ) {
                             throw LocalBookStorageLimitException(
-                                "The SD card is too full to finish this download safely."
+                                "The selected folder is too full to finish this download safely."
                             )
                         }
                         var permitted = allowance.permitsCurrentPolicyAndReserve(
@@ -809,7 +816,7 @@ internal suspend fun downloadBookToPortableStorage(
             val storedSize = writer.stageLength(target)
             if (storedSize <= 0L || storedSize != copiedBytes) {
                 throw PortableStorageUnavailableException(
-                    "The SD card did not retain the complete download. The previous copy was kept."
+                    "The selected folder did not retain the complete download. The previous copy was kept."
                 )
             }
             val openStage = { writer.openStageInput(target) }
@@ -1133,7 +1140,7 @@ private fun OutputStream.asPortableDownloadOutput(): OutputStream = object : Out
             action()
         } catch (error: IOException) {
             throw PortableStorageUnavailableException(
-                "The SD card could not save this download. Check that it is inserted, writable, and has free space."
+                "The selected folder could not save this download. Check that it is writable and has free space."
             ).also { it.addSuppressed(error) }
         }
     }
@@ -1162,7 +1169,7 @@ private fun findPortableChild(context: Context, parentUri: Uri, displayName: Str
     val matches = listPortableChildren(context, parentUri).filter { it.name == displayName }
     if (matches.size > 1) {
         throw PortableStorageUnavailableException(
-            "The SD-card folder contains duplicate entries named $displayName."
+            "The selected folder contains duplicate entries named $displayName."
         )
     }
     return matches.singleOrNull()
@@ -1225,7 +1232,7 @@ private fun listPortableChildren(
             null,
             null
         ) ?: throw PortableStorageUnavailableException(
-            "The SD-card folder could not be read."
+            "The selected folder could not be read."
         )
         cursor.use {
             val documentIdColumn = cursor.getColumnIndexOrThrow(
@@ -1243,7 +1250,7 @@ private fun listPortableChildren(
 } catch (error: PortableStorageUnavailableException) {
     throw error
 } catch (error: Exception) {
-    throw PortableStorageUnavailableException("The SD-card folder could not be read.").also {
+    throw PortableStorageUnavailableException("The selected folder could not be read.").also {
         it.addSuppressed(error)
     }
 }
@@ -1274,6 +1281,15 @@ internal fun documentBelongsToRoot(rootUri: Uri, documentUri: Uri): Boolean = ru
 internal fun documentVolumeId(treeUri: Uri): String? = runCatching {
     DocumentsContract.getTreeDocumentId(treeUri).substringBefore(':').takeIf(String::isNotBlank)
 }.getOrNull()
+
+internal fun isSupportedDownloadVolume(
+    volumeId: String?,
+    removableVolumeAvailable: Boolean
+): Boolean {
+    val normalized = volumeId?.trim().orEmpty()
+    if (normalized.isBlank()) return false
+    return normalized.equals("primary", ignoreCase = true) || removableVolumeAvailable
+}
 
 internal fun portableSafeFileName(value: String): String = value
     .replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), " ")

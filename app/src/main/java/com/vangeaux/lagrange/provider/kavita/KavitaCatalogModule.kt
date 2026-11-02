@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.time.Instant
 import java.util.Locale
 
-private const val KAVITA_PAGE_SIZE = 100
+private const val KAVITA_PAGE_SIZE = 20
 
 internal fun mergeKavitaCatalogPages(
     existing: List<BookSummary>,
@@ -23,6 +23,31 @@ internal fun mergeKavitaCatalogPages(
     existing.forEach { byId[it.id] = it }
     incoming.forEach { byId[it.id] = it }
     addAll(byId.values)
+}
+
+internal fun kavitaSeriesName(root: JSONObject, fallback: String): String {
+    val nested = root.optJSONObject("series")
+    return sequenceOf(
+        root.optString("seriesName"),
+        root.optString("localizedSeriesName"),
+        nested?.optString("name").orEmpty(),
+        nested?.optString("localizedName").orEmpty(),
+        nested?.optString("seriesName").orEmpty(),
+        root.optString("name"),
+        root.optString("localizedName"),
+        nested?.optString("localizedSeriesName").orEmpty()
+    ).firstOrNull { it.isNotBlank() } ?: fallback
+}
+
+internal fun kavitaChapterSeriesName(chapter: JSONObject, fallback: String): String {
+    val nested = chapter.optJSONObject("series")
+    return sequenceOf(
+        chapter.optString("seriesName"),
+        chapter.optString("localizedSeriesName"),
+        nested?.optString("name").orEmpty(),
+        nested?.optString("localizedName").orEmpty(),
+        nested?.optString("seriesName").orEmpty()
+    ).firstOrNull { it.isNotBlank() } ?: fallback
 }
 
 internal data class KavitaChapterProjection(
@@ -56,9 +81,9 @@ internal fun kavitaChapterProjection(chapter: JSONObject): KavitaChapterProjecti
         chapter.optString("range"),
         chapter.optString("number"),
         filename?.substringBeforeLast('.')
-    ).filterNotNull().firstOrNull(::isUsableKavitaTitle)
-        ?.let(::normalizeKavitaTitle)
-        ?.takeIf(::isUsableKavitaTitle)
+    ).filterNotNull()
+        .map(::normalizeKavitaTitle)
+        .firstOrNull(::isUsableKavitaTitle)
         ?: "Chapter $id"
     val writers = chapter.optJSONArray("writers")
     val author = writers?.optJSONObject(0)?.optString("name")?.takeIf { it.isNotBlank() }
@@ -89,7 +114,7 @@ internal fun kavitaFormat(rawFormat: String?, rawExtension: String?): String? {
     return when {
         value.contains("epub") -> "epub"
         value.contains("pdf") -> "pdf"
-        value.contains("cbz") || value.contains("zip") -> "cbz"
+        value.contains("cbz") -> "cbz"
         value.contains("cbr") || value.contains("rar") -> "cbr"
         value.contains("cb7") || value.contains("7z") -> "cb7"
         value.contains("m4b") -> "m4b"
@@ -102,9 +127,15 @@ internal fun kavitaFormat(rawFormat: String?, rawExtension: String?): String? {
         else -> rawExtension
             ?.substringAfterLast('.', missingDelimiterValue = rawExtension)
             ?.removePrefix(".")
-            ?.takeIf { it.isNotBlank() }
+            ?.lowercase(Locale.US)
+            ?.takeIf {
+                it in setOf("epub", "pdf", "cbz", "cbr", "cb7", "m4b", "m4a", "mp3", "flac", "opus", "ogg", "wav")
+            }
     }
 }
+
+internal fun kavitaFileId(file: JSONObject, chapterId: String): String =
+    file.optInt("id", -1).takeIf { it >= 0 }?.toString() ?: chapterId
 
 internal fun kavitaMediaKind(format: String?): MediaKind = when (format) {
     "epub" -> MediaKind.EPUB
@@ -117,6 +148,8 @@ internal fun kavitaMediaKind(format: String?): MediaKind = when (format) {
 internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) : BookCatalogModule {
     private val client = OkHttpClient()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    internal suspend fun serverUrl(): String? = auth.serverUrl()
 
     override suspend fun loadBooks(libraryId: String): List<BookSummary> =
         loadAllBooks(libraryId)
@@ -194,6 +227,203 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
         }
     }
 
+    internal suspend fun loadHomeSeriesPage(
+        section: HomeSection,
+        libraryId: String?,
+        page: Int,
+        pageSize: Int = 20
+    ): SeriesCatalogPage = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val path = when (section) {
+            HomeSection.RECENTLY_ADDED_SERIES ->
+                "/api/series/recently-added-v2?pageNumber=${page + 1}&pageSize=$pageSize"
+            HomeSection.RECENTLY_UPDATED_SERIES ->
+                "/api/series/recently-updated-series?pageNumber=${page + 1}&pageSize=$pageSize"
+            else -> return@withContext SeriesCatalogPage()
+        }
+        val filterBody = JSONObject().apply {
+            put("statements", JSONArray().apply {
+                libraryId?.toIntOrNull()?.let { id ->
+                    put(JSONObject().apply {
+                        put("field", 19)
+                        put("comparison", 0)
+                        put("value", id.toString())
+                    })
+                }
+            })
+            put("combination", 0)
+        }.toString()
+        val request = Request.Builder()
+            .url(base + path)
+            .header("Accept", "application/json")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .post(filterBody.toRequestBody(jsonMediaType))
+            .build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita Home series (HTTP ${response.code}).", response.code))
+            }
+            val items = kavitaDashboardItems(payload)
+                .mapNotNull { item -> kavitaSeriesCard(item, base) }
+                .filter { libraryId.isNullOrBlank() || it.libraryId == libraryId }
+            val total = response.headers["X-Total-Count"]?.toIntOrNull()
+                ?: response.headers["X-TotalItems"]?.toIntOrNull()
+                ?: response.headers["Total-Count"]?.toIntOrNull()
+            SeriesCatalogPage(
+                items = items.map { book ->
+                    SeriesSummary(
+                        id = book.seriesId.orEmpty(),
+                        name = book.seriesName ?: book.title,
+                        bookCount = 0,
+                        coverUrl = book.coverUrl,
+                        lastAddedAtMillis = book.addedAtMillis,
+                        availableFormats = book.availableFormats
+                    )
+                },
+                total = total,
+                page = page,
+                size = pageSize
+            )
+        }
+    }
+
+    internal suspend fun loadSeriesSummaryPage(
+        libraryId: String?,
+        page: Int
+    ): KavitaSeriesSummaryPage = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val filter = JSONObject().apply {
+            put("statements", JSONArray().apply {
+                libraryId?.toIntOrNull()?.let { id ->
+                    put(JSONObject().apply {
+                        put("field", 19)
+                        put("comparison", 0)
+                        put("value", id.toString())
+                    })
+                }
+            })
+            put("combination", 0)
+        }
+        val url = if (page < 0) {
+            "$base/api/Series/v2"
+        } else {
+            "$base/api/Series/v2?PageNumber=$page&PageSize=$KAVITA_PAGE_SIZE"
+        }
+        val request = Request.Builder()
+            .url(url)
+            .header("Content-Type", "application/json")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .post(filter.toString().toRequestBody(jsonMediaType))
+            .build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
+            }
+            val root = runCatching { JSONObject(payload) }.getOrNull()
+            // Kavita Web UI reads the exact `Pagination` response header.
+            // Keep legacy header variants for older/proxy deployments.
+            val rawPaginationHeader = response.headers["Pagination"]
+                ?: response.headers["X-Pagination"]
+                ?: response.headers["X-Pagination-JSON"]
+            val headerPagination = rawPaginationHeader?.let(::parseKavitaPaginationHeader)
+            val headerTotal = listOf("X-Total-Count", "X-TotalItems", "Total-Count")
+                .firstNotNullOfOrNull { name -> response.headers[name]?.toIntOrNull() }
+            val items = kavitaSeriesPageItems(payload)
+            val pageSize = root?.optInt("pageSize", -1)?.takeIf { it > 0 }
+                ?: root?.optInt("size", -1)?.takeIf { it > 0 }
+                ?: headerPagination?.optInt("itemsPerPage", -1)?.takeIf { it > 0 }
+                ?: KAVITA_PAGE_SIZE
+            val total = kavitaPaginationTotal(root, headerPagination)
+                ?: headerTotal
+                ?: kavitaDerivedPaginationTotal(root, headerPagination, pageSize)
+            KavitaSeriesSummaryPage(
+                items = buildList {
+                    for (index in 0 until items.length()) {
+                        val item = items.optJSONObject(index) ?: continue
+                        val id = item.optInt("id", -1).takeIf { it >= 0 } ?: continue
+                        val name = item.optString("name").takeIf { it.isNotBlank() }
+                            ?: item.optString("localizedName").takeIf { it.isNotBlank() }
+                            ?: id.toString()
+                        add(
+                            SeriesSummary(
+                                id = id.toString(),
+                                name = name,
+                                coverUrl = "$base/api/Image/series-cover?seriesId=$id"
+                            )
+                        )
+                    }
+                },
+                total = total ?: items.length().takeIf { page < 0 },
+                pageSize = pageSize
+            )
+        }
+    }
+
+    internal suspend fun loadSeriesDisplayName(seriesId: String): String? = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: return@withContext null
+        val request = Request.Builder()
+            .url("$base/api/Series/$seriesId")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val payload = response.body?.string().orEmpty()
+            kavitaSeriesName(JSONObject(payload), "").takeIf { it.isNotBlank() }
+        }
+    }
+
+    internal suspend fun loadSelectedSeriesBooks(seriesId: String): List<BookSummary> = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
+        val request = Request.Builder()
+            .url("$base/api/Series/series-detail?seriesId=$seriesId")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw UserFacingException(
+                auth.localizedMessage(R.string.perror_kavita_series_details_http, "Unable to load Kavita series details (HTTP ${response.code}).", response.code)
+            )
+            val root = JSONObject(payload)
+            val name = kavitaSeriesName(root, seriesId)
+            val libraryId = root.optInt("libraryId", 0).toString()
+            val lastAdded = root.optString("created").takeIf { it.isNotBlank() }
+                ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+            val chapters = kavitaSeriesChapters(root)
+            chapters.mapNotNull { chapter ->
+                val projection = kavitaChapterProjection(chapter) ?: return@mapNotNull null
+                val completed = projection.pages != null && projection.pagesRead >= projection.pages
+                val progress = projection.pages?.let { (projection.pagesRead.toFloat() / it * 100f).coerceIn(0f, 100f) }
+                BookSummary(
+                    libraryId = libraryId,
+                    id = "chapter:${projection.id}",
+                    fileId = projection.fileId,
+                    title = projection.title,
+                    filename = projection.filename,
+                    author = projection.author,
+                    format = projection.format,
+                    mediaKind = kavitaMediaKind(projection.format),
+                    coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
+                    progressLabel = projection.pagesRead.takeIf { it > 0 }?.let { "Page $it" },
+                    progressPercent = progress,
+                    progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
+                    seriesId = seriesId,
+                    seriesName = name,
+                    seriesIndex = projection.seriesIndex,
+                    readStatus = when { completed -> BookReadStatus.READ; projection.pagesRead > 0 -> BookReadStatus.READING; else -> BookReadStatus.UNREAD },
+                    isRead = completed,
+                    addedAtMillis = projection.releaseDateMillis ?: lastAdded,
+                    updatedAtMillis = lastAdded,
+                    readerPageCount = projection.pages,
+                    genres = projection.genres
+                )
+            }
+        }
+    }
+
     private fun loadSeriesPage(base: String, page: Int): List<KavitaSeriesProjection> {
         val request = Request.Builder()
             .url("$base/api/Series/v2?PageNumber=$page&PageSize=$KAVITA_PAGE_SIZE")
@@ -206,7 +436,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
             if (!response.isSuccessful) {
                 throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_series_http, "Unable to load Kavita series (HTTP ${response.code}).", response.code))
             }
-            val array = runCatching { JSONArray(payload) }.getOrElse { JSONArray() }
+            val array = kavitaSeriesPageItems(payload)
             return buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
@@ -270,7 +500,7 @@ internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) :
                             coverUrl = "$base/api/Image/chapter-cover?chapterId=${projection.id}",
                             progressLabel = if (projection.pagesRead > 0) "Page ${projection.pagesRead}" else null,
                             progressPercent = progress,
-                            progressPageIndex = projection.pagesRead.takeIf { it > 0 },
+                            progressPageIndex = kavitaReaderPageIndex(projection.pagesRead),
                             seriesId = seriesId,
                             seriesName = seriesName,
                             seriesIndex = projection.seriesIndex,
@@ -306,7 +536,7 @@ private fun normalizeKavitaTitle(value: String): String =
     value.replaceFirst(Regex("^Book\\s+-100000\\s+-\\s*", RegexOption.IGNORE_CASE), "").trim()
 
 private fun isUsableKavitaTitle(value: String): Boolean =
-    value.isNotBlank() && value.trim() != "-100000"
+    value.isNotBlank() && !value.contains("-100000")
 
 internal fun kavitaSeriesChapters(root: JSONObject): List<JSONObject> = buildList {
     val seen = mutableSetOf<Int>()
@@ -345,6 +575,69 @@ private data class KavitaSeriesProjection(
     val libraryId: String,
     val lastAddedAtMillis: Long?
 )
+
+internal data class KavitaSeriesSummaryPage(
+    val items: List<SeriesSummary>,
+    val total: Int?,
+    val pageSize: Int
+)
+
+private fun kavitaPaginationTotal(root: JSONObject?, header: JSONObject?): Int? {
+    val keys = setOf("totalcount", "totalitems", "total", "count")
+    fun read(source: JSONObject?): Int? = source?.let {
+        it.keys().asSequence().firstNotNullOfOrNull { key ->
+            if (key.lowercase(Locale.US) !in keys) return@firstNotNullOfOrNull null
+            val value = it.opt(key)
+            when (value) {
+                is Number -> value.toInt().takeIf { number -> number >= 0 }
+                is String -> value.toIntOrNull()?.takeIf { number -> number >= 0 }
+                else -> null
+            }
+        }
+    }
+    return read(root) ?: read(root?.optJSONObject("pagination")) ?: read(root?.optJSONObject("meta")) ?: read(header)
+}
+
+private fun kavitaDerivedPaginationTotal(
+    root: JSONObject?,
+    header: JSONObject?,
+    pageSize: Int
+): Int? {
+    if (pageSize <= 0) return null
+    fun readPageCount(source: JSONObject?): Int? = source?.let {
+        it.keys().asSequence().firstNotNullOfOrNull { key ->
+            if (key.lowercase(Locale.US) != "totalpages") return@firstNotNullOfOrNull null
+            when (val value = it.opt(key)) {
+                is Number -> value.toInt().takeIf { number -> number > 0 }
+                is String -> value.toIntOrNull()?.takeIf { number -> number > 0 }
+                else -> null
+            }
+        }
+    }
+    return (readPageCount(root) ?: readPageCount(root?.optJSONObject("pagination")) ?: readPageCount(header))
+        ?.times(pageSize)
+}
+
+private fun parseKavitaPaginationHeader(value: String): JSONObject? {
+    val candidates = listOf(
+        value,
+        value.trim().removeSurrounding("\"").replace("\\\"", "\"")
+    )
+    return candidates.firstNotNullOfOrNull { candidate ->
+        runCatching { JSONObject(candidate) }.getOrNull()
+    }
+}
+
+internal fun kavitaSeriesPageItems(payload: String): JSONArray =
+    runCatching { JSONArray(payload) }.getOrElse {
+        runCatching {
+            val root = JSONObject(payload)
+            root.optJSONArray("items")
+                ?: root.optJSONArray("results")
+                ?: root.optJSONArray("data")
+                ?: JSONArray()
+        }.getOrDefault(JSONArray())
+    }
 
 internal fun JSONArray?.jsonTitles(): List<String> = buildList {
     val array = this@jsonTitles ?: return@buildList

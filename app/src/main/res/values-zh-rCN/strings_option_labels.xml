@@ -3,7 +3,13 @@
     <!-- 阅读主题 -->
     <string name="label_theme_light">浅色</string>
     <string name="label_theme_sepia">护眼</string>
+    <string name="label_theme_darker_sepia">深褐色</string>
+    <string name="label_theme_fern">蕨绿</string>
+    <string name="label_theme_arctic">北极</string>
     <string name="label_theme_dark">深色</string>
+    <string name="label_theme_midnight">午夜</string>
+    <string name="label_theme_amber_night">琥珀夜</string>
+    <string name="label_theme_dark_moss">深苔绿</string>
     <string name="label_theme_oled_black">OLED 纯黑</string>
 
     <!-- 阅读方向 -->

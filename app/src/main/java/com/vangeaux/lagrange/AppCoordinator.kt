@@ -169,6 +169,8 @@ class AppCoordinator internal constructor(
     private fun cacheModule(): CacheModule? = cacheModuleResolver?.invoke(repository)
     private fun featureAvailability(): ProviderFeatureAvailability =
         featureAvailabilityResolver?.invoke(repository) ?: ProviderFeatureAvailability()
+    fun libraryBookCatalogAvailable(): Boolean = featureAvailability().libraryBookCatalog
+    fun seriesCatalogAvailable(): Boolean = featureAvailability().seriesCatalog
     private fun providerSessionModule(): ProviderSessionModule? = providerSessionModuleResolver?.invoke(repository)
     private fun bookOrbitOidcModule(): BookOrbitOidcModule? = bookOrbitOidcModuleResolver?.invoke(repository)
     fun achievementsAvailable(): Boolean = featureAvailability().achievements
@@ -266,7 +268,11 @@ class AppCoordinator internal constructor(
         catalogLoadJob = scope.launch {
             showBrowser(current.copy(isCatalogSyncing = true, message = null))
             runCatching {
-                val nextPage = current.booksPage + 1
+                val nextPage = if (current.books.isEmpty() && current.booksPage == 0) {
+                    0
+                } else {
+                    current.booksPage + 1
+                }
                 val page = loadLibraryBooksPage(libraryId, nextPage)
                 val merged = (current.books + page.items).distinctBy { it.id }
                 showBrowser(
@@ -419,6 +425,8 @@ class AppCoordinator internal constructor(
     }
 
     suspend fun loadStorageUsage(): StorageUsage = cacheModule()?.loadStorageUsage() ?: repository.loadStorageUsage()
+
+    fun offlineCacheAvailable(): Boolean = cacheModule()?.offlineCacheAvailable ?: true
 
     suspend fun clearAppCache() {
         cacheModule()?.clearAppCache() ?: repository.clearAppCache()
@@ -1282,6 +1290,8 @@ class AppCoordinator internal constructor(
                 }
             }
             var previous = lastBrowserState
+            val providerHomeModule = homeShelfModule()
+            val suppressCachedHomeFallback = providerHomeModule?.deferInitialCatalogLoad == true
             if (previous == null) {
                 (cacheModule()?.loadCachedBrowserState() ?: repository.loadCachedBrowserState())?.let { cached ->
                     previous = cached
@@ -1293,6 +1303,20 @@ class AppCoordinator internal constructor(
                         isRefreshing = userInitiated,
                         isLoadingLibraries = true,
                         isLoadingBooks = true,
+                        homeShelves = if (suppressCachedHomeFallback) {
+                            HomeShelfData(
+                                isServerProvided = true,
+                                hiddenSections = setOf(
+                                    HomeSection.WANT_TO_READ,
+                                    HomeSection.RECENTLY_ADDED_BOOKS,
+                                    HomeSection.RECENTLY_RELEASED_BOOKS,
+                                    HomeSection.RECENTLY_READ
+                                ),
+                                deferInitialCatalogLoad = true
+                            )
+                        } else {
+                            previousState.homeShelves
+                        },
                         isOfflineSnapshot = false,
                         message = null
                     )
@@ -1343,20 +1367,29 @@ class AppCoordinator internal constructor(
 
                 serverSelectionModule()?.setSelectedLibraryId(selectedLibrary) ?: repository.setSelectedLibraryId(selectedLibrary)
                 val homeShelves = runCatching {
-                    homeShelfModule()?.loadHomeShelves()
-                }.getOrNull() ?: HomeShelfData()
+                    providerHomeModule?.loadHomeShelves()
+                }.getOrElse {
+                    HomeShelfData(deferInitialCatalogLoad = providerHomeModule?.deferInitialCatalogLoad == true)
+                } ?: HomeShelfData()
                 // Dashboard settings are optional. Load them concurrently so a failed
                 // preference request cannot hold up the first library render.
                 val homeShelfPreferencesRequest = async {
                     runCatching {
-                        homeShelfModule()?.loadHomeShelfPreferences()
+                        providerHomeModule?.loadHomeShelfPreferences()
                     }.getOrNull() ?: HomeShelfPreferences()
                 }
-                var homeBooks = homeShelfModule()?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
+                var homeBooks = providerHomeModule?.loadCachedHomeBooks() ?: repository.loadCachedHomeBooks()
                     .onlyFrom(libraries)
                 val cachedCatalog = repository.loadCachedLibraryCatalog(selectedLibrary)
-                showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
-                val firstPage = cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
+                val deferInitialCatalogLoad = homeShelves.deferInitialCatalogLoad
+                if (!deferInitialCatalogLoad) {
+                    showStartup(uiText(R.string.error_loading_your_library, "Loading your library…"))
+                }
+                val firstPage = if (deferInitialCatalogLoad) {
+                    cachedCatalog ?: LibraryBooksPage(page = 0, size = 0, total = null, isComplete = false)
+                } else {
+                    cachedCatalog ?: (bookCatalogModule()?.loadBooksPage(selectedLibrary, 0) ?: repository.loadBooksPage(selectedLibrary, 0))
+                }
 
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, firstPage.items)
                 showBrowser(
@@ -1369,7 +1402,7 @@ class AppCoordinator internal constructor(
                         homeShelves = homeShelves,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated,
-                        isCatalogSyncing = true
+                        isCatalogSyncing = !deferInitialCatalogLoad
                     )
                 )
 
@@ -1381,6 +1414,9 @@ class AppCoordinator internal constructor(
                         showBrowser(current.copy(homeShelfPreferences = homeShelfPreferences))
                     }
 
+                if (deferInitialCatalogLoad) {
+                    return@runCatching
+                }
                 val refreshedCatalog = repository.refreshLibraryCatalog(
                     libraryId = selectedLibrary,
                     firstPage = firstPage.takeUnless { it.isComplete }
@@ -1493,6 +1529,20 @@ class AppCoordinator internal constructor(
                     )
                     showBrowser(
                         cached.copy(
+                            homeShelves = if (providerHomeModule?.deferInitialCatalogLoad == true) {
+                                HomeShelfData(
+                                    isServerProvided = true,
+                                    hiddenSections = setOf(
+                                        HomeSection.WANT_TO_READ,
+                                        HomeSection.RECENTLY_ADDED_BOOKS,
+                                        HomeSection.RECENTLY_RELEASED_BOOKS,
+                                        HomeSection.RECENTLY_READ
+                                    ),
+                                    deferInitialCatalogLoad = true
+                                )
+                            } else {
+                                cached.homeShelves
+                            },
                             isOfflineSnapshot = true,
                             message = uiText(
                                 R.string.error_cached_snapshot_refresh_failed,
@@ -2478,6 +2528,10 @@ class AppCoordinator internal constructor(
         scope.launch {
             try {
                 readingStatusModule()?.resetBookReadingState(book) ?: repository.resetBookReadingState(book)
+                readerLifecycleModule?.clearEpubReaderPosition(
+                    (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
+                    book
+                )
                 latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 val current = lastBrowserState ?: return@launch

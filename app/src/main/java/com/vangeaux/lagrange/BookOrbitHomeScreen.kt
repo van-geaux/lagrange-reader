@@ -22,10 +22,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.FlowRow
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -49,6 +52,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.KeyboardOptions
@@ -117,7 +121,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -139,11 +145,13 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -152,6 +160,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
@@ -195,7 +204,11 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 import kotlinx.coroutines.launch
@@ -205,6 +218,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -693,10 +708,13 @@ private fun SeriesFileSelectionDialog(
     groupingMode: SeriesGroupingMode,
     onGroupingModeChange: (SeriesGroupingMode) -> Unit,
     selectedFileIds: Set<String>,
+    fileSizes: Map<String, Long?> = emptyMap(),
+    fileSizesLoading: Boolean = false,
     onSelectedFileIdsChange: (Set<String>) -> Unit,
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
-    title: String? = null
+    title: String? = null,
+    confirmLabel: Int = R.string.common_continue
 ) {
     val libraryNames = remember(libraries) { libraries.associate { it.id to it.name } }
     val groups = remember(candidates, libraryNames) {
@@ -721,6 +739,7 @@ private fun SeriesFileSelectionDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.9f)
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -737,6 +756,24 @@ private fun SeriesFileSelectionDialog(
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            val selectedBooks = candidates.filter {
+                seriesFileIsSelectable(it) && selectedFileIds.contains(it.fileId)
+            }
+            val knownSizes = selectedBooks.mapNotNull { book ->
+                book.fileId?.let(fileSizes::get)
+            }
+            Text(
+                when {
+                    fileSizesLoading -> stringResource(R.string.browse_expected_download_size_calculating)
+                    knownSizes.size == selectedBooks.size ->
+                        stringResource(
+                            R.string.browse_expected_download_size,
+                            formatByteSize(knownSizes.sumOf { it })
+                        )
+                    else -> stringResource(R.string.browse_expected_download_size_unknown)
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = { onSelectedFileIdsChange(selectableIds) },
@@ -751,7 +788,7 @@ private fun SeriesFileSelectionDialog(
                 SeriesGroupingControls(groupingMode, onGroupingModeChange)
             }
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 groups.forEach { group ->
@@ -804,7 +841,7 @@ private fun SeriesFileSelectionDialog(
                 onClick = onConfirm,
                 enabled = selectedCount > 0,
                 modifier = Modifier.fillMaxWidth().testTag("bulk-download-continue")
-            ) { Text(stringResource(R.string.common_continue)) }
+            ) { Text(stringResource(confirmLabel)) }
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -907,7 +944,7 @@ internal fun homeLocalBooksPreview(
 }
 
 internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeShelfData {
-    if (libraryId == null || shelves.isAggregatedAcrossLibraries) return shelves
+    if (libraryId == null) return shelves
     fun scoped(source: Map<HomeSection, List<BookSummary>>): Map<HomeSection, List<BookSummary>> =
         source.mapValues { (_, books) -> books.filter { it.libraryId == libraryId } }
     return shelves.copy(
@@ -918,6 +955,24 @@ internal fun homeFeedShelves(shelves: HomeShelfData, libraryId: String?): HomeSh
 
 internal fun homeFeedBooks(books: List<BookSummary>, libraryId: String?): List<BookSummary> =
     libraryId?.let { selectedId -> books.filter { it.libraryId == selectedId } } ?: books
+
+internal fun homeSectionSourceBooks(
+    state: BrowserState,
+    section: HomeSection,
+    serverWide: Boolean
+): List<BookSummary> {
+    val shelves = homeFeedShelves(state.homeShelves, state.selectedLibraryId.takeUnless { serverWide })
+    shelves.seriesBySection[section]?.let { return it }
+    if (shelves.isServerProvided && section in shelves.booksBySection.keys) {
+        return shelves.booksBySection[section].orEmpty()
+    }
+    return if (serverWide) state.homeBooks else state.books
+}
+
+internal fun homeSectionCurrentStatusBooks(
+    state: BrowserState,
+    serverWide: Boolean
+): List<BookSummary> = if (serverWide) state.homeBooks else state.books
 
 internal fun bookAvailableFormatsForDisplay(
     book: BookSummary
@@ -1117,6 +1172,8 @@ internal fun NativeLibraryBrowserScreen(
     userRatingAvailable: Boolean = true,
     seriesDetailLoader: suspend (String) -> SeriesDetailInfo?,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    libraryBookCatalogAvailable: Boolean = true,
+    seriesCatalogAvailable: Boolean = true,
     smartScopesLoader: suspend () -> List<SmartScope> = { emptyList() },
     smartScopesAvailable: Boolean = true,
     smartScopeSeriesCatalogLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -1159,6 +1216,7 @@ internal fun NativeLibraryBrowserScreen(
     onCheckForUpdates: () -> Unit = {},
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
+    offlineCacheAvailable: Boolean = true,
     offlineCacheStatusLoader: suspend () -> OfflineCacheStatus = { OfflineCacheStatus() },
     onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
     onCancelOfflineCacheUpdate: suspend () -> Unit = {},
@@ -1176,6 +1234,11 @@ internal fun NativeLibraryBrowserScreen(
     }
     var destination by rememberSaveable {
         mutableStateOf(appPreferences.defaultOpeningScreen.toBrowserDestination())
+    }
+    LaunchedEffect(seriesCatalogAvailable, destination) {
+        if (!seriesCatalogAvailable && destination == BrowserDestination.SERIES) {
+            destination = BrowserDestination.LIBRARY
+        }
     }
     LaunchedEffect(achievementsAvailable) {
         if (!achievementsAvailable && destination == BrowserDestination.ACHIEVEMENTS) {
@@ -1231,6 +1294,7 @@ internal fun NativeLibraryBrowserScreen(
         update = { browserRoute = browserRoute.copy(selectedSeriesKey = it) }
     )
     var selectedSeriesKey by selectedSeriesKeyProperty
+    var selectedSeriesName by remember { mutableStateOf<String?>(null) }
     val selectedAuthorProperty = browserRouteProperty(
         value = { browserRoute.selectedAuthor },
         update = { browserRoute = browserRoute.copy(selectedAuthor = it) }
@@ -1484,6 +1548,7 @@ internal fun NativeLibraryBrowserScreen(
             windowInsets = WindowInsets(0, 0, 0, 0)
         ) {
             MoreMenu(
+                seriesAvailable = seriesCatalogAvailable,
                 smartScopesAvailable = smartScopesAvailable,
                 authorsAvailable = authorsAvailable,
                 onSeries = {
@@ -2014,6 +2079,7 @@ internal fun NativeLibraryBrowserScreen(
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
+                        selectedSeriesName = series.name
                         activeSeriesGenre = null
                         genreSourceSeriesKey = null
                         detailReturnDestination = BrowserDestination.SERIES
@@ -2054,6 +2120,7 @@ internal fun NativeLibraryBrowserScreen(
                     readingStatusOptions = readingStatusOptions,
                     onSeriesSelected = { seriesKey ->
                         selectedSeriesKey = seriesKey
+                        selectedSeriesName = selectedBook?.seriesName
                         selectedBook = null
                     },
                     onAuthorSelected = { authorName ->
@@ -2077,6 +2144,7 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 selectedSeriesKey != null && destination != BrowserDestination.SMART_SCOPES -> SeriesDetails(
                     seriesKey = selectedSeriesKey!!,
+                    seriesNameHint = selectedSeriesName,
                     books = (state.books + state.homeBooks).distinctBy { it.id to it.fileId },
                     libraries = state.libraries,
                     groupingMode = appPreferences.seriesGroupingMode,
@@ -2090,6 +2158,7 @@ internal fun NativeLibraryBrowserScreen(
                     } else {
                         { seriesId -> smartScopeSeriesDetailLoader(selectedSmartScope!!.id, seriesId) }
                     },
+                    bookDetailLoader = bookDetailLoader,
                     onBookSelected = { selectedBook = it },
                     onDeleteLocalCopy = requestLocalDelete,
                     onDeleteLocalCopies = onDeleteLocalCopies,
@@ -2136,12 +2205,14 @@ internal fun NativeLibraryBrowserScreen(
                     libraryOptions = state.libraries,
                     selectedScope = selectedSmartScope,
                     books = state.homeBooks,
+                    loadAllPages = false,
                     modifier = Modifier.padding(padding),
                     loader = seriesCatalogLoader,
                     scopeLoader = smartScopeSeriesCatalogLoader,
                     imageLoader = catalogImageLoader,
                     onSeriesSelected = { series ->
                         selectedSeriesKey = series.id
+                        selectedSeriesName = series.name
                         detailReturnDestination = BrowserDestination.SERIES
                     }
                 )
@@ -2204,6 +2275,7 @@ internal fun NativeLibraryBrowserScreen(
                     onPreferencesChange = onAppPreferencesChange,
                     storageUsageLoader = storageUsageLoader,
                     onClearCache = onClearCache,
+                    offlineCacheAvailable = offlineCacheAvailable,
                     offlineCacheStatusLoader = offlineCacheStatusLoader,
                     onStartOfflineCacheUpdate = onStartOfflineCacheUpdate,
                     onCancelOfflineCacheUpdate = onCancelOfflineCacheUpdate,
@@ -2238,15 +2310,44 @@ internal fun NativeLibraryBrowserScreen(
                 destination.toHomeSection() in setOf(
                     HomeSection.RECENTLY_ADDED_SERIES,
                     HomeSection.RECENTLY_UPDATED_SERIES
-                ) -> HomeSeriesSectionScreen(
+                ) -> if (state.homeShelves.isServerProvided) {
+                    SeriesCatalogScreen(
+                        query = "",
+                        initialFilter = SeriesCatalogFilter(
+                            libraryId = state.selectedLibraryId.takeUnless {
+                                homeSectionReturnDestination == BrowserDestination.HOME
+                            },
+                            sort = SeriesSortOption.LAST_ADDED,
+                            direction = SortDirection.DESCENDING,
+                            homeSection = destination.toHomeSection()
+                        ),
+                        persistenceKey = "home-series:${destination.toHomeSection()}:${state.selectedLibraryId}",
+                        appPreferences = appPreferences,
+                        onAppPreferencesChange = onAppPreferencesChange,
+                        libraryOptions = state.libraries,
+                        books = emptyList(),
+                        loadAllPages = false,
+                        showJumpRail = false,
+                        enablePagination = false,
+                        modifier = Modifier.padding(padding),
+                        loader = seriesCatalogLoader,
+                        imageLoader = catalogImageLoader,
+                        onSeriesSelected = { series ->
+                            selectedSeriesKey = series.id
+                            selectedSeriesName = series.name
+                            detailReturnDestination = destination
+                        }
+                    )
+                } else HomeSeriesSectionScreen(
                     section = destination.toHomeSection()!!,
-                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
-                        state.books
-                    } else {
-                        state.homeBooks
-                    },
+                    books = homeSectionSourceBooks(
+                        state = state,
+                        section = destination.toHomeSection()!!,
+                        serverWide = homeSectionReturnDestination == BrowserDestination.HOME
+                    ),
                     state = state,
-                    serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
+                    serverWide = homeSectionReturnDestination == BrowserDestination.HOME &&
+                        !state.homeShelves.isServerProvided,
                     recentBooksPageLoader = recentBooksPageLoader,
                     seriesCatalogLoader = seriesCatalogLoader,
                     modifier = Modifier.padding(padding),
@@ -2258,11 +2359,11 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination.toHomeSection() != null -> HomeSectionScreen(
                     section = destination.toHomeSection()!!,
-                    books = if (homeSectionReturnDestination == BrowserDestination.LIBRARY) {
-                        state.books
-                    } else {
-                        state.homeBooks
-                    },
+                    books = homeSectionSourceBooks(
+                        state = state,
+                        section = destination.toHomeSection()!!,
+                        serverWide = homeSectionReturnDestination == BrowserDestination.HOME
+                    ),
                     state = state,
                     localOnDeckEnabled = appPreferences.showOnDeckWhenShelfSyncDisabled,
                     serverWide = homeSectionReturnDestination == BrowserDestination.HOME,
@@ -2330,6 +2431,9 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
+                    libraryBookCatalogAvailable = libraryBookCatalogAvailable,
+                    seriesCatalogLoader = seriesCatalogLoader,
+                    catalogImageLoader = catalogImageLoader,
                     localBooksLoader = localBooksLoader,
                     coverLoader = coverLoader,
                     onBookSelected = { book ->
@@ -2339,6 +2443,9 @@ internal fun NativeLibraryBrowserScreen(
                     onSeriesSelected = { seriesKey ->
                         detailReturnDestination = BrowserDestination.LIBRARY
                         selectedSeriesKey = seriesKey
+                    },
+                    onSeriesNameSelected = { seriesName ->
+                        selectedSeriesName = seriesName
                     },
                     onRemoveFromCurrentlyReading = onRemoveFromCurrentlyReading,
                     onDownload = requestDownload,
@@ -2513,18 +2620,38 @@ private fun BrowserBottomNavigation(
     onLibraries: () -> Unit,
     onMore: () -> Unit
 ) {
-    NavigationBar(modifier = Modifier.testTag("browser_bottom_navigation")) {
+    val colorEink = LocalColorEinkTheme.current
+    val itemColors = if (colorEink) {
+        NavigationBarItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            indicatorColor = MaterialTheme.colorScheme.primary,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurface,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurface,
+            disabledIconColor = MaterialTheme.colorScheme.outline,
+            disabledTextColor = MaterialTheme.colorScheme.outline
+        )
+    } else {
+        NavigationBarItemDefaults.colors()
+    }
+    NavigationBar(
+        modifier = Modifier.testTag("browser_bottom_navigation"),
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = if (colorEink) 0.dp else NavigationBarDefaults.Elevation
+    ) {
         NavigationBarItem(
             selected = destination == BrowserDestination.HOME,
             onClick = onHome,
             icon = { Icon(Icons.Default.Home, contentDescription = null) },
-            label = { Text(stringResource(R.string.browse_home)) }
+            label = { Text(stringResource(R.string.browse_home)) },
+            colors = itemColors
         )
         NavigationBarItem(
             selected = destination == BrowserDestination.LIBRARY,
             onClick = onLibraries,
             icon = { Icon(Icons.Default.LocalLibrary, contentDescription = stringResource(R.string.browse_cd_libraries)) },
-            label = { Text(stringResource(R.string.browse_libraries)) }
+            label = { Text(stringResource(R.string.browse_libraries)) },
+            colors = itemColors
         )
         NavigationBarItem(
             selected = destination == BrowserDestination.SERIES ||
@@ -2537,13 +2664,15 @@ private fun BrowserBottomNavigation(
                 destination == BrowserDestination.ABOUT,
             onClick = onMore,
             icon = { Icon(Icons.Default.MoreVert, contentDescription = null) },
-            label = { Text(stringResource(R.string.browse_more)) }
+            label = { Text(stringResource(R.string.browse_more)) },
+            colors = itemColors
         )
     }
 }
 
 @Composable
 private fun MoreMenu(
+    seriesAvailable: Boolean = true,
     smartScopesAvailable: Boolean = true,
     authorsAvailable: Boolean = true,
     onSeries: () -> Unit,
@@ -2562,11 +2691,13 @@ private fun MoreMenu(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
             style = MaterialTheme.typography.headlineSmall
         )
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.browse_series)) },
-            leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_series)) },
-            modifier = Modifier.clickable(onClick = onSeries)
-        )
+        if (seriesAvailable) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.browse_series)) },
+                leadingContent = { Icon(Icons.Default.CollectionsBookmark, contentDescription = stringResource(R.string.browse_cd_series)) },
+                modifier = Modifier.clickable(onClick = onSeries)
+            )
+        }
         if (smartScopesAvailable) {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.browse_smart_scopes)) },
@@ -2749,6 +2880,9 @@ private fun SeriesCatalogScreen(
     libraryOptions: List<LibrarySummary>,
     selectedScope: SmartScope? = null,
     books: List<BookSummary> = emptyList(),
+    loadAllPages: Boolean = true,
+    showJumpRail: Boolean = true,
+    enablePagination: Boolean = true,
     modifier: Modifier,
     loader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     scopeLoader: suspend (Long, SeriesCatalogFilter, Int) -> SeriesCatalogPage = { _, _, _ -> SeriesCatalogPage() },
@@ -2759,11 +2893,17 @@ private fun SeriesCatalogScreen(
     val lockedFilter = appPreferences.lockedSeriesFilters[persistenceKey]
         ?.let(::seriesCatalogFilterFromStorage)
     var items by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var jumpIndexItems by remember(query, initialFilter, selectedScopeId) { mutableStateOf<List<SeriesSummary>>(emptyList()) }
+    var hasProviderJumpIndex by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var total by remember(query, initialFilter, selectedScopeId) { mutableStateOf(0) }
     var isLoading by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var isRefreshing by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var loadError by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var reloadKey by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(0) }
+    var nextPage by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(1) }
+    var seriesPageSize by remember(query, initialFilter, selectedScopeId) { mutableIntStateOf(20) }
+    var hasMorePages by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
+    var isLoadingMore by remember(query, initialFilter, selectedScopeId) { mutableStateOf(false) }
     var filter by remember(query, initialFilter, selectedScopeId) {
         mutableStateOf(
             (lockedFilter ?: initialFilter).copy(query = query.takeIf { it.isNotBlank() })
@@ -2778,15 +2918,28 @@ private fun SeriesCatalogScreen(
         isLoading = true
         loadError = false
         items = emptyList()
+        jumpIndexItems = emptyList()
+        hasProviderJumpIndex = false
         total = 0
         gridState.scrollToItem(0)
         if (query.isNotBlank()) delay(300)
         val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-        runCatching { loadCompleteSeriesCatalog { page ->
-                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
-            } }.onSuccess { catalog ->
+        runCatching {
+            if (loadAllPages) {
+                loadCompleteSeriesCatalog { page ->
+                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+                }
+            } else {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, 0) else loader(activeFilter, 0)
+            }
+        }.onSuccess { catalog ->
             items = catalog.items
-            total = catalog.total ?: catalog.items.size
+            jumpIndexItems = catalog.jumpIndex ?: catalog.items
+            hasProviderJumpIndex = catalog.jumpIndex != null
+            total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
+            nextPage = 1
+            seriesPageSize = catalog.size ?: seriesPageSize
+            hasMorePages = enablePagination && !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
         }.onFailure {
             loadError = true
         }
@@ -2796,12 +2949,21 @@ private fun SeriesCatalogScreen(
         if (reloadKey == 0) return@LaunchedEffect
         try {
             val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() })
-            val catalog = loadCompleteSeriesCatalog { page ->
-                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+            val catalog = if (loadAllPages) {
+                loadCompleteSeriesCatalog { page ->
+                    if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page) else loader(activeFilter, page)
+                }
+            } else {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, 0) else loader(activeFilter, 0)
             }
             if (catalog.items.isNotEmpty() || items.isEmpty()) {
                 items = catalog.items
-                total = catalog.total ?: catalog.items.size
+                jumpIndexItems = catalog.jumpIndex ?: jumpIndexItems
+                hasProviderJumpIndex = catalog.jumpIndex != null || hasProviderJumpIndex
+                total = catalog.total ?: total.takeIf { it > 0 } ?: catalog.items.size
+                nextPage = 1
+                seriesPageSize = catalog.size ?: seriesPageSize
+                hasMorePages = enablePagination && !loadAllPages && catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
             }
         } finally {
             isRefreshing = false
@@ -2813,16 +2975,115 @@ private fun SeriesCatalogScreen(
             reloadKey += 1
         }
     }
+    suspend fun loadNextPage(includeCounts: Boolean = true): Boolean {
+        if (!enablePagination || loadAllPages || !hasMorePages || isLoading || isLoadingMore) return false
+        isLoadingMore = true
+        return try {
+            val activeFilter = filter.copy(
+                query = query.takeIf { it.isNotBlank() },
+                includeCounts = includeCounts
+            )
+            val catalog = runCatching {
+                if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, nextPage)
+                else loader(activeFilter, nextPage)
+            }.getOrNull() ?: return false
+            items = (items + catalog.items).distinctBy { it.id }
+            total = catalog.total ?: total.takeIf { it > 0 } ?: items.size
+            seriesPageSize = catalog.size ?: seriesPageSize
+            nextPage += 1
+            hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+            catalog.items.isNotEmpty()
+        } finally {
+            isLoadingMore = false
+        }
+    }
+    LaunchedEffect(loadAllPages, filter, selectedScopeId, hasMorePages) {
+        if (!enablePagination || loadAllPages) return@LaunchedEffect
+        snapshotFlow {
+            val layout = gridState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible to layout.totalItemsCount
+        }
+            .distinctUntilChanged()
+            .filter { (lastVisible, totalItems) ->
+                hasMorePages && totalItems > 0 && lastVisible >= totalItems - 6
+            }
+            .collect { loadNextPage() }
+    }
+    suspend fun jumpToSeriesIndex(index: Int) {
+        val targetLabel = jumpIndexItems.getOrNull(index)?.let { libraryJumpLabel(it.name) }
+        if (index < items.size) {
+            val localIndex = targetLabel?.let { label -> items.indexOfFirst { libraryJumpLabel(it.name) == label } }
+                ?.takeIf { it >= 0 } ?: index
+            if (reduceMotion) gridState.scrollToItem(localIndex) else gridState.animateScrollToItem(localIndex)
+            return
+        }
+        var targetPage = (index / seriesPageSize.coerceAtLeast(1)).coerceAtLeast(0)
+        val activeFilter = filter.copy(query = query.takeIf { it.isNotBlank() }, includeCounts = false)
+        suspend fun loadSummaryPage(page: Int): SeriesCatalogPage? = runCatching {
+            if (selectedScope != null) scopeLoader(selectedScope.id, activeFilter, page)
+            else loader(activeFilter, page)
+        }.getOrNull()
+        var catalog = loadSummaryPage(targetPage) ?: return
+        if (targetLabel != null && catalog.items.none { libraryJumpLabel(it.name) == targetLabel }) {
+            val next = loadSummaryPage(targetPage + 1)
+            if (next?.items?.any { libraryJumpLabel(it.name) == targetLabel } == true) {
+                targetPage += 1
+                catalog = next
+            }
+        }
+        if (catalog.items.isEmpty()) return
+        items = catalog.items
+        seriesPageSize = catalog.size ?: seriesPageSize
+        nextPage = targetPage + 1
+        hasMorePages = catalog.items.size >= (catalog.size ?: 0) && catalog.items.isNotEmpty()
+        val localIndex = targetLabel?.let { label -> catalog.items.indexOfFirst { libraryJumpLabel(it.name) == label } }
+            ?.takeIf { it >= 0 }
+            ?: (index % seriesPageSize.coerceAtLeast(1)).coerceIn(0, catalog.items.lastIndex)
+        if (reduceMotion) gridState.scrollToItem(localIndex) else gridState.animateScrollToItem(localIndex)
+        scope.launch {
+            val enriched = runCatching {
+                val countFilter = filter.copy(query = query.takeIf { it.isNotBlank() }, includeCounts = true)
+                if (selectedScope != null) scopeLoader(selectedScope.id, countFilter, targetPage)
+                else loader(countFilter, targetPage)
+            }.getOrNull() ?: return@launch
+            val enrichedById = enriched.items.associateBy { it.id }
+            items = items.map { enrichedById[it.id] ?: it }
+        }
+    }
+
+    suspend fun jumpToSeriesLabel(target: Char) {
+        if (loadAllPages) return
+        var targetPage = if (items.any { libraryJumpLabel(it.name) == target }) 0 else -1
+        while (targetPage < 0 && hasMorePages) {
+            val pageToLoad = nextPage
+            if (!loadNextPage(includeCounts = false)) break
+            if (items.any { libraryJumpLabel(it.name) == target }) targetPage = pageToLoad
+        }
+        if (targetPage < 0) return
+        val pagesToEnrich = (targetPage - 1..targetPage + 1).filter { it >= 0 && it < nextPage }
+        pagesToEnrich.forEach { page ->
+            val enriched = runCatching {
+                loader(filter.copy(includeCounts = true), page)
+            }.getOrNull() ?: return@forEach
+            val enrichedById = enriched.items.associateBy { it.id }
+            items = items.map { enrichedById[it.id] ?: it }
+        }
+        val index = items.indexOfFirst { libraryJumpLabel(it.name) == target }
+        if (index >= 0) {
+            if (reduceMotion) gridState.scrollToItem(index) else gridState.animateScrollToItem(index)
+        }
+    }
     val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
-    val jumpTargets = remember(displayItems, filter.sort, filter.direction, isLoading) {
+    val jumpTargets = remember(jumpIndexItems, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
-            buildSeriesJumpTargets(displayItems, filter.direction)
+            buildSeriesJumpTargets(jumpIndexItems, filter.direction)
         } else {
             emptyList()
         }
     }
 
-    val hasJumpRail = jumpTargets.isNotEmpty()
+    val hasJumpRail = showJumpRail && !isLoading && (jumpTargets.isNotEmpty() || (!loadAllPages && displayItems.isNotEmpty()))
     PullToRefreshLayout(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -2937,23 +3198,28 @@ private fun SeriesCatalogScreen(
         LibraryJumpRail(
             targets = jumpTargets,
             direction = filter.direction,
+            enabledLabels = if (!loadAllPages && !hasProviderJumpIndex) {
+                catalogJumpRailLabels(filter.direction).toSet()
+            } else {
+                jumpTargets.map { it.first }.toSet()
+            },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp, bottom = 12.dp),
                 onJump = { index ->
                     scope.launch {
-                        if (reduceMotion) {
-                            gridState.scrollToItem(index)
-                        } else {
-                            gridState.animateScrollToItem(index)
-                        }
+                        jumpToSeriesIndex(index)
                     }
-                }
+                },
+                onUnavailableJump = if (!loadAllPages && !hasProviderJumpIndex) {
+                    { label -> scope.launch { jumpToSeriesLabel(label) } }
+                } else null
             )
         }
         }
         }
     }
+
     if (showFilter) {
         SeriesFilterSheet(
             initial = filter,
@@ -3728,6 +3994,7 @@ internal fun OptionsScreen(
     onPreferencesChange: (AppPreferences) -> Unit,
     storageUsageLoader: suspend () -> StorageUsage = { StorageUsage() },
     onClearCache: suspend () -> Unit = {},
+    offlineCacheAvailable: Boolean = true,
     offlineCacheStatusLoader: suspend () -> OfflineCacheStatus = { OfflineCacheStatus() },
     onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
     onCancelOfflineCacheUpdate: suspend () -> Unit = {},
@@ -3890,8 +4157,13 @@ internal fun OptionsScreen(
     }
     val offlineCacheStatus by produceState(
         initialValue = OfflineCacheStatus(),
-        offlineCacheRefreshKey
+        offlineCacheRefreshKey,
+        offlineCacheAvailable
     ) {
+        if (!offlineCacheAvailable) {
+            value = OfflineCacheStatus()
+            return@produceState
+        }
         do {
             value = runCatching { offlineCacheStatusLoader() }.getOrDefault(value)
             if (value.state == OfflineCacheRunState.RUNNING) delay(750) else break
@@ -4059,8 +4331,8 @@ internal fun OptionsScreen(
         }
 if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item(key = "scale-progress-speed") {
             AppPreferenceSwitchRow(
-                title = "Scale Progress by Playback Speed",
-                summary = "Adjusts remaining time and progress bar tracking when listening above 1.0x speed.",
+                title = stringResource(R.string.auto_settings_scale_progress_title),
+                summary = stringResource(R.string.auto_settings_scale_progress_summary),
                 checked = preferences.scaleProgressByPlaybackSpeed,
                 testTag = "options-scale-progress-speed",
                 onCheckedChange = {
@@ -4078,9 +4350,12 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 OrbitEyebrow("Android Auto")
-                Text("Dashboard controls", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Customize playback speed buttons, skip intervals, and steering wheel actions.",
+                    stringResource(R.string.auto_settings_dashboard_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    stringResource(R.string.auto_settings_dashboard_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -4092,10 +4367,13 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp, end = 4.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                OrbitEyebrow("Android Auto Controls")
-                Text("Steering wheel & skip behavior", style = MaterialTheme.typography.titleLarge)
+                OrbitEyebrow(stringResource(R.string.auto_settings_controls_eyebrow))
                 Text(
-                    "Define whether vehicle skip buttons jump chapters or perform timed skips.",
+                    stringResource(R.string.auto_settings_steering_title),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    stringResource(R.string.auto_settings_steering_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -4104,8 +4382,8 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
         if (subDestination == "android_auto") item(key = "aa-vehicle-skip-mode") {
             // Placeholder or preference toggle for steering wheel skip mode (Chapters vs Time-skip)
             AppPreferenceSwitchRow(
-                title = "Vehicle Skip Buttons Jump Chapters",
-                summary = "When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.",
+                title = stringResource(R.string.auto_settings_vehicle_skip_title),
+                summary = stringResource(R.string.auto_settings_vehicle_skip_summary),
                 checked = false, // Map to your app preference key when ready
                 testTag = "options-aa-vehicle-skip-chapters",
                 onCheckedChange = { /* Save preference */ }
@@ -4250,6 +4528,13 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (downloadStorageSelection.usesPortableFolder) {
+                            Text(
+                                stringResource(R.string.settings_download_location_managed_subfolder),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         downloadStorageMessage?.let { message ->
                             Text(
                                 message,
@@ -4339,7 +4624,7 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
-        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "offline-library-cache") {
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE && offlineCacheAvailable) item(key = "offline-library-cache") {
             OfflineLibraryCacheConfiguration(
                 preferences = preferences,
                 libraries = libraries,
@@ -4368,6 +4653,14 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
                     }
                 }
             )
+        }
+        if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE && !offlineCacheAvailable) item(key = "offline-library-cache-unavailable") {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_offline_cache_title)) },
+                supportingContent = { Text(stringResource(R.string.settings_offline_cache_unavailable)) },
+                modifier = Modifier.fillMaxWidth().testTag("options-offline-cache-unavailable")
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
         if (selectedCategory == OptionsCategory.DOWNLOADS_OFFLINE) item(key = "automatic-book-downloads") {
             AutomaticBookDownloadConfiguration(
@@ -5607,6 +5900,31 @@ private fun LibraryReaderConfiguration(
             }
         }
         if (selectedLibrary != null) {
+            AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_volume_page_navigation),
+                summary = stringResource(R.string.settings_volume_page_navigation_summary),
+                checked = value.volumeButtonPageNavigation,
+                testTag = "options-reading-volume-button-navigation",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(volumeButtonPageNavigation = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_swap_volume_buttons),
+                summary = stringResource(R.string.settings_swap_volume_buttons_summary),
+                checked = value.reverseVolumeButtonNavigation,
+                enabled = value.volumeButtonPageNavigation,
+                testTag = "options-reading-reverse-volume-button-navigation",
+                onCheckedChange = { reversed ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(reverseVolumeButtonNavigation = reversed)
+                    )
+                }
+            )
             Text(
                 stringResource(R.string.settings_reading_direction),
                 style = MaterialTheme.typography.titleMedium
@@ -5641,6 +5959,18 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading-tap-zone"
             )
             AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_show_page_progress),
+                summary = stringResource(R.string.settings_show_page_progress_summary),
+                checked = value.showPageProgress,
+                testTag = "options-reading-show-page-progress",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(showPageProgress = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
                 title = stringResource(R.string.settings_prefer_server_progress),
                 summary = stringResource(R.string.settings_prefer_server_progress_summary),
                 checked = value.preferServerProgressOnReopen,
@@ -5652,24 +5982,22 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            Text(
-                stringResource(R.string.settings_typography),
-                style = MaterialTheme.typography.titleMedium
+            ReaderAppearanceSettings(
+                value = value,
+                onPreferencesChange = { next ->
+                    onPreferencesChange(selectedLibrary.id, next)
+                },
+                testTagPrefix = "options-reading",
+                showOptionsTheme = true,
+                showBackgroundTheme = true
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                EPUB_THEME_OPTIONS.forEach { theme ->
-                    FilterChip(
-                        selected = value.theme == theme,
-                        onClick = {
-                            onPreferencesChange(selectedLibrary.id, value.copy(theme = theme))
-                        },
-                        label = { Text(stringResource(theme.labelRes)) }
-                    )
-                }
-            }
+            ReaderTextColorSettings(
+                value = value,
+                onPreferencesChange = { next ->
+                    onPreferencesChange(selectedLibrary.id, next)
+                },
+                testTagPrefix = "options-reading"
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -5735,6 +6063,13 @@ private fun LibraryReaderConfiguration(
                     onPreferencesChange(
                         selectedLibrary.id,
                         value.copy(pdfPageGapDp = pageGapDp)
+                    )
+                },
+                joinFacingPages = value.joinPdfFacingPages,
+                onJoinFacingPagesChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(joinPdfFacingPages = enabled)
                     )
                 },
                 invertColors = value.invertPdfColors,
@@ -5982,6 +6317,235 @@ private fun ReaderTapZoneSettings(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun ReaderThemeChips(
+    selected: EpubReaderTheme,
+    presetSelected: Boolean,
+    testTagPrefix: String,
+    onSelected: (EpubReaderTheme) -> Unit,
+    showCustom: Boolean = false,
+    customSelected: Boolean = false,
+    onCustomSelected: () -> Unit = {}
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        EPUB_THEME_OPTIONS.forEach { theme ->
+            FilterChip(
+                selected = presetSelected && selected == theme,
+                onClick = { onSelected(theme) },
+                label = { Text(stringResource(theme.labelRes)) },
+                modifier = Modifier.testTag(
+                    "$testTagPrefix-${theme.name.lowercase()}"
+                )
+            )
+        }
+        if (showCustom) {
+            FilterChip(
+                selected = customSelected,
+                onClick = onCustomSelected,
+                label = { Text(stringResource(R.string.sheet_custom_background_custom)) },
+                modifier = Modifier.testTag("$testTagPrefix-custom")
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReaderTextColorSettings(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String
+) {
+    var customTextColorDialogVisible by remember { mutableStateOf(false) }
+    val systemDarkMode = isSystemInDarkTheme()
+    val defaultTextColor = defaultReaderTextColor(
+        customBackgroundActive = activeCustomReaderBackground(value) != null,
+        presetTextColor = cssHexColorInt(value.backgroundTheme.foregroundCss),
+        systemDarkMode = systemDarkMode
+    )
+    Text(
+        stringResource(R.string.sheet_text_color),
+        style = MaterialTheme.typography.titleMedium
+    )
+    Text(
+        stringResource(R.string.sheet_text_color_summary),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline
+    )
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = !value.useCustomTextColor,
+            onClick = {
+                if (value.useCustomTextColor) {
+                    onPreferencesChange(value.copy(useCustomTextColor = false))
+                }
+            },
+            label = { Text(stringResource(R.string.sheet_text_color_default)) },
+            modifier = Modifier.testTag("$testTagPrefix-text-color-default")
+        )
+        FilterChip(
+            selected = value.useCustomTextColor,
+            onClick = {
+                when {
+                    value.customTextColor == null ->
+                        customTextColorDialogVisible = true
+                    !value.useCustomTextColor ->
+                        onPreferencesChange(value.copy(useCustomTextColor = true))
+                }
+            },
+            label = { Text(stringResource(R.string.sheet_text_color_custom)) },
+            modifier = Modifier.testTag("$testTagPrefix-text-color-custom")
+        )
+    }
+    if (value.useCustomTextColor) {
+        AppPreferenceSelectionRow(
+            title = stringResource(R.string.sheet_text_color_custom),
+            value = value.customTextColor?.let(::customReaderBackgroundCss)
+                ?: stringResource(R.string.sheet_text_color_default),
+            summary = stringResource(R.string.sheet_text_color_custom_summary),
+            testTag = "$testTagPrefix-text-color",
+            onClick = { customTextColorDialogVisible = true }
+        )
+    }
+    if (customTextColorDialogVisible) {
+        ReaderCustomTextColorDialog(
+            initialColor = value.customTextColor ?: defaultTextColor,
+            pageBackgroundColor = readerContentBackgroundColor(value),
+            defaultTextColor = defaultTextColor,
+            testTagPrefix = testTagPrefix,
+            onApply = { color ->
+                onPreferencesChange(
+                    value.copy(
+                        useCustomTextColor = true,
+                        customTextColor = color
+                    )
+                )
+                customTextColorDialogVisible = false
+            },
+            onReset = {
+                onPreferencesChange(
+                    value.copy(
+                        useCustomTextColor = false,
+                        customTextColor = null
+                    )
+                )
+                customTextColorDialogVisible = false
+            },
+            onDismiss = { customTextColorDialogVisible = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReaderAppearanceSettings(
+    value: LibraryReaderPreferences,
+    onPreferencesChange: (LibraryReaderPreferences) -> Unit,
+    testTagPrefix: String,
+    showOptionsTheme: Boolean,
+    showBackgroundTheme: Boolean
+) {
+    var customBackgroundDialogVisible by remember { mutableStateOf(false) }
+
+    if (showOptionsTheme) {
+        Text(
+            stringResource(R.string.sheet_reader_theme_options),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_reader_theme_options_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        ReaderThemeChips(
+            selected = value.theme,
+            presetSelected = true,
+            testTagPrefix = "$testTagPrefix-theme",
+            onSelected = { theme -> onPreferencesChange(value.copy(theme = theme)) }
+        )
+    }
+
+    if (showBackgroundTheme) {
+        if (showOptionsTheme) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+        }
+        Text(
+            stringResource(R.string.sheet_reading_background),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_reading_background_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        ReaderThemeChips(
+            selected = value.backgroundTheme,
+            presetSelected = !value.useCustomBackground,
+            testTagPrefix = "$testTagPrefix-background-theme",
+            onSelected = { theme ->
+                onPreferencesChange(
+                    value.copy(
+                        backgroundTheme = theme,
+                        useCustomBackground = false
+                    )
+                )
+            },
+            showCustom = true,
+            customSelected = value.useCustomBackground,
+            onCustomSelected = {
+                when {
+                    value.customBackgroundColor == null ->
+                        customBackgroundDialogVisible = true
+                    !value.useCustomBackground ->
+                        onPreferencesChange(value.copy(useCustomBackground = true))
+                }
+            }
+        )
+        if (value.useCustomBackground) {
+            AppPreferenceSelectionRow(
+                title = stringResource(R.string.sheet_custom_background),
+                value = value.customBackgroundColor?.let(::customReaderBackgroundCss)
+                    ?: stringResource(R.string.sheet_custom_background_default),
+                summary = stringResource(R.string.sheet_custom_background_summary),
+                testTag = "$testTagPrefix-custom-background",
+                onClick = { customBackgroundDialogVisible = true }
+            )
+        }
+        if (customBackgroundDialogVisible) {
+            ReaderCustomBackgroundDialog(
+                initialColor = value.customBackgroundColor ?: value.backgroundTheme.backgroundColor,
+                testTagPrefix = testTagPrefix,
+                onApply = { color ->
+                    onPreferencesChange(
+                        value.copy(
+                            useCustomBackground = true,
+                            customBackgroundColor = color
+                        )
+                    )
+                    customBackgroundDialogVisible = false
+                },
+                onReset = {
+                    onPreferencesChange(
+                        value.copy(
+                            useCustomBackground = false,
+                            customBackgroundColor = null
+                        )
+                    )
+                    customBackgroundDialogVisible = false
+                },
+                onDismiss = { customBackgroundDialogVisible = false }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 internal fun ReaderConfigurationControls(
     value: LibraryReaderPreferences,
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
@@ -6053,28 +6617,19 @@ internal fun ReaderConfigurationControls(
         testTag = "$testTagPrefix-tap-zone-tutorial-after-changes",
         onCheckedChange = onShowTapZoneTutorialAfterChangesChange
     )
-    if (format != ReaderConfigurationFormat.COMIC) {
-        Text(
-            stringResource(R.string.settings_typography),
-            style = MaterialTheme.typography.titleMedium
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            EPUB_THEME_OPTIONS.forEach { theme ->
-                FilterChip(
-                    selected = value.theme == theme,
-                    onClick = { onPreferencesChange(value.copy(theme = theme)) },
-                    label = { Text(stringResource(theme.labelRes)) },
-                    modifier = Modifier.testTag(
-                        "$testTagPrefix-theme-${theme.name.lowercase()}"
-                    )
-                )
-            }
-        }
-    }
+    ReaderAppearanceSettings(
+        value = value,
+        onPreferencesChange = onPreferencesChange,
+        testTagPrefix = testTagPrefix,
+        showOptionsTheme = format != ReaderConfigurationFormat.COMIC,
+        showBackgroundTheme = format == ReaderConfigurationFormat.EPUB
+    )
     if (format == ReaderConfigurationFormat.EPUB) {
+        ReaderTextColorSettings(
+            value = value,
+            onPreferencesChange = onPreferencesChange,
+            testTagPrefix = testTagPrefix
+        )
         AppPreferenceSwitchRow(
             title = stringResource(R.string.settings_prefer_server_progress),
             summary = stringResource(R.string.settings_prefer_server_progress_summary),
@@ -6216,6 +6771,22 @@ internal fun ReaderConfigurationControls(
                 modifier = Modifier.testTag("$testTagPrefix-word-spacing")
             )
         }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                stringResource(
+                    R.string.settings_paragraph_spacing,
+                    formatEpubParagraphSpacing(value.paragraphSpacing)
+                ),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Slider(
+                value = value.paragraphSpacing,
+                onValueChange = { onPreferencesChange(value.copy(paragraphSpacing = it)) },
+                valueRange = DEFAULT_EPUB_PARAGRAPH_SPACING..MAX_EPUB_PARAGRAPH_SPACING,
+                steps = 19,
+                modifier = Modifier.testTag("$testTagPrefix-paragraph-spacing")
+            )
+        }
         EpubTypesettingSettings(value, testTagPrefix, onPreferencesChange)
     }
     if (format != ReaderConfigurationFormat.COMIC) {
@@ -6311,6 +6882,299 @@ private fun ReaderSpreadSettings(
             onPreferencesChange(
                 value.copy(twoPageSpread = if (enabled) ReaderSpreadMode.AUTO else ReaderSpreadMode.OFF)
             )
+        }
+    )
+}
+
+@Composable
+private fun ReaderColorWheel(
+    hue: Float,
+    saturation: Float,
+    description: String,
+    testTag: String,
+    onColorSelected: (Float, Float) -> Unit
+) {
+    val wheelSize = remember { mutableStateOf(IntSize.Zero) }
+    val currentOnColorSelected by rememberUpdatedState(onColorSelected)
+    val hueColors = remember {
+        listOf(
+            Color.Red,
+            Color.Yellow,
+            Color.Green,
+            Color.Cyan,
+            Color.Blue,
+            Color.Magenta,
+            Color.Red
+        )
+    }
+    val selectColorAt: (Offset) -> Unit = { position ->
+        val width = wheelSize.value.width.toFloat()
+        val height = wheelSize.value.height.toFloat()
+        if (width > 0f && height > 0f) {
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val dx = position.x - centerX
+            val dy = position.y - centerY
+            val radius = minOf(width, height) / 2f
+            val wheelSaturation = (sqrt(dx * dx + dy * dy) / radius).coerceIn(0f, 1f)
+            val wheelHue = ((Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())) + 360.0) % 360.0)
+                .toFloat()
+            currentOnColorSelected(wheelHue, wheelSaturation)
+        }
+    }
+
+    Canvas(
+        modifier = Modifier
+            .size(308.dp)
+            .onSizeChanged { wheelSize.value = it }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = selectColorAt)
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = selectColorAt,
+                    onDrag = { change, _ ->
+                        selectColorAt(change.position)
+                        change.consume()
+                    }
+                )
+            }
+            .testTag(testTag)
+            .semantics { contentDescription = description }
+    ) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = size.minDimension / 2f
+        drawCircle(
+            brush = Brush.sweepGradient(hueColors, center),
+            radius = radius,
+            center = center
+        )
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.White, Color.Transparent),
+                center = center,
+                radius = radius
+            ),
+            radius = radius,
+            center = center
+        )
+        val angle = Math.toRadians(hue.toDouble())
+        val indicatorCenter = Offset(
+            center.x + cos(angle).toFloat() * radius * saturation,
+            center.y + sin(angle).toFloat() * radius * saturation
+        )
+        drawCircle(Color.Black, radius = 8.8.dp.toPx(), center = indicatorCenter)
+        drawCircle(Color.White, radius = 6.4.dp.toPx(), center = indicatorCenter)
+        drawCircle(
+            color = Color.Black,
+            radius = 6.4.dp.toPx(),
+            center = indicatorCenter,
+            style = Stroke(width = 0.7.dp.toPx())
+        )
+    }
+}
+
+@Composable
+private fun ReaderColorPickerDialog(
+    title: String,
+    initialColor: Int?,
+    colorFieldTestTag: String,
+    wheelTestTag: String,
+    onApply: (Int) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+    previewContent: @Composable (Int?) -> Unit
+) {
+    val startingColor = initialColor ?: 0xFFFFFFFF.toInt()
+    val initialHsv = remember(initialColor) { readerColorToHsv(startingColor) }
+    var hue by remember(initialColor) { mutableFloatStateOf(initialHsv.hue) }
+    var saturation by remember(initialColor) { mutableFloatStateOf(initialHsv.saturation) }
+    var brightness by remember(initialColor) { mutableFloatStateOf(initialHsv.brightness) }
+    var hexValue by remember(initialColor) {
+        mutableStateOf(customReaderBackgroundHex(startingColor))
+    }
+    val color = parseCustomReaderHex(hexValue)
+    val invalidValue = hexValue.isNotEmpty() && color == null
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ReaderColorWheel(
+                        hue = hue,
+                        saturation = saturation,
+                        description = stringResource(R.string.sheet_custom_background_wheel_description),
+                        testTag = wheelTestTag,
+                        onColorSelected = { selectedHue, selectedSaturation ->
+                            hue = selectedHue
+                            saturation = selectedSaturation
+                            val selected = readerColorFromHsv(hue, saturation, brightness)
+                            hexValue = customReaderBackgroundHex(selected)
+                        }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.sheet_custom_background_brightness),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Slider(
+                        value = brightness,
+                        onValueChange = { selectedBrightness ->
+                            brightness = selectedBrightness
+                            val selected = readerColorFromHsv(hue, saturation, brightness)
+                            hexValue = customReaderBackgroundHex(selected)
+                        },
+                        valueRange = 0f..1f,
+                        steps = 99,
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("$wheelTestTag-brightness")
+                    )
+                    Text("${(brightness * 100).roundToInt()}%")
+                }
+                OutlinedTextField(
+                    value = hexValue,
+                    onValueChange = { entered ->
+                        val normalized = entered
+                            .trim()
+                            .removePrefix("#")
+                            .filter { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+                            .take(6)
+                            .uppercase()
+                        hexValue = normalized
+                        parseCustomReaderHex(normalized)?.let { enteredColor ->
+                            val hsv = readerColorToHsv(enteredColor)
+                            hue = hsv.hue
+                            saturation = hsv.saturation
+                            brightness = hsv.brightness
+                        }
+                    },
+                    label = { Text(stringResource(R.string.sheet_custom_background_hex)) },
+                    prefix = { Text("#") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag(colorFieldTestTag),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                )
+                Text(
+                    stringResource(R.string.sheet_custom_background_preview),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                previewContent(color)
+                if (invalidValue) {
+                    Text(
+                        stringResource(R.string.sheet_custom_background_invalid),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { color?.let(onApply) },
+                enabled = color != null
+            ) {
+                Text(stringResource(R.string.sheet_custom_background_apply))
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onReset) {
+                    Text(stringResource(R.string.sheet_custom_background_reset))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReaderCustomBackgroundDialog(
+    initialColor: Int?,
+    testTagPrefix: String,
+    onApply: (Int) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ReaderColorPickerDialog(
+        title = stringResource(R.string.sheet_custom_background_dialog_title),
+        initialColor = initialColor,
+        colorFieldTestTag = "$testTagPrefix-custom-background-hex",
+        wheelTestTag = "$testTagPrefix-custom-background-wheel",
+        onApply = onApply,
+        onReset = onReset,
+        onDismiss = onDismiss,
+        previewContent = { color ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(color?.let { Color(it) } ?: MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                color?.let {
+                    Text(
+                        text = customReaderBackgroundCss(it),
+                        color = Color(customReaderBackgroundTextColor(it)),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReaderCustomTextColorDialog(
+    initialColor: Int?,
+    pageBackgroundColor: Int,
+    defaultTextColor: Int,
+    testTagPrefix: String,
+    onApply: (Int) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ReaderColorPickerDialog(
+        title = stringResource(R.string.sheet_text_color_dialog_title),
+        initialColor = initialColor,
+        colorFieldTestTag = "$testTagPrefix-text-color-hex",
+        wheelTestTag = "$testTagPrefix-text-color-wheel",
+        onApply = onApply,
+        onReset = onReset,
+        onDismiss = onDismiss,
+        previewContent = { color ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(pageBackgroundColor)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.sheet_text_color_sample),
+                    color = Color(color ?: defaultTextColor),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
         }
     )
 }
@@ -6694,6 +7558,7 @@ private fun HomeFeed(
     // Provider Home shelves are server-wide; filter them before rendering a
     // library Recommended feed instead of reusing aggregate contents.
     val serverShelves = homeFeedShelves(state.homeShelves, localBooksLibraryId)
+    val hiddenSections = serverShelves.hiddenSections
     val onDeckEnabled = state.homeShelfPreferences.effectiveOnDeckEnabled(
         localFallbackEnabled = localOnDeckEnabled,
         hasProviderOwnedShelves = serverShelves.isServerProvided
@@ -6714,7 +7579,10 @@ private fun HomeFeed(
     ) {
         if (!onDeckEnabled) emptyList()
         else if (serverShelves.providesBooks(HomeSection.ON_DECK)) {
-            serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
+            visibleProviderOnDeckBooks(
+                providerBooks = serverShelves.booksBySection[HomeSection.ON_DECK].orEmpty(),
+                currentBooks = libraryScopedBooks
+            )
         } else generatedOnDeckBooks(
             books = libraryScopedBooks,
             enabled = true,
@@ -6727,6 +7595,13 @@ private fun HomeFeed(
     }
     val currentlyReading = currentlyReadingAll.take(HOME_PREVIEW_LIMIT)
     val onDeck = onDeckAll.take(HOME_PREVIEW_LIMIT)
+    val onDeckSeriesAll = if (serverShelves.isServerProvided) {
+        val seriesBooks = visibleProviderOnDeckBooks(
+            providerBooks = serverShelves.seriesBySection[HomeSection.ON_DECK].orEmpty(),
+            currentBooks = libraryScopedBooks
+        )
+        seriesBooks.map { book -> (book.seriesName ?: book.title) to book }
+    } else emptyList()
     val wantToRead = wantToReadAll.take(HOME_PREVIEW_LIMIT)
     val recentlyAddedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_ADDED_BOOKS].orEmpty()
@@ -6767,22 +7642,12 @@ private fun HomeFeed(
     val recentlyReleasedBooksAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_RELEASED_BOOKS].orEmpty()
     } else emptyList()
+    fun providerSeriesShelf(section: HomeSection): List<Pair<String, BookSummary>> {
+        val seriesBooks = serverShelves.seriesBySection[section].orEmpty()
+        return seriesBooks.map { book -> (book.seriesName ?: book.title) to book }
+    }
     val recentSeriesAll = if (serverShelves.isServerProvided) {
-        val seriesBooks = serverShelves.seriesBySection[HomeSection.RECENTLY_ADDED_SERIES].orEmpty()
-        homeSeriesShelfItems(
-            series = seriesBooks.mapNotNull { book ->
-                book.seriesId?.let {
-                    SeriesSummary(
-                        id = it,
-                        name = book.seriesName ?: book.title,
-                        coverUrl = book.coverUrl
-                    )
-                }
-            }.distinctBy { it.id },
-            books = seriesBooks,
-            limit = Int.MAX_VALUE,
-            preferBookOrbitImportSequence = false
-        )
+        providerSeriesShelf(HomeSection.RECENTLY_ADDED_SERIES)
     } else {
         homeSeriesShelfItems(
             series = authoritativeRecentSeries ?: fallbackRecentSeries,
@@ -6791,7 +7656,9 @@ private fun HomeFeed(
             preferBookOrbitImportSequence = true
         )
     }
-    val updatedSeriesAll = if (serverShelves.isServerProvided) emptyList() else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
+    val updatedSeriesAll = if (serverShelves.isServerProvided) {
+        providerSeriesShelf(HomeSection.RECENTLY_UPDATED_SERIES)
+    } else recentSeries(libraryScopedBooks, useUpdatedAt = true, limit = null)
     val recentlyReadAll = if (serverShelves.isServerProvided) {
         serverShelves.booksBySection[HomeSection.RECENTLY_READ].orEmpty()
     } else recentlyReadBooks(libraryScopedBooks, limit = null)
@@ -6856,21 +7723,23 @@ private fun HomeFeed(
                 )
             }
         }
-        if (onDeck.isNotEmpty()) item {
+        if (onDeckSeriesAll.isNotEmpty()) item {
+            SeriesShelf(stringResource(R.string.browse_on_deck), onDeckSeriesAll.take(HOME_PREVIEW_LIMIT), coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
+        } else if (onDeck.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_on_deck), onDeck, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.ON_DECK) })
         }
-        if (wantToRead.isNotEmpty()) item {
+        if (HomeSection.WANT_TO_READ !in hiddenSections && wantToRead.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_want_to_read), wantToRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.WANT_TO_READ) })
         }
-        if (recentlyAddedBooks.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_ADDED_BOOKS !in hiddenSections && recentlyAddedBooks.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_added_books), recentlyAddedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_BOOKS) })
         }
-        if (recentlyReleasedBooks.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_RELEASED_BOOKS !in hiddenSections && recentlyReleasedBooks.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_released_books), recentlyReleasedBooks, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_RELEASED_BOOKS) })
         }
         if (recentSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_added_series), recentSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_ADDED_SERIES) }) }
         if (updatedSeries.isNotEmpty()) item { SeriesShelf(stringResource(R.string.browse_recently_updated_series), updatedSeries, coverLoader, onSeriesSelected, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_UPDATED_SERIES) }) }
-        if (recentlyRead.isNotEmpty()) item {
+        if (HomeSection.RECENTLY_READ !in hiddenSections && recentlyRead.isNotEmpty()) item {
             BookShelf(stringResource(R.string.browse_recently_read_books), recentlyRead, coverLoader, onBookSelected, state = state, onDownload = onDownload, onCancelDownload = onCancelDownload, onClearFailedDownload = onClearFailedDownload, onDeleteLocalCopy = onDeleteLocalCopy, onMarkAsRead = availableMarkAsRead, onMarkAsUnread = availableMarkAsUnread, onMarkAsStatus = onMarkAsStatus, onSeeAll = { onHomeSectionSelected?.invoke(HomeSection.RECENTLY_READ) })
         }
         if (localBooks.isNotEmpty()) item {
@@ -6890,7 +7759,9 @@ private fun HomeFeed(
             )
         }
         if (state.isLoadingBooks) item { LoadingFeedRow(stringResource(R.string.browse_loading_books)) }
-        if (!state.isLoadingBooks && state.books.isEmpty()) {
+        val hasServerHomeContent = serverShelves.booksBySection.values.any { it.isNotEmpty() } ||
+            serverShelves.seriesBySection.values.any { it.isNotEmpty() }
+        if (!state.isLoadingBooks && state.books.isEmpty() && !hasServerHomeContent) {
             item {
                 Text(
                     stringResource(R.string.browse_no_books_in_library),
@@ -7394,10 +8265,14 @@ private fun LibraryContentScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit,
+    libraryBookCatalogAvailable: Boolean,
+    seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
+    catalogImageLoader: suspend (String) -> ByteArray?,
     localBooksLoader: suspend () -> List<BookSummary>,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
+    onSeriesNameSelected: (String) -> Unit,
     onRemoveFromCurrentlyReading: (BookSummary) -> Unit,
     onDownload: ((BookSummary) -> Unit)? = null,
     onBulkDownload: ((String, List<BookSummary>) -> Unit)? = null,
@@ -7419,6 +8294,11 @@ private fun LibraryContentScreen(
         state.selectedLibraryId
     ) {
         value = runCatching { localBooksLoader() }.getOrNull()
+    }
+    LaunchedEffect(tab, state.selectedLibraryId) {
+        if (tab == LibraryTab.BROWSE && state.books.isEmpty() && !state.isCatalogComplete && !state.isCatalogSyncing) {
+            onLoadMoreLibraryBooks()
+        }
     }
     val libraryDownloadCandidates = remember(state.books, state.selectedLibraryId) {
         booksDownloadableForLibrary(state.books, state.selectedLibraryId)
@@ -7454,6 +8334,7 @@ private fun LibraryContentScreen(
     if (showLibraryFileSelection) {
         SeriesFileSelectionDialog(
             title = stringResource(R.string.browse_select_library_downloads),
+            confirmLabel = R.string.browse_download_library,
             candidates = libraryDownloadCandidates,
             libraries = state.libraries,
             groupingMode = SeriesGroupingMode.NONE,
@@ -7504,7 +8385,7 @@ private fun LibraryContentScreen(
                         onBulkDownload?.invoke(libraryDownloadScopeLabel, libraryFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-library-step2")
-                ) { Text(stringResource(R.string.browse_download_library)) }
+                ) { Text(stringResource(R.string.common_continue)) }
             },
             dismissButton = {
                 TextButton(onClick = { libraryDownloadConfirmStep = 0 }) { Text(stringResource(R.string.common_cancel)) }
@@ -7580,7 +8461,25 @@ private fun LibraryContentScreen(
                     localBooksLibraryId = state.selectedLibraryId,
                     showHeader = false
                 )
-                LibraryTab.BROWSE -> LibraryBrowseScreen(
+                LibraryTab.BROWSE -> if (!libraryBookCatalogAvailable) {
+                    SeriesCatalogScreen(
+                        query = "",
+                        initialFilter = SeriesCatalogFilter(libraryId = state.selectedLibraryId),
+                        persistenceKey = "library-series-${state.selectedLibraryId}",
+                        appPreferences = appPreferences,
+                        onAppPreferencesChange = onAppPreferencesChange,
+                        libraryOptions = state.libraries,
+                        books = state.books,
+                        loadAllPages = false,
+                        modifier = Modifier.weight(1f),
+                        loader = seriesCatalogLoader,
+                        imageLoader = catalogImageLoader,
+                        onSeriesSelected = { series ->
+                            onSeriesNameSelected(series.name)
+                            onSeriesSelected(series.id)
+                        }
+                    )
+                } else LibraryBrowseScreen(
                     state = state,
                     modifier = Modifier.weight(1f),
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
@@ -7682,12 +8581,14 @@ internal fun PullToRefreshLayout(
     }
     Box(modifier = modifier.nestedScroll(pullState.nestedScrollConnection)) {
         content()
-        PullToRefreshContainer(
-            state = pullState,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .testTag("pull_to_refresh_indicator")
-        )
+        if (isRefreshing || pullState.isRefreshing) {
+            PullToRefreshContainer(
+                state = pullState,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .testTag("pull_to_refresh_indicator")
+            )
+        }
     }
 }
 
@@ -7858,8 +8759,10 @@ internal fun HomeSectionScreen(
         localFallbackEnabled = localOnDeckEnabled,
         hasProviderOwnedShelves = scopedServerShelves.isServerProvided
     )
+    val currentStatusBooks = homeSectionCurrentStatusBooks(state, serverWide)
     val localSectionBooks = remember(
         books,
+        currentStatusBooks,
         section,
         onDeckEnabled,
         scopedServerShelves
@@ -7869,7 +8772,10 @@ internal fun HomeSectionScreen(
             HomeSection.ON_DECK -> when {
                 !onDeckEnabled -> emptyList()
                 scopedServerShelves.providesBooks(HomeSection.ON_DECK) ->
-                    scopedServerShelves.booksBySection[HomeSection.ON_DECK].orEmpty()
+                    visibleProviderOnDeckBooks(
+                        providerBooks = scopedServerShelves.booksBySection[HomeSection.ON_DECK].orEmpty(),
+                        currentBooks = currentStatusBooks
+                    )
                 else -> generatedOnDeckBooks(books = books, enabled = true, limit = null)
             }
             HomeSection.WANT_TO_READ -> wantToReadBooks(books, limit = null)
@@ -8311,7 +9217,7 @@ private fun LibraryBooks(
                     if (state.isCatalogComplete) {
                         stringResource(R.string.browse_updating_cached_catalog)
                     } else {
-                        stringResource(R.string.browse_caching_full_library)
+                        stringResource(R.string.browse_loading_books)
                     }
                 )
             }
@@ -8636,7 +9542,9 @@ private fun LibraryJumpRail(
     targets: List<Pair<Char, Int>>,
     direction: SortDirection,
     modifier: Modifier,
-    onJump: (Int) -> Unit
+    enabledLabels: Set<Char>? = null,
+    onJump: (Int) -> Unit,
+    onUnavailableJump: ((Char) -> Unit)? = null
 ) {
     val targetsByLabel = targets.toMap()
     Column(
@@ -8651,6 +9559,7 @@ private fun LibraryJumpRail(
     ) {
         catalogJumpRailLabels(direction).forEach { label ->
             val index = targetsByLabel[label]
+            val canLoad = index == null && enabledLabels?.contains(label) == true && onUnavailableJump != null
             val jumpDescription = stringResource(R.string.browse_jump_to, label.toString())
             val unavailableDescription = stringResource(
                 R.string.browse_jump_unavailable,
@@ -8661,6 +9570,10 @@ private fun LibraryJumpRail(
                     if (index != null) {
                         Modifier
                             .clickable { onJump(index) }
+                            .semantics { contentDescription = jumpDescription }
+                    } else if (canLoad) {
+                        Modifier
+                            .clickable { onUnavailableJump?.invoke(label) }
                             .semantics { contentDescription = jumpDescription }
                     } else {
                         Modifier.semantics {
@@ -8674,7 +9587,7 @@ private fun LibraryJumpRail(
                 Text(
                     text = label.toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (index != null) {
+                    color = if (index != null || canLoad) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
@@ -12072,6 +12985,7 @@ private fun SeriesGroupingControls(
 @OptIn(ExperimentalLayoutApi::class)
 private fun SeriesDetails(
     seriesKey: String,
+    seriesNameHint: String? = null,
     books: List<BookSummary>,
     libraries: List<LibrarySummary>,
     groupingMode: SeriesGroupingMode,
@@ -12079,6 +12993,7 @@ private fun SeriesDetails(
     modifier: Modifier,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     detailLoader: suspend (String) -> SeriesDetailInfo?,
+    bookDetailLoader: suspend (BookSummary) -> BookDetailInfo?,
     onBookSelected: (BookSummary) -> Unit,
     onDeleteLocalCopy: (BookSummary) -> Unit,
     onDeleteLocalCopies: (List<BookSummary>) -> Unit,
@@ -12096,6 +13011,8 @@ private fun SeriesDetails(
         .filter { (it.seriesId ?: it.seriesName) == seriesKey }
         .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
     val seriesDisplayName = localBooks.firstOrNull()?.seriesName
+        ?.takeUnless { it == seriesKey }
+        ?: seriesNameHint?.takeUnless { it == seriesKey }
         ?: stringResource(R.string.browse_series)
     val localDetail = SeriesDetailInfo(
         id = seriesKey,
@@ -12114,17 +13031,27 @@ private fun SeriesDetails(
             isRefreshing = false
         }
     }
+    val displayedDetail = detail.copy(
+        name = detail.name.takeUnless { it.isBlank() || it == seriesKey || it == "Series" } ?: seriesDisplayName,
+        books = detail.books.map { book ->
+            if (book.seriesName.isNullOrBlank() || book.seriesName == seriesKey || book.seriesName == "Series") {
+                book.copy(seriesName = seriesDisplayName)
+            } else {
+                book
+            }
+        }
+    )
     val onRefresh: () -> Unit = {
         if (!isRefreshing) {
             isRefreshing = true
             reloadKey += 1
         }
     }
-    val bookSections = seriesBookSections(detail.books, libraries, groupingMode)
-    val completion = if (detail.bookCount > 0) detail.readCount.toFloat() / detail.bookCount else 0f
+    val bookSections = seriesBookSections(displayedDetail.books, libraries, groupingMode)
+    val completion = if (displayedDetail.bookCount > 0) displayedDetail.readCount.toFloat() / displayedDetail.bookCount else 0f
     val seriesDownloadCandidates = seriesSelectableFiles(
         booksWithLocalFilePathOverrides(
-            books = detail.books,
+            books = displayedDetail.books,
             localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
         )
     )
@@ -12133,6 +13060,8 @@ private fun SeriesDetails(
     var seriesFrozenSelection by remember(seriesKey) { mutableStateOf<List<BookSummary>>(emptyList()) }
     var showSeriesDownloadConfirm by remember(seriesKey) { mutableStateOf(false) }
     var pendingSeriesLocalDeletes by remember(seriesKey) { mutableStateOf<List<BookSummary>?>(null) }
+    var seriesFileSizes by remember(seriesKey) { mutableStateOf<Map<String, Long?>>(emptyMap()) }
+    var seriesFileSizesLoading by remember(seriesKey) { mutableStateOf(false) }
     val seriesLocalCopies = localCopiesForBulkAction(
         books = seriesDownloadCandidates,
         localFilePathOverrides = downloadState?.localFilePathOverrides.orEmpty()
@@ -12152,6 +13081,17 @@ private fun SeriesDetails(
         progressByFileId = downloadState?.downloadProgressByFileId.orEmpty(),
         completedFileIds = seriesLocalCopies.mapNotNullTo(mutableSetOf()) { it.fileId }
     )
+    LaunchedEffect(showSeriesFileSelection, seriesDownloadCandidates) {
+        if (!showSeriesFileSelection) return@LaunchedEffect
+        val candidates = seriesDownloadCandidates.filter { it.fileId != null }
+        seriesFileSizesLoading = candidates.isNotEmpty()
+        seriesFileSizes = candidates.associate { book ->
+            requireNotNull(book.fileId) to runCatching {
+                bookDetailLoader(book)?.totalSizeBytes
+            }.getOrNull()
+        }
+        seriesFileSizesLoading = false
+    }
     if (showSeriesFileSelection) {
         SeriesFileSelectionDialog(
             candidates = seriesDownloadCandidates,
@@ -12159,6 +13099,9 @@ private fun SeriesDetails(
             groupingMode = groupingMode,
             onGroupingModeChange = onGroupingModeChange,
             selectedFileIds = seriesSelectedFileIds,
+            fileSizes = seriesFileSizes,
+            fileSizesLoading = seriesFileSizesLoading,
+            confirmLabel = R.string.browse_download_series,
             onSelectedFileIdsChange = { seriesSelectedFileIds = it },
             onDismissRequest = { showSeriesFileSelection = false },
             onConfirm = {
@@ -12189,7 +13132,7 @@ private fun SeriesDetails(
                         onBulkDownload?.invoke(seriesDownloadScopeLabel, seriesFrozenSelection)
                     },
                     modifier = Modifier.testTag("confirm-download-series")
-                ) { Text(stringResource(R.string.browse_download_series)) }
+                ) { Text(stringResource(R.string.common_continue)) }
             },
             dismissButton = {
                 TextButton(onClick = { showSeriesDownloadConfirm = false }) { Text(stringResource(R.string.common_cancel)) }
@@ -12245,8 +13188,8 @@ private fun SeriesDetails(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OrbitEyebrow(stringResource(R.string.browse_series))
-                Text(detail.name, style = MaterialTheme.typography.headlineSmall)
-                detail.authors.takeIf { it.isNotEmpty() }?.let {
+                Text(displayedDetail.name, style = MaterialTheme.typography.headlineSmall)
+                displayedDetail.authors.takeIf { it.isNotEmpty() }?.let {
                     Text(
                         stringResource(R.string.browse_by_authors, it.joinToString()),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -12255,8 +13198,8 @@ private fun SeriesDetails(
                 Text(
                     stringResource(
                         R.string.browse_series_books_read,
-                        detail.bookCount,
-                        detail.readCount
+                        displayedDetail.bookCount,
+                        displayedDetail.readCount
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -12528,6 +13471,47 @@ internal fun onDeckBooks(
         }
         .let { result -> limit?.let(result::take) ?: result }
 }
+
+internal fun visibleProviderOnDeckBooks(
+    providerBooks: List<BookSummary>,
+    currentBooks: List<BookSummary> = providerBooks
+): List<BookSummary> = providerBooks
+    .map { providerBook ->
+        val currentMatches = currentProviderShelfBookMatches(providerBook, currentBooks)
+        val currentBook = currentMatches.firstOrNull { it.shouldBeHiddenFromProviderOnDeck() }
+            ?: currentMatches.firstOrNull()
+        if (currentBook == null) providerBook else providerBook.copy(
+            readStatus = currentBook.readStatus,
+            isRead = currentBook.isRead
+        )
+    }
+    .filterNot { book -> book.shouldBeHiddenFromProviderOnDeck() }
+
+private fun currentProviderShelfBookMatches(
+    providerBook: BookSummary,
+    currentBooks: List<BookSummary>
+): List<BookSummary> {
+    val scopedCurrentBooks = providerBook.libraryId.takeIf(String::isNotBlank)?.let { libraryId ->
+        currentBooks.filter { currentBook ->
+            currentBook.libraryId.isBlank() || currentBook.libraryId == libraryId
+        }
+    } ?: currentBooks
+
+    providerBook.fileId?.takeIf(String::isNotBlank)?.let { fileId ->
+        scopedCurrentBooks.filter { it.fileId == fileId }
+            .takeIf { it.isNotEmpty() }
+            ?.let { return it }
+    }
+    return providerBook.id.takeIf(String::isNotBlank)
+        ?.let { bookId -> scopedCurrentBooks.filter { it.id == bookId } }
+        .orEmpty()
+}
+
+private fun BookSummary.shouldBeHiddenFromProviderOnDeck(): Boolean =
+    isRead ||
+        readStatus?.isCompletedStatus() == true ||
+        readStatus == BookReadStatus.READING ||
+        readStatus == BookReadStatus.REREADING
 
 internal fun wantToReadBooks(
     books: List<BookSummary>,

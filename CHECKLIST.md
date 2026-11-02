@@ -4,9 +4,9 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Current release
 
-- [ ] Lagrange 2.1.0 is prepared for publication as [`v2.1.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.0), with combined and ABI-specific APK assets.
-- [x] `app/build.gradle.kts` records `versionName 2.1.0` and `versionCode 28`.
-- [ ] Release validation is recorded in [`docs/release-notes/v2.1.0.md`](docs/release-notes/v2.1.0.md); automated verification and final release publication remain part of the release gate. Current-device validation remains separate and incomplete.
+- [x] Lagrange 2.1.2 is published as [`v2.1.2`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.2), with combined and ABI-specific APK assets.
+- [x] `app/build.gradle.kts` records `versionName 2.1.2` and `versionCode 30`.
+- [x] Release workflow [run 41381768534](https://github.com/van-geaux/lagrange-reader/actions/runs/41381768534) succeeded and published the combined and ABI-specific APK assets.
 
 ## Current implementation status
 
@@ -17,6 +17,8 @@ This is the active completion and validation checklist. Historical work orders a
 - [x] CBR/CB7 offline opening uses client-side RAR4/RAR5/7z extraction into a cached CBZ; MOBI, AZW, AZW3, and FB2 remain unsupported.
 - [x] Multiple named profiles may use the same provider and normalized server URL; profile-scoped browser state, downloads, and Local books prevent local content from bleeding between accounts ([#305](https://github.com/van-geaux/lagrange-reader/issues/305)).
 - [x] Audiobook playback prefers the `medium=audio` cover endpoint, falls back to the generic book cover, and renders the selected audiobook cover with its square aspect ratio ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).
+- [x] Issue [#375](https://github.com/van-geaux/lagrange-reader/issues/375) adds reachable Series/library bulk-download selection actions, context-specific `Download series`/`Download library` labels, `Continue` confirmation actions, and expected aggregate download-size feedback. The user confirmed the final behavior on the Android device with `Lagrange-debug-202610312225.apk`.
+- [x] Download location accepts writable internal shared-storage folders as well as mounted SD-card folders through the Android system picker. The selected folder and managed download location remain visible, persisted access is reused for new downloads, and existing downloads remain in place ([#308](https://github.com/van-geaux/lagrange-reader/issues/308)). User-confirmed manual validation covers the selected-folder flow; API 26–28 broad-permission behavior remains documented separately from the SAF grant.
 
 ## Active validation
 

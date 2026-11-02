@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android Auto 浏览与播放界面 -->
+    <string name="auto_tab_home_title">主页</string>
+    <string name="auto_tab_home_subtitle">正在播放和进行中的有声书</string>
+    <string name="auto_tab_downloaded_title">已下载</string>
+    <string name="auto_tab_downloaded_subtitle">此设备上离线的有声书</string>
+    <string name="auto_tab_recent_title">最近</string>
+    <string name="auto_tab_recent_subtitle">最近添加和更新的有声书</string>
+    <string name="auto_tab_libraries_title">书库</string>
+    <string name="auto_tab_libraries_subtitle">按书库和系列浏览</string>
+    <string name="auto_group_now_playing">正在播放</string>
+    <string name="auto_group_in_progress">进行中</string>
+    <string name="auto_group_suggested">推荐</string>
+    <string name="auto_group_continue_listening">继续收听</string>
+    <string name="auto_chapters_title">章节 · %1$s</string>
+    <plurals name="auto_chapters_count">
+        <item quantity="one">%1$d 章</item>
+        <item quantity="other">%1$d 章</item>
+    </plurals>
+    <string name="auto_chapter_fallback">第 %1$d 章</string>
+    <string name="auto_chapter_starts_at">开始于 %1$s</string>
+    <string name="auto_series_title">系列</string>
+    <plurals name="auto_series_count">
+        <item quantity="one">%1$d 个有声书系列</item>
+        <item quantity="other">%1$d 个有声书系列</item>
+    </plurals>
+    <string name="auto_library_fallback">书库</string>
+    <plurals name="auto_audiobook_count">
+        <item quantity="one">%1$d 本有声书</item>
+        <item quantity="other">%1$d 本有声书</item>
+    </plurals>
+    <string name="auto_subtitle_progress_listened">已听 %1$d%%</string>
+    <string name="auto_subtitle_downloaded">已下载</string>
+    <string name="auto_subtitle_audiobook">有声书</string>
+    <string name="auto_playback_speed">播放速度（%1$s）</string>
+    <string name="auto_previous_chapter">上一章</string>
+    <string name="auto_next_chapter">下一章</string>
+    <string name="auto_settings_scale_progress_title">按播放速度缩放进度</string>
+    <string name="auto_settings_scale_progress_summary">以高于 1.0 倍速收听时，调整剩余时间和进度条跟踪。</string>
+    <string name="auto_settings_controls_eyebrow">Android Auto 控制</string>
+    <string name="auto_settings_dashboard_title">仪表盘控制</string>
+    <string name="auto_settings_dashboard_summary">自定义播放速度按钮、跳过间隔和方向盘操作。</string>
+    <string name="auto_settings_steering_title">方向盘与跳过行为</string>
+    <string name="auto_settings_steering_summary">设置车辆跳过按钮是跳章节还是按时间跳过。</string>
+    <string name="auto_settings_vehicle_skip_title">车辆跳过按钮跳转章节</string>
+    <string name="auto_settings_vehicle_skip_summary">启用后，方向盘上一首/下一首将跳章节，而不是跳转 10 秒/30 秒。</string>
+</resources>

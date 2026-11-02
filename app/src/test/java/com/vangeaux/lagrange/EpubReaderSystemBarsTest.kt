@@ -12,7 +12,13 @@ class EpubReaderSystemBarsTest {
         assertTrue(readerSystemBarsPolicy(false).showNavigationBar)
         assertTrue(EpubReaderTheme.Light.usesDarkStatusBarIcons())
         assertTrue(EpubReaderTheme.Sepia.usesDarkStatusBarIcons())
+        assertTrue(EpubReaderTheme.DarkerSepia.usesDarkStatusBarIcons())
+        assertTrue(EpubReaderTheme.Fern.usesDarkStatusBarIcons())
+        assertTrue(EpubReaderTheme.Arctic.usesDarkStatusBarIcons())
         assertFalse(EpubReaderTheme.Dark.usesDarkStatusBarIcons())
+        assertFalse(EpubReaderTheme.Midnight.usesDarkStatusBarIcons())
+        assertFalse(EpubReaderTheme.AmberNight.usesDarkStatusBarIcons())
+        assertFalse(EpubReaderTheme.DarkMoss.usesDarkStatusBarIcons())
         assertFalse(EpubReaderTheme.OledBlack.usesDarkStatusBarIcons())
     }
 

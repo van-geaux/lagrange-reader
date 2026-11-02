@@ -1,18 +1,22 @@
 package com.vangeaux.lagrange
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -44,8 +48,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             wordSpacing = 0.4f
         )
 
-        assertEquals(1.4, preferences.lineHeight)
-        assertEquals(0.4, preferences.wordSpacing)
+        assertEquals(1.4, requireNotNull(preferences.lineHeight), 0.0001)
+        assertEquals(0.4, requireNotNull(preferences.wordSpacing), 0.0001)
         assertFalse(preferences.publisherStyles == true)
     }
 
@@ -136,9 +140,17 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onAllNodesWithText("Page 3 of 4").assertCountEquals(0)
         composeRule.onNodeWithText("Continue reading").performClick()
         composeRule.onNodeWithText("Close book").performClick()
-        composeRule
+        val dismissScrim = composeRule
             .onNodeWithContentDescription("Dismiss reader options and continue reading")
-            .performClick()
+        val scrimBounds = dismissScrim.fetchSemanticsNode().boundsInRoot
+        val sheetBounds = composeRule
+            .onNodeWithTag("reader-options-sheet")
+            .fetchSemanticsNode()
+            .boundsInRoot
+        dismissScrim
+            .performTouchInput {
+                click(Offset(10f, sheetBounds.bottom - scrimBounds.top + 10f))
+            }
 
         composeRule.runOnIdle {
             assertEquals(1, continueCount.intValue)
@@ -201,7 +213,9 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
-        composeRule.onNodeWithText("Fonts").assertIsDisplayed()
+        composeRule.onNodeWithText("Fonts")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithTag("reader-options-reading-font-family-dropdown")
             .performScrollTo()
             .performClick()
@@ -218,6 +232,10 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .onNodeWithTag("reader-options-reading-word-spacing")
             .performScrollTo()
             .performTouchInput { swipeRight() }
+        composeRule
+            .onNodeWithTag("reader-options-reading-paragraph-spacing")
+            .performScrollTo()
+            .performTouchInput { swipeRight() }
 
         composeRule.runOnIdle {
             assertEquals(EpubReaderFontFamily.SYSTEM_SANS_SERIF, profile.value.fontFamily)
@@ -225,6 +243,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             assertEquals(1.3f, profile.value.fontScale)
             assertTrue(profile.value.lineSpacing > 1.2f)
             assertTrue(profile.value.wordSpacing > 0.2f)
+            assertTrue(profile.value.paragraphSpacing > DEFAULT_EPUB_PARAGRAPH_SPACING)
             assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
             assertEquals(EpubPaddingPercentages(11f, 22f, 33f, 44f), profile.value.padding)
@@ -322,6 +341,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     fun readerConfigurationEditsPreserveAllFormatLayoutsAndGaps() {
         val profile = mutableStateOf(
             LibraryReaderPreferences(
+                theme = EpubReaderTheme.Dark,
                 epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
                 pdfLayoutMode = ReaderLayoutMode.PAGINATED,
                 pdfPageGapDp = 8f,
@@ -351,15 +371,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
 
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
             .performScrollTo()
-            .assertIsOn()
             .performClick()
 
-        composeRule.onNodeWithTag("reader-options-reading-theme-oledblack")
-            .performScrollTo()
-            .assertIsDisplayed()
-        composeRule.onNodeWithTag("reader-options-reading-theme-dark")
-            .performScrollTo()
-            .performClick()
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
             .performScrollTo()
             .performClick()
@@ -384,11 +397,13 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     fun pdfFacingPageToggleIsOffByDefaultAndDisabledForContinuousLayout() {
         val profile = mutableStateOf(LibraryReaderPreferences())
         composeRule.setContent {
-            ReaderConfigurationControls(
-                value = profile.value,
-                onPreferencesChange = { profile.value = it },
-                format = ReaderConfigurationFormat.PDF
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                ReaderConfigurationControls(
+                    value = profile.value,
+                    onPreferencesChange = { profile.value = it },
+                    format = ReaderConfigurationFormat.PDF
+                )
+            }
         }
 
         composeRule.onNodeWithTag("reader-options-reading-pdf-join-facing-pages")

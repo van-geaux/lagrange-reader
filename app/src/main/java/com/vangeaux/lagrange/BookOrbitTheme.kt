@@ -7,6 +7,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -21,6 +23,11 @@ private val OrbitPaper = Color(0xFFFAF6ED)
 private val OrbitSurface = Color(0xFFFFFCF6)
 private val OrbitSlate = Color(0xFF486581)
 private val OrbitMist = Color(0xFFD9E2EC)
+
+internal val LocalColorEinkTheme = staticCompositionLocalOf { false }
+
+internal fun isColorEinkTheme(themeMode: AppThemeMode): Boolean =
+    themeMode == AppThemeMode.COLOR_EINK
 
 private val LightColors = lightColorScheme(
     primary = OrbitNavy,
@@ -43,6 +50,49 @@ private val LightColors = lightColorScheme(
     outlineVariant = OrbitMist,
     error = Color(0xFFBA1A1A),
     onError = Color.White
+)
+
+/**
+ * Opaque, high-contrast colors for colour e-ink panels. These deliberately avoid subtle tonal
+ * surfaces and translucent accents, which wash out or resemble display ghosting on the device.
+ */
+private val ColorEinkColors = lightColorScheme(
+    primary = Color(0xFF003F8F),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF0057B8),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFFB83A00),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFF25C05),
+    onSecondaryContainer = Color.Black,
+    tertiary = Color(0xFF007A3D),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFF009B50),
+    onTertiaryContainer = Color.Black,
+    background = Color.White,
+    onBackground = Color.Black,
+    surface = Color.White,
+    onSurface = Color.Black,
+    surfaceDim = Color(0xFFCCCCCC),
+    surfaceBright = Color.White,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF2F2F2),
+    surfaceContainer = Color(0xFFE8E8E8),
+    surfaceContainerHigh = Color(0xFFDADADA),
+    surfaceContainerHighest = Color(0xFFCCCCCC),
+    surfaceVariant = Color(0xFFD4D4D4),
+    onSurfaceVariant = Color.Black,
+    outline = Color.Black,
+    outlineVariant = Color(0xFF505050),
+    error = Color(0xFF9B0000),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFB4A8),
+    onErrorContainer = Color.Black,
+    inverseSurface = Color.Black,
+    inverseOnSurface = Color.White,
+    inversePrimary = Color(0xFF70A8FF),
+    scrim = Color.Black,
+    surfaceTint = Color.Transparent
 )
 
 private val CharcoalColors = darkColorScheme(
@@ -126,6 +176,7 @@ internal fun appColorSchemeForTheme(
 ): ColorScheme = when (themeMode) {
     AppThemeMode.FOLLOW_SYSTEM -> if (systemDark) CharcoalColors else LightColors
     AppThemeMode.LIGHT -> LightColors
+    AppThemeMode.COLOR_EINK -> ColorEinkColors
     AppThemeMode.CHARCOAL -> CharcoalColors
     AppThemeMode.WARM_BLACK -> WarmBlackColors
     AppThemeMode.OLED_BLACK -> OledBlackColors
@@ -206,10 +257,12 @@ fun BookOrbitTheme(
         themeMode = themeMode,
         systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     )
-    MaterialTheme(
-        colorScheme = colors,
-        typography = OrbitTypography,
-        shapes = OrbitShapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalColorEinkTheme provides isColorEinkTheme(themeMode)) {
+        MaterialTheme(
+            colorScheme = colors,
+            typography = OrbitTypography,
+            shapes = OrbitShapes,
+            content = content
+        )
+    }
 }

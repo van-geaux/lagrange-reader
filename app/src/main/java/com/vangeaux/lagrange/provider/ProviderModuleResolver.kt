@@ -207,6 +207,7 @@ internal fun resolveProviderCacheModule(repository: BookOrbitDataSource): CacheM
         is KomgaRepository -> KomgaModuleSet(repository).cache
         is KavitaRepository -> KavitaModuleSet(repository).modules.cache
         else -> object : CacheModule {
+        override val offlineCacheAvailable: Boolean = true
         override suspend fun loadCachedBrowserState() = repository.loadCachedBrowserState()
         override suspend fun loadStorageUsage() = repository.loadStorageUsage()
         override suspend fun clearAppCache() = repository.clearAppCache()

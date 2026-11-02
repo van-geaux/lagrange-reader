@@ -43,7 +43,7 @@ When a provider does not support a capability, its module must expose an explici
 - `AnnotationModule`: annotation CRUD, restoration, deletion, and mutation synchronization.
 - `AchievementModule`: achievement loading.
 - `StatisticsModule`: statistics loading.
-- `CacheModule`: storage usage, offline-cache lifecycle, and background refresh configuration.
+- `CacheModule`: storage usage, offline-cache lifecycle, and background refresh configuration. Providers expose `offlineCacheAvailable`; Komga sets it false, so shared UI does not render unsupported offline metadata-cache controls.
 - `AuthenticatedMediaModule`: origin-scoped provider media headers and authentication recovery for remote reader/player requests.
 - `ProviderSessionModule`: provider/profile session save and restore.
 - `BackgroundCacheModule`: provider-specific background cache warming, including explicit availability when unsupported.
@@ -83,7 +83,9 @@ Book Details are routed through `BookDetailModule` for detail loading, cached de
 
 Book covers and catalog images are routed through `BookCoverModule`. Each provider retains its own authenticated/image-loading behavior, while shared UI, audio playback, EPUB image-library, and comic-page callers use the coordinator capability path.
 
-Home shelf cache access and library/catalog loading are routed through `HomeShelfModule` and `BookCatalogModule`. Provider adapters own catalog retrieval and cache access; shared application code retains shelf projection, pagination orchestration, filtering UI, and refresh state.
+Home shelf cache access and library/catalog loading are routed through `HomeShelfModule` and `BookCatalogModule`. Provider feature availability separately declares whether Library → Browse renders a native paginated book catalog; Komga enables that capability through `/api/v1/books`, while Kavita keeps its Series-oriented Library fallback. Provider adapters own catalog retrieval and cache access; shared application code retains shelf projection, pagination orchestration, filtering UI, and refresh state.
+
+- Komga book search uses the native `POST /api/v1/books/list` contract. Komga series catalog/detail requests use `/api/v1/series/list` and `/api/v1/series/{seriesId}/books` rather than scanning every book in every library. The ordered Series summary response is retained as the jump index, so the shared rail requests the selected Series page directly instead of walking prior pages. Komga Home requests recently added and recently updated series through bounded `/api/v1/series/new` and `/api/v1/series/updated` shelves, and defers the initial full catalog refresh.
 
 Library discovery is routed through `LibraryModule`. Provider adapters own server-specific library retrieval, while selected-library persistence, profile switching, and shared navigation remain application concerns.
 

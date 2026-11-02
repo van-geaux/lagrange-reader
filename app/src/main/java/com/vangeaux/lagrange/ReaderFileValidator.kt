@@ -36,7 +36,7 @@ internal object ReaderFileValidator {
             MediaKind.AUDIO,
             MediaKind.UNKNOWN -> true
             MediaKind.PDF -> hasHeader(openInput, "%PDF-".toByteArray(Charsets.US_ASCII))
-            MediaKind.EPUB -> zipContains(openInput) { name -> name == "META-INF/container.xml" }
+            MediaKind.EPUB -> epubStreamContainsContainer(openInput)
             MediaKind.COMIC -> hasHeader(openInput, rar4Signature, rar5Signature, sevenZipSignature) ||
                 zipContains(openInput) { name ->
                     name.substringAfterLast('.', "").lowercase(Locale.US) in comicImageExtensions
@@ -130,6 +130,76 @@ internal object ReaderFileValidator {
             }
         }.getOrDefault(false)
 
+    private fun epubStreamContainsContainer(openInput: () -> InputStream): Boolean {
+        if (zipContains(openInput) { name -> name == "META-INF/container.xml" }) return true
+        // Android's ZipInputStream rejects some otherwise readable EPUBs whose stored directory
+        // entries carry a data descriptor. Fall back to local-header discovery only when that
+        // exact malformed-archive marker is present and the required container entry is found.
+        return runCatching { epubLocalHeadersContainContainer(openInput) }.getOrDefault(false)
+    }
+
+    private fun epubLocalHeadersContainContainer(openInput: () -> InputStream): Boolean = runCatching {
+        openInput().buffered().use { input ->
+            var scannedBytes = 0L
+            var hasStoredDataDescriptor = false
+            val header = ByteArray(26)
+
+            fun readByte(): Int {
+                val value = input.read()
+                if (value >= 0) scannedBytes += 1L
+                return value
+            }
+
+            fun readFully(buffer: ByteArray): Boolean {
+                var offset = 0
+                while (offset < buffer.size) {
+                    val count = input.read(buffer, offset, buffer.size - offset)
+                    if (count < 0) return false
+                    if (count == 0) continue
+                    offset += count
+                    scannedBytes += count.toLong()
+                    if (scannedBytes > MAX_VALIDATION_ZIP_SCAN_BYTES) return false
+                }
+                return true
+            }
+
+            fun littleEndianShort(offset: Int): Int =
+                (header[offset].toInt() and 0xFF) or
+                    ((header[offset + 1].toInt() and 0xFF) shl 8)
+
+            while (scannedBytes < MAX_VALIDATION_ZIP_SCAN_BYTES) {
+                val first = readByte()
+                if (first < 0) return false
+                if (first != 0x50 || readByte() != 0x4B ||
+                    readByte() != 0x03 || readByte() != 0x04
+                ) {
+                    if (scannedBytes >= MAX_VALIDATION_ZIP_SCAN_BYTES) return false
+                    continue
+                }
+                if (!readFully(header)) return false
+                val nameLength = littleEndianShort(22)
+                val extraLength = littleEndianShort(24)
+                if (nameLength > MAX_VALIDATION_ZIP_ENTRY_NAME_BYTES) return false
+                val flags = littleEndianShort(2)
+                val method = littleEndianShort(4)
+                val name = ByteArray(nameLength)
+                if (!readFully(name)) return false
+                if (extraLength > 0 && !readFully(ByteArray(extraLength))) return false
+                val entryName = name.toString(Charsets.UTF_8)
+                hasStoredDataDescriptor = hasStoredDataDescriptor ||
+                    (entryName.endsWith("/") &&
+                        flags and ZIP_DATA_DESCRIPTOR_FLAG != 0 && method == ZIP_STORED_METHOD)
+                if (entryName == "META-INF/container.xml") {
+                    if (hasStoredDataDescriptor) return true
+                }
+            }
+            false
+        }
+    }.getOrDefault(false)
+
     private const val MAX_VALIDATION_ZIP_ENTRIES = 20_000
     private const val MAX_VALIDATION_ZIP_SCAN_BYTES = 32L * 1024L * 1024L
+    private const val MAX_VALIDATION_ZIP_ENTRY_NAME_BYTES = 4 * 1024
+    private const val ZIP_DATA_DESCRIPTOR_FLAG = 0x08
+    private const val ZIP_STORED_METHOD = 0
 }

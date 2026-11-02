@@ -596,6 +596,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val appStorageManager = AppStorageManager(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
+        .addInterceptor { chain ->
+            // BookOrbit localizes server-owned text (for example achievements) from this header.
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("Accept-Language", context.bookOrbitAcceptLanguage())
+                    .build()
+            )
+        }
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
@@ -811,7 +819,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             mutateCatalogImageSession {
                 CatalogImageCoordinator.interactiveSignInProfileKey = null
                 try {
-                    clearRuntimeSession(activeReaderScope)
+                    clearRuntimeSession(activeReaderScope, clearReaderResumeState = false)
                 } finally {
                     automaticProfileId?.let {
                         AuthenticatedAccountScopeStore(context).deactivate(it)
@@ -870,7 +878,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 // Per-book languages are kept per profile across profile switches; sign-out forgets them.
                 EpubBookLanguageStore(context).clearProfile()
                 try {
-                    clearRuntimeSession(activeReaderScope)
+                    clearRuntimeSession(activeReaderScope, clearReaderResumeState = true)
                 } finally {
                     try {
                         automaticProfileId?.let(profileSessionStore::clear)
@@ -905,7 +913,10 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
     }
 
-    private suspend fun clearRuntimeSession(activeReaderScope: EpubReaderScope?) =
+    private suspend fun clearRuntimeSession(
+        activeReaderScope: EpubReaderScope?,
+        clearReaderResumeState: Boolean
+    ) =
         withContext(NonCancellable) {
         var credentialFailure: Exception? = null
         try {
@@ -942,10 +953,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         bestEffortRuntimeCleanup("clear book detail cache") { bookDetailCacheStore.clear() }
         activeReaderScope?.let { scope ->
             bestEffortRuntimeCleanup("clear active reader") { activeReaderStore.clear(scope) }
+            if (clearReaderResumeState) {
+                bestEffortRuntimeCleanup("clear EPUB resume state") {
+                    clearEpubResumeStateForScope(context, scope)
+                }
+            }
         }
-        bestEffortRuntimeCleanup("clear EPUB reader positions") { epubReaderPositionStore.clear() }
-        bestEffortRuntimeCleanup("clear EPUB locators") { ReadiumEpubLocatorStore(context).clear() }
-        bestEffortRuntimeCleanup("clear EPUB TTS positions") { ReadiumEpubTtsPositionStore(context).clear() }
         credentialFailure?.let { throw it }
     }
 
@@ -2417,15 +2430,20 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     override suspend fun saveEpubReaderPosition(book: BookSummary) = withContext(Dispatchers.IO) {
         if (book.mediaKind != MediaKind.EPUB || book.readerPageIndex == null) return@withContext
-        epubReaderPositionStore.save(
-            EpubReaderPosition(
-                serverUrl = getServerUrl().orEmpty(),
-                bookId = book.id,
-                fileId = book.fileId,
+        val serverUrl = getServerUrl().orEmpty()
+        val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext
+        val file = book.localPath?.let(::File)?.takeIf { it.isFile } ?: return@withContext
+        val identity = runCatching {
+            epubReaderPositionIdentity(scope, book.id, book.fileId, file)
+        }.getOrNull() ?: return@withContext
+        epubReaderPositionStore.importIfAbsent(
+            identity.copy(
                 chapterIndex = book.progressPageIndex ?: 0,
                 pageIndex = book.readerPageIndex,
                 pageCount = book.readerPageCount ?: 1,
-                updatedAtMillis = System.currentTimeMillis()
+                updatedAtMillis = System.currentTimeMillis(),
+                locatorJson = book.readerLocatorJson,
+                progressPercent = book.progressPercent
             )
         )
     }
@@ -2525,7 +2543,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             lastSyncedProgressStore.removeForBook(serverUrl, book.id)
         }
 
-        epubReaderPositionStore.removeForBook(serverUrl, book.id)
         resolveEpubReaderScope(context, serverUrl)?.let { scope ->
             activeReaderStore.clearIfMatches(scope, book.id)
         }
@@ -3623,7 +3640,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (!downloadedLocatorPassesIntegrity(context, book, locator)) {
             return LocalReaderResolution(
                 file = null,
-                localFileError = "The SD-card reader file is unavailable or failed integrity checks."
+                localFileError = "The selected-folder reader file is unavailable or failed integrity checks."
             )
         }
         if (book.mediaKind == MediaKind.AUDIO) {
@@ -3639,7 +3656,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         } catch (error: Throwable) {
             LocalReaderResolution(
                 file = null,
-                localFileError = error.message ?: "The SD-card reader file could not be opened."
+                localFileError = error.message ?: "The selected-folder reader file could not be opened."
             )
         }
     }

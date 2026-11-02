@@ -11,4 +11,29 @@
     <string name="sheet_book_language_title">书籍语言</string>
     <string name="sheet_book_language_auto">自动（优先书籍，其次设备语言）</string>
     <string name="sheet_comic_page_of">第 %1$d 页，共 %2$d 页</string>
+    <!-- EPUB 自定义页面背景 -->
+    <string name="sheet_custom_background">背景颜色</string>
+    <string name="sheet_custom_background_summary">自定义 EPUB 页面背景（RGB）</string>
+    <string name="sheet_custom_background_default">默认</string>
+    <string name="sheet_custom_background_dialog_title">自定义背景颜色</string>
+    <string name="sheet_custom_background_hex">十六进制颜色 (#RRGGBB)</string>
+    <string name="sheet_custom_background_wheel_description">用于选择色相和饱和度的色轮</string>
+    <string name="sheet_custom_background_brightness">亮度</string>
+    <string name="sheet_custom_background_preview">预览</string>
+    <string name="sheet_custom_background_apply">应用</string>
+    <string name="sheet_custom_background_reset">恢复默认</string>
+    <string name="sheet_custom_background_invalid">请输入 6 位十六进制颜色值，例如 #A1B2C3。</string>
+    <string name="sheet_text_color">文字颜色</string>
+    <string name="sheet_text_color_default">默认</string>
+    <string name="sheet_text_color_summary">跟随阅读背景或使用自定义颜色</string>
+    <string name="sheet_text_color_dialog_title">自定义文字颜色</string>
+    <string name="sheet_text_color_preview">预览</string>
+    <string name="sheet_text_color_sample">Aa 文字示例</string>
+    <string name="sheet_reader_theme_options">阅读选项</string>
+    <string name="sheet_reader_theme_options_summary">菜单与选项面板的颜色</string>
+    <string name="sheet_reading_background">阅读背景</string>
+    <string name="sheet_reading_background_summary">页面背景与阅读区域</string>
+    <string name="sheet_custom_background_custom">自定义</string>
+    <string name="sheet_text_color_custom">自定义</string>
+    <string name="sheet_text_color_custom_summary">自定义 EPUB 文字颜色（RGB）</string>
 </resources>

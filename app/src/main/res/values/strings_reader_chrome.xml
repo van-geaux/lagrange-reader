@@ -38,9 +38,9 @@
 
     <!-- EPUB progress footer -->
     <string name="chrome_progress_summary">%1$d%% · Chapter %2$d/%3$d · Page %4$d/%5$d · %6$s</string>
-    <string name="chrome_progress_book_pages">Book %1$d/%2$d</string>
-    <string name="chrome_progress_book_pages_calculating">Book pages calculating…</string>
+    <string name="chrome_progress_book_pages">Overall %1$d/%2$d</string>
+    <string name="chrome_progress_book_pages_calculating">Overall position calculating…</string>
     <string name="chrome_progress_a11y_summary">Book completion %1$d percent; chapter %2$d of %3$d; chapter page %4$d of %5$d; %6$s</string>
-    <string name="chrome_progress_a11y_book_pages">book page %1$d of %2$d</string>
+    <string name="chrome_progress_a11y_book_pages">overall page %1$d of %2$d</string>
     <string name="chrome_progress_a11y_book_pages_calculating">whole-book pages are calculating</string>
 </resources>
