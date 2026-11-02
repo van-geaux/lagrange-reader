@@ -13,6 +13,12 @@ import com.vangeaux.lagrange.provider.komga.komgaMergeDownloadedBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesCatalogFromBooks
 import com.vangeaux.lagrange.provider.komga.komgaCachedSeriesDetailFromBooks
 import com.vangeaux.lagrange.provider.komga.komgaBookProjection
+import com.vangeaux.lagrange.provider.komga.komgaBookSearchPayload
+import com.vangeaux.lagrange.provider.komga.komgaBookSearchPath
+import com.vangeaux.lagrange.provider.komga.komgaSeriesSearchPayload
+import com.vangeaux.lagrange.provider.komga.komgaSeriesSearchPath
+import com.vangeaux.lagrange.provider.komga.komgaHttpClientFollowsRedirects
+import com.vangeaux.lagrange.provider.komga.komgaHomeSeriesPath
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -22,6 +28,140 @@ import org.junit.Test
 import org.json.JSONObject
 
 class HomeShelfTest {
+    @Test
+    fun `provider On Deck suppresses stale active and completed books`() {
+        val unread = seriesBook("unread", 1.0, status = BookReadStatus.UNREAD)
+        val wanted = seriesBook("wanted", 2.0, status = BookReadStatus.WANT_TO_READ)
+        val onHold = seriesBook("on-hold", 3.0, status = BookReadStatus.ON_HOLD)
+        val abandoned = seriesBook("abandoned", 4.0, status = BookReadStatus.ABANDONED)
+        val reading = seriesBook("reading", 5.0, status = BookReadStatus.READING)
+        val rereading = seriesBook("rereading", 6.0, status = BookReadStatus.REREADING)
+        val readFlag = seriesBook("read-flag", 7.0, status = BookReadStatus.UNREAD, isRead = true)
+        val readStatus = seriesBook("read-status", 8.0, status = BookReadStatus.READ)
+        val skimmed = seriesBook("skimmed", 9.0, status = BookReadStatus.SKIMMED)
+
+        assertEquals(
+            listOf(unread, wanted, onHold, abandoned),
+            visibleProviderOnDeckBooks(
+                listOf(
+                    unread,
+                    wanted,
+                    onHold,
+                    abandoned,
+                    reading,
+                    rereading,
+                    readFlag,
+                    readStatus,
+                    skimmed
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `provider On Deck uses current local status by file then book identity`() {
+        val providerReading = seriesBook("reading", 1.0, status = BookReadStatus.UNREAD)
+        val providerCompleted = seriesBook("completed", 2.0, status = BookReadStatus.WANT_TO_READ)
+            .copy(fileId = "provider-file-completed")
+        val providerVisible = seriesBook("visible", 3.0, status = BookReadStatus.UNREAD)
+        val currentBooks = listOf(
+            providerReading.copy(readStatus = BookReadStatus.READING),
+            providerCompleted.copy(
+                fileId = "current-file-completed",
+                readStatus = BookReadStatus.READ,
+                isRead = true
+            ),
+            providerVisible.copy(readStatus = BookReadStatus.UNREAD)
+        )
+
+        assertEquals(
+            listOf(providerVisible),
+            visibleProviderOnDeckBooks(
+                providerBooks = listOf(providerReading, providerCompleted, providerVisible),
+                currentBooks = currentBooks
+            )
+        )
+    }
+
+    @Test
+    fun `provider On Deck prefers a same-library status match`() {
+        val provider = seriesBook("shared", 1.0, status = BookReadStatus.UNREAD)
+            .copy(fileId = null, libraryId = "lib-a")
+        val otherLibraryCompleted = provider.copy(
+            libraryId = "lib-b",
+            readStatus = BookReadStatus.READ,
+            isRead = true
+        )
+        val sameLibraryUnread = provider.copy(readStatus = BookReadStatus.UNREAD)
+
+        assertEquals(
+            listOf(provider),
+            visibleProviderOnDeckBooks(
+                providerBooks = listOf(provider),
+                currentBooks = listOf(otherLibraryCompleted, sameLibraryUnread)
+            )
+        )
+    }
+
+    @Test
+    fun `provider On Deck ignores a matching status from another library`() {
+        val provider = seriesBook("shared", 1.0, status = BookReadStatus.UNREAD)
+            .copy(fileId = "shared-file", libraryId = "lib-a")
+        val otherLibraryCompleted = provider.copy(
+            libraryId = "lib-b",
+            readStatus = BookReadStatus.READ,
+            isRead = true
+        )
+
+        assertEquals(
+            listOf(provider),
+            visibleProviderOnDeckBooks(
+                providerBooks = listOf(provider),
+                currentBooks = listOf(otherLibraryCompleted)
+            )
+        )
+    }
+
+    @Test
+    fun `komga book search uses the native list endpoint and payload`() {
+        assertEquals(
+            "/api/v1/books/list?page=0&size=100&sort=metadata.title,asc",
+            komgaBookSearchPath()
+        )
+        assertEquals(
+            "The Expanse",
+            JSONObject(komgaBookSearchPayload("  The Expanse  ")).getString("fullTextSearch")
+        )
+    }
+
+    @Test
+    fun `komga series catalog uses the native series list endpoint`() {
+        val payload = JSONObject(
+            komgaSeriesSearchPayload(
+                SeriesCatalogFilter(query = "Batman", genre = "Action"),
+                libraryId = "library-1"
+            )
+        )
+        assertEquals("/api/v1/series/list?unpaged=true&sort=metadata.title,asc", komgaSeriesSearchPath())
+        assertEquals("Batman", payload.getString("fullTextSearch"))
+        assertEquals(
+            "library-1",
+            payload.getJSONObject("condition").getJSONArray("allOf")
+                .getJSONObject(0).getJSONObject("libraryId").getString("value")
+        )
+    }
+
+    @Test
+    fun `komga server probing does not follow redirects`() {
+        assertFalse(komgaHttpClientFollowsRedirects())
+    }
+
+    @Test
+    fun `komga Home uses bounded added and updated series endpoints`() {
+        assertEquals("/api/v1/series/new?page=0&size=8", komgaHomeSeriesPath(updated = false))
+        assertEquals("/api/v1/series/updated?page=0&size=8", komgaHomeSeriesPath(updated = true))
+    }
+
     @Test
     fun `generated On deck requires the synced provider setting`() {
         val books = listOf(
@@ -227,6 +367,75 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `provider hidden sections remain hidden in the feed projection`() {
+        val hidden = setOf(
+            HomeSection.WANT_TO_READ,
+            HomeSection.RECENTLY_ADDED_BOOKS,
+            HomeSection.RECENTLY_RELEASED_BOOKS,
+            HomeSection.RECENTLY_READ
+        )
+        val shelves = HomeShelfData(hiddenSections = hidden)
+
+        assertEquals(hidden, shelves.hiddenSections)
+        assertFalse(HomeSection.CURRENTLY_READING in shelves.hiddenSections)
+        assertFalse(HomeSection.ON_DECK in shelves.hiddenSections)
+    }
+
+    @Test
+    fun `see all uses provider shelf data when catalog is deferred`() {
+        val current = BookSummary("library-a", "book-1", "file-1", "Current")
+        val state = BrowserState(
+            serverUrl = "https://example.test",
+            libraries = listOf(LibrarySummary("library-a", "Library A")),
+            selectedLibraryId = "library-a",
+            books = emptyList(),
+            homeBooks = emptyList(),
+            homeShelves = HomeShelfData(
+                booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(current)),
+                isServerProvided = true,
+                deferInitialCatalogLoad = true
+            )
+        )
+
+        assertEquals(
+            listOf("book-1"),
+            homeSectionSourceBooks(state, HomeSection.CURRENTLY_READING, serverWide = false).map { it.id }
+        )
+    }
+
+    @Test
+    fun `On Deck see all reconciles stale shelf entries against current catalog status`() {
+        val provider = seriesBook("stale", 1.0, status = BookReadStatus.UNREAD)
+        val selectedLibraryReading = provider.copy(readStatus = BookReadStatus.READING)
+        val serverWideCompleted = provider.copy(readStatus = BookReadStatus.READ, isRead = true)
+        val state = BrowserState(
+            serverUrl = "https://example.test",
+            libraries = listOf(LibrarySummary("lib-1", "Library")),
+            selectedLibraryId = "lib-1",
+            books = listOf(selectedLibraryReading),
+            homeBooks = listOf(serverWideCompleted),
+            homeShelves = HomeShelfData(
+                booksBySection = mapOf(HomeSection.ON_DECK to listOf(provider)),
+                isServerProvided = true
+            )
+        )
+        val providerBooks = homeSectionSourceBooks(state, HomeSection.ON_DECK, serverWide = false)
+
+        assertTrue(
+            visibleProviderOnDeckBooks(
+                providerBooks = providerBooks,
+                currentBooks = homeSectionCurrentStatusBooks(state, serverWide = false)
+            ).isEmpty()
+        )
+        assertTrue(
+            visibleProviderOnDeckBooks(
+                providerBooks = providerBooks,
+                currentBooks = homeSectionCurrentStatusBooks(state, serverWide = true)
+            ).isEmpty()
+        )
+    }
+
+    @Test
     fun `library recommended feed filters every shelf to the selected library`() {
         val books = listOf(
             BookSummary("library-one", "book-1", "file-1", "One"),
@@ -245,7 +454,8 @@ class HomeShelfTest {
         val shelves = HomeShelfData(
             booksBySection = mapOf(HomeSection.CURRENTLY_READING to listOf(libraryBook, otherBook)),
             seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to listOf(libraryBook, otherBook)),
-            isServerProvided = true
+            isServerProvided = true,
+            isAggregatedAcrossLibraries = true
         )
         val localBook = BookSummary("", "book-1", "file-1", "One", localPath = "/books/one.epub")
 

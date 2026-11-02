@@ -18,6 +18,9 @@
     <string name="common_close">Close</string>
     <string name="common_cancel">Cancel</string>
     <string name="common_continue">Continue</string>
+    <string name="browse_expected_download_size">Expected download: %1$s</string>
+    <string name="browse_expected_download_size_calculating">Expected download: calculating…</string>
+    <string name="browse_expected_download_size_unknown">Expected download: size unavailable</string>
     <string name="common_sign_in">Sign in</string>
     <string name="common_change_server">Change server</string>
     <string name="common_dismiss_message">Dismiss message</string>

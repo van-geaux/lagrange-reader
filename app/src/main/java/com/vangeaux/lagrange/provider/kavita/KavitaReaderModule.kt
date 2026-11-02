@@ -32,7 +32,8 @@ internal class KavitaReaderModuleImpl(
                     return@withContext ReaderState(
                         book = localBook,
                         localFile = localFile,
-                        pageIndex = localBook.progressPageIndex ?: 0,
+                        pageIndex = 0,
+                        readerPageIndex = localBook.progressPageIndex ?: 0,
                         progressPercent = localBook.progressPercent,
                         serverProgressAuthoritative = false
                     )

@@ -1,7 +1,9 @@
 package com.vangeaux.lagrange
 
+import com.vangeaux.lagrange.provider.komga.komgaSeriesCatalogPage
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SeriesPaginationTest {
@@ -68,6 +70,22 @@ class SeriesPaginationTest {
         assertEquals(0, descending.first().second)
         assertEquals(1, descending.first { it.first == 'M' }.second)
         assertEquals(3, descending.last().second)
+    }
+
+    @Test
+    fun `Komga series page keeps the complete ordered summary as the jump index`() {
+        val summaries = (0 until 125).map { index ->
+            series("series-$index", "Series ${index.toString().padStart(3, '0')}")
+        }
+
+        val firstPage = komgaSeriesCatalogPage(summaries, SeriesCatalogFilter(), page = 0)
+        val secondPage = komgaSeriesCatalogPage(summaries, SeriesCatalogFilter(), page = 1)
+
+        assertEquals(100, firstPage.items.size)
+        assertEquals(25, secondPage.items.size)
+        assertEquals(125, firstPage.jumpIndex?.size)
+        assertNull(secondPage.jumpIndex)
+        assertEquals("Series 100", secondPage.items.first().name)
     }
 
     @Test

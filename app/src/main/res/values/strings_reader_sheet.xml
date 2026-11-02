@@ -11,4 +11,29 @@
     <string name="sheet_book_language_title">Book language</string>
     <string name="sheet_book_language_auto">Auto (book, else device language)</string>
     <string name="sheet_comic_page_of">Page %1$d of %2$d</string>
+    <!-- EPUB custom page background -->
+    <string name="sheet_custom_background">Background color</string>
+    <string name="sheet_custom_background_summary">Custom EPUB page background (RGB)</string>
+    <string name="sheet_custom_background_default">Default</string>
+    <string name="sheet_custom_background_dialog_title">Custom background color</string>
+    <string name="sheet_custom_background_hex">Hex color (#RRGGBB)</string>
+    <string name="sheet_custom_background_wheel_description">Color wheel for choosing hue and saturation</string>
+    <string name="sheet_custom_background_brightness">Brightness</string>
+    <string name="sheet_custom_background_preview">Preview</string>
+    <string name="sheet_custom_background_apply">Apply</string>
+    <string name="sheet_custom_background_reset">Reset to default</string>
+    <string name="sheet_custom_background_invalid">Enter a 6-digit hex color, such as #A1B2C3.</string>
+    <string name="sheet_text_color">Text color</string>
+    <string name="sheet_text_color_default">Default</string>
+    <string name="sheet_text_color_summary">Follow the reading background or choose a custom color</string>
+    <string name="sheet_text_color_dialog_title">Custom text color</string>
+    <string name="sheet_text_color_preview">Preview</string>
+    <string name="sheet_text_color_sample">Aa Text sample</string>
+    <string name="sheet_reader_theme_options">Menu &amp; options</string>
+    <string name="sheet_reader_theme_options_summary">Menu and option sheet colors</string>
+    <string name="sheet_reading_background">Reading background</string>
+    <string name="sheet_reading_background_summary">Page background and reading surface</string>
+    <string name="sheet_custom_background_custom">Custom</string>
+    <string name="sheet_text_color_custom">Custom</string>
+    <string name="sheet_text_color_custom_summary">Choose a custom EPUB text color (RGB)</string>
 </resources>

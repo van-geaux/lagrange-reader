@@ -18,6 +18,16 @@ import java.util.UUID
 internal fun kavitaDownloadEndpoint(base: String, chapterId: String): String =
     "$base/api/Download/chapter?chapterId=$chapterId"
 
+internal fun kavitaDownloadFilesForBook(book: BookSummary): List<BookSummary> {
+    if (book.mediaKind == MediaKind.AUDIO) {
+        throw UserFacingException(
+            "Kavita audiobook downloads are not supported.",
+            UserFacingReason.CAPABILITY_UNAVAILABLE
+        )
+    }
+    return listOf(book)
+}
+
 internal class KavitaDownloadModuleImpl(
     context: Context,
     private val auth: KavitaAuthModule
@@ -327,7 +337,8 @@ internal class KavitaDownloadModuleImpl(
             DownloadedBookFile(target.absolutePath, target)
         }
 
-    override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = emptyList()
+    override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> =
+        kavitaDownloadFilesForBook(book)
 
     override suspend fun deleteLocalCopy(book: BookSummary) {
         val base = auth.serverUrl() ?: return

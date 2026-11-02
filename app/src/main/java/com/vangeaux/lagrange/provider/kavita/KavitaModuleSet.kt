@@ -46,55 +46,9 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 repository.loadSeriesDetail(seriesId)
         },
         home = object : HomeShelfModule {
+            override val deferInitialCatalogLoad: Boolean = true
             override suspend fun loadCachedHomeBooks(): List<BookSummary> = repository.loadCachedHomeBooks()
-            override suspend fun loadHomeShelves(): HomeShelfData {
-                val books = repository.loadCachedHomeBooks()
-                val libraryId = repository.getSelectedLibraryId()
-                val currentlyReading = books.filter {
-                    !it.isRead && (it.progressPercent ?: 0f) > 0f ||
-                        (!it.isRead && it.progressPageIndex != null)
-                }
-                val recentlyRead = books
-                    .filter { it.isRead || it.readStatus == BookReadStatus.READ }
-                    .sortedByDescending { it.lastReadAtMillis ?: it.updatedAtMillis ?: 0L }
-                val onDeck = onDeckBooks(books, limit = null)
-                val recentlyAdded = books.sortedByDescending { it.addedAtMillis ?: 0L }
-                val bookShelves = buildMap {
-                    if (currentlyReading.isNotEmpty()) put(HomeSection.CURRENTLY_READING, currentlyReading)
-                    if (onDeck.isNotEmpty()) put(HomeSection.ON_DECK, onDeck)
-                    if (recentlyRead.isNotEmpty()) put(HomeSection.RECENTLY_READ, recentlyRead)
-                    if (recentlyAdded.isNotEmpty()) put(HomeSection.RECENTLY_ADDED_BOOKS, recentlyAdded)
-                }
-                val series = aggregateBooksToSeriesCatalog(books).items
-                    .sortedByDescending { it.lastAddedAtMillis ?: 0L }
-                    .map { series ->
-                        BookSummary(
-                            libraryId = libraryId.orEmpty(),
-                            id = "series:${series.id}",
-                            fileId = null,
-                            title = series.name,
-                            coverUrl = series.coverUrl,
-                            seriesId = series.id,
-                            seriesName = series.name,
-                            genres = series.genres,
-                            availableFormats = series.availableFormats,
-                            downloadedFormats = series.downloadedFormats,
-                            addedAtMillis = series.lastAddedAtMillis ?: 0L,
-                            isRead = series.bookCount > 0 && series.readCount >= series.bookCount,
-                            readStatus = if (series.bookCount > 0 && series.readCount >= series.bookCount) {
-                                BookReadStatus.READ
-                            } else {
-                                BookReadStatus.UNREAD
-                            }
-                        )
-                    }
-                return HomeShelfData(
-                    booksBySection = bookShelves,
-                    seriesBySection = mapOf(HomeSection.RECENTLY_ADDED_SERIES to series),
-                    isServerProvided = true,
-                    isAggregatedAcrossLibraries = true
-                )
-            }
+            override suspend fun loadHomeShelves(): HomeShelfData = repository.loadHomeShelves()
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes(): List<SmartScope> = unavailable()
@@ -132,7 +86,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 storageScopeId: String?,
                 onProgress: (Float?) -> Unit
             ) = repository.downloadBook(book, storageScopeId, onProgress)
-            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> = listOf(book)
+            override suspend fun loadAudiobookDownloadFiles(book: BookSummary): List<BookSummary> =
+                kavitaDownloadFilesForBook(book)
             override suspend fun deleteLocalCopy(book: BookSummary) = repository.deleteLocalCopy(book)
             override suspend fun deleteLocalCopies(book: BookSummary): Set<String> = repository.deleteLocalCopies(book)
         },
@@ -175,6 +130,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun loadUserStatistics() = UserStatistics(status = UserStatisticsStatus.UNSUPPORTED)
         },
         cache = object : CacheModule {
+            override val offlineCacheAvailable: Boolean = true
             override suspend fun loadCachedBrowserState(): BrowserState? = repository.loadCachedBrowserState()
             override suspend fun loadStorageUsage(): StorageUsage = repository.loadStorageUsage()
             override suspend fun clearAppCache() = repository.clearAppCache()
@@ -188,6 +144,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
 
     val featureAvailability = ProviderFeatureAvailability(
         serverHostedSignIn = true,
+        libraryBookCatalog = false,
+        seriesCatalog = false,
         achievements = false,
         statistics = false,
         smartScopes = false,
@@ -222,13 +180,10 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             maxDownloads: Int
         ): Int? {
             if (repository.getServerUrl() != expectedServerUrl) return null
-            val books = repository.loadBooks(libraryId).drop(startIndex).take(maxDownloads)
+            val page = repository.loadBooksPage(libraryId, startIndex)
+            val books = page.items
             books.forEach { repository.loadBookCover(it) }
-            return if (startIndex + books.size < repository.loadBooks(libraryId).size) {
-                startIndex + books.size
-            } else {
-                null
-            }
+            return (startIndex + 1).takeUnless { page.isComplete }
         }
 
         override suspend fun warmOfflineCacheBatch(
@@ -240,8 +195,8 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             includeCovers: Boolean
         ): OfflineCacheBatchResult? {
             if (repository.getServerUrl() != expectedServerUrl) return null
-            val allBooks = repository.loadBooks(libraryId)
-            val books = allBooks.drop(startIndex).take(maxItems)
+            val page = repository.loadBooksPage(libraryId, startIndex)
+            val books = page.items
             var downloaded = 0
             var skipped = 0
             var failed = 0
@@ -256,7 +211,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
                 }
             }
             return OfflineCacheBatchResult(
-                nextIndex = (startIndex + books.size).takeIf { it < allBooks.size },
+                nextIndex = (startIndex + 1).takeUnless { page.isComplete },
                 processed = books.size,
                 downloaded = downloaded,
                 skipped = skipped,

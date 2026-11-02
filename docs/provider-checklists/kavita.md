@@ -16,6 +16,12 @@ Copy this file into this folder using the target server/provider name, for examp
 - Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
 - Evidence links/screenshots/logs: `[locations]`
 
+User confirmation:
+
+- On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`.
+- Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied. This confirmation does not mark additional checklist items as manually validated.
+- On 2026-10-30, the maintainer verified Kavita `Secrets of the Silent Witch, Vol. 4` downloaded successfully to a user-selected SAF folder on Samsung SM-S931B / Android 17 over ADB (`100.90.237.107:45013`) using `Lagrange-debug-202610301648.apk` with SHA-256 `7fecacc03425c1ef6fb82bf0c715b6e9d4f542f630bb91fa1263c7b95adc4b29`. The user subsequently confirmed that the fix works. This validates the selected-folder EPUB integrity path for one Kavita file; it does not validate every Kavita format or the equivalent BookOrbit/Komga server payloads.
+
 Use these result markers for every item:
 
 - `[x] Pass`
@@ -249,6 +255,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Retry works after a failed download.
 - [x] Interrupted downloads recover according to the provider contract.
 - [x] Downloaded content is stored at the expected local path.
+- [-] Audiobook download expansion is unavailable by provider contract; the UI must show an explicit unavailable result rather than a silent empty success.
 - [x] Download metadata persists after process recreation.
 - [x] Download status appears on the originating book and remains correct after reopening.
 - [x] Local books screen lists completed local copies.

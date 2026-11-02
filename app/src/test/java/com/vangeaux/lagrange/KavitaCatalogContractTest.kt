@@ -1,7 +1,10 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.kavita.kavitaChapterProjection
+import com.vangeaux.lagrange.provider.kavita.kavitaChapterSeriesName
+import com.vangeaux.lagrange.provider.kavita.kavitaFileId
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
+import com.vangeaux.lagrange.provider.kavita.kavitaSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
 import com.vangeaux.lagrange.provider.kavita.mergeKavitaCatalogPages
 import org.json.JSONObject
@@ -11,6 +14,23 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class KavitaCatalogContractTest {
+    @Test
+    fun seriesNameReadsKavitaSeriesNameVariantsBeforeFallingBackToId() {
+        assertEquals(
+            "Actual Series",
+            kavitaSeriesName(JSONObject("{\"seriesName\":\"Actual Series\"}"), "42")
+        )
+        assertEquals(
+            "Nested Series",
+            kavitaSeriesName(JSONObject("{\"series\":{\"name\":\"Nested Series\"}}"), "42")
+        )
+        assertEquals("42", kavitaSeriesName(JSONObject("{}"), "42"))
+        assertEquals(
+            "Actual Series",
+            kavitaChapterSeriesName(JSONObject("{\"title\":\"Book title\",\"seriesName\":\"Actual Series\"}"), "42")
+        )
+    }
+
     @Test
     fun formatExtractsExtensionFromKavitaFilename() {
         assertEquals("epub", kavitaFormat("application/octet-stream", "novel.epub"))
@@ -53,6 +73,18 @@ class KavitaCatalogContractTest {
         assertEquals("Ada Lovelace", projection?.author)
         assertEquals(listOf("Science Fiction", "Favorite"), projection?.genres)
         assertEquals(30, projection?.pagesRead)
+    }
+
+    @Test
+    fun fileIdentityUsesTheNestedKavitaFileId() {
+        assertEquals(
+            "99",
+            kavitaFileId(JSONObject("""{"id":99}"""), "42")
+        )
+        assertEquals(
+            "42",
+            kavitaFileId(JSONObject("{}"), "42")
+        )
     }
 
     @Test
@@ -101,9 +133,20 @@ class KavitaCatalogContractTest {
     }
 
     @Test
+    fun chapterProjectionRejectsSentinelInsideChapterTitle() {
+        val projection = kavitaChapterProjection(
+            JSONObject(
+                """{"id": 42, "titleName": "Chapter -100000", "files": [{"filePath": "/library/real-title.cbz"}]}"""
+            )
+        )
+
+        assertEquals("real-title", projection?.title)
+    }
+
+    @Test
     fun formatNormalizationUsesMimeOrExtensionFallback() {
         assertEquals("epub", kavitaFormat("application/epub+zip", null))
-        assertEquals("cbz", kavitaFormat(null, ".zip"))
+        assertNull(kavitaFormat(null, ".zip"))
         assertEquals("pdf", kavitaFormat(null, "book.pdf"))
     }
 

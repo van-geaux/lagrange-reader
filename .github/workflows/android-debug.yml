@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -43,6 +45,13 @@ jobs:
 
       - name: Test Android localization validator
         run: python3 -m unittest tools/test_validate_android_localizations.py
+
+      - name: Test hardcoded UI string check
+        run: python3 -m unittest tools/test_check_hardcoded_ui_strings.py
+
+      - name: Check for newly added hardcoded UI strings
+        if: github.event_name == 'pull_request'
+        run: python3 tools/check_hardcoded_ui_strings.py --base "${{ github.event.pull_request.base.sha }}"
 
       - name: Run JVM unit tests
         run: ./gradlew testDebugUnitTest

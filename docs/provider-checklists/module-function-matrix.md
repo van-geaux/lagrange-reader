@@ -12,6 +12,12 @@ On 2026-10-06, the user confirmed Komga server web OIDC sign-in on Samsung SM-S9
 
 On 2026-10-09, the user confirmed the saved-session provider-switch path on Samsung SM-S931B / Android 16 with `Lagrange-debug-202610092219.apk` against the configured BookOrbit and Komga profiles under issue [#268](https://github.com/van-geaux/lagrange-reader/issues/268). Switching to Komga, waiting five minutes, and returning to BookOrbit restored BookOrbit Home without login. This confirms the implemented server-selection/session-restoration function for both provider directions; it does not independently validate general provider token-expiry behavior.
 
+On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`. Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied, so no additional Kavita matrix cells are changed to `S` or treated as manually validated by this confirmation.
+
+On 2026-10-29, the user confirmed Komga Libraries → Browse displays books rather than Series cards on Samsung SM-S931B / Android 17 over ADB (`192.168.1.170:43851`) with `Lagrange-debug-202610292305.apk` (SHA-256 `9d542c319f742dbe4dc36cf223d183c01a01a8e55c072013cef319afbacf44f9`). This validates the Komga paginated library-book catalog surface under issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357).
+
+On 2026-10-30, the maintainer verified the Kavita selected-folder EPUB integrity path on Samsung SM-S931B / Android 17 over ADB (`100.90.237.107:45013`) with `Lagrange-debug-202610301648.apk` (SHA-256 `7fecacc03425c1ef6fb82bf0c715b6e9d4f542f630bb91fa1263c7b95adc4b29`) by downloading `Secrets of the Silent Witch, Vol. 4` into a user-selected SAF folder. The user confirmed that the fix works. This is narrower than full Kavita download validation and does not change the broader pending status.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -60,20 +66,20 @@ For every provider-exclusive row, manually verify all of the following:
 | Authentication | Session expiry recovery | Login/retry | S | V | Komga live expiry behavior still requires validation. |
 | Libraries | Library discovery | Library dropdown | S | S | Komga `/api/v1/libraries`. |
 | Libraries | Selected-library persistence | Library screen/profile | S | V | Verify per-provider persistence manually. |
-| Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`. |
-| Book catalog | Search | Search screen | S | N | Komga search is not implemented in the current adapter. |
+| Book catalog | Paginated library books | Library book list | S | S | Komga paginated `/api/v1/books`; user-confirmed in Libraries → Browse under issue [#357](https://github.com/van-geaux/lagrange-reader/issues/357) with `Lagrange-debug-202610292305.apk`. |
+| Book catalog | Search | Search screen | S | V | Komga native `POST /api/v1/books/list` search is implemented; live-server/device validation remains pending. |
 | Book catalog | Book filters and sorting | Library/Search/More screens | S | S | User-confirmed on the issue-202 APK; genre, read state, progress, last-read, date, and existing format projections are applied locally after complete Komga paging. |
-| Home shelves | Currently reading | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | On deck | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Want to read | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Recently added books | Home | S | N | Komga Home shelf modules are not implemented. |
-| Home shelves | Recently added Series | Home | S | P | Komga Series exists, but Home-specific recency is not implemented. |
-| Home shelves | Recently updated Series | Home | S | P | Verify whether a provider derivation is added. |
-| Home shelves | Recently read | Home | S | U | Komga progress/status is unsupported in the current adapter. |
+| Home shelves | Currently reading | Home | S | S | Komga provider shelf request is implemented and previously checklist-validated. |
+| Home shelves | On deck | Home | S | S | Komga `/api/v1/books/ondeck` shelf request is implemented and previously checklist-validated. |
+| Home shelves | Want to read | Home | S | U | Komga does not expose the BookOrbit Want to read capability. |
+| Home shelves | Recently added books | Home | S | S | Komga `/api/v1/books/latest` shelf request is implemented and previously checklist-validated. |
+| Home shelves | Recently added Series | Home | S | S | Komga `/api/v1/series/new` is requested with a bounded page. |
+| Home shelves | Recently updated Series | Home | S | V | Komga `/api/v1/series/updated` is implemented with a bounded page; live-server/device validation remains pending. |
+| Home shelves | Recently read | Home | S | S | Komga read-status shelf request is implemented and previously checklist-validated. |
 | Home shelves | Local Books shelf | Home | S | P | Local books are shared device state, but provider attribution must remain isolated. |
 | Home shelves | More/See all destination | Home section action | S | P | Validate only for sections exposed by the provider. |
-| Aggregation | Aggregate books across libraries | Home/Series/catalog | S | S | Komga Series aggregates all libraries. |
-| Aggregation | Post-aggregation library filter | Series screen | S | S | Komga applies library filtering after aggregate loading. |
+| Aggregation | Aggregate series across libraries | Home/Series/catalog | S | V | Komga native series list returns server-aggregated series summaries; live multi-library validation remains pending. |
+| Aggregation | Post-query library filter | Series screen | S | S | Komga series-list conditions include the selected library before shared local filtering. |
 | Series | Series catalog | Series screen | S | S | Komga groups by series identity. |
 | Series | Series detail/member ordering | Series detail | S | S | Komga uses series number/order where available. |
 | Series | Completion/read-progress filters | Series filter | S | S | User-confirmed on the issue-202 APK; genre/query/completion and read-progress/date sorting are applied to the aggregated series projection. |
@@ -99,11 +105,11 @@ For every provider-exclusive row, manually verify all of the following:
 | Reader lifecycle | Active-reader save/clear persistence | Reader open/close/server change | X | X | Shared `ReaderLifecycleModule`; validate once plus cross-provider isolation. |
 | Reader feature | EPUB 3 read-along narration | EPUB reader/player | S | V | Reader feature is independent; provider file/overlay support needs validation. |
 | Reader feature | EPUB text-to-speech | EPUB reader/player | X | X | Local feature module, not a server-provider capability. |
-| Progress | Read position hydration | Reader open | S | U | Komga progress synchronization is unsupported. |
-| Progress | Read position upload | Reader lifecycle | S | U | Komga adapter intentionally bypasses progress sync. |
+| Progress | Read position hydration | Reader open | S | S | Komga read-progress and Readium progression endpoints are implemented and previously checklist-validated. |
+| Progress | Read position upload | Reader lifecycle | S | S | Komga `PATCH /read-progress` and `PUT /progression` paths are implemented and previously checklist-validated. |
 | Progress | Audiobook position sync | Player lifecycle | S | U | Requires provider progress contract. |
-| Status | Read/unread mutations | Mark as/context menu | S | U | Komga status module is not implemented. |
-| Status | In-progress/completed state | Cards/filters | S | U | Komga status module is not implemented. |
+| Status | Read/unread mutations | Mark as/context menu | S | S | Komga read-progress status module is implemented and previously checklist-validated. |
+| Status | In-progress/completed state | Cards/filters | S | S | Komga read-progress mapping exposes read/in-progress state and completion thresholds. |
 | Sessions | Reading sessions/attempts | History/detail | S | U | Komga server-session synchronization unsupported. |
 | Downloads | Authenticated file download | Download action | S | S | Komga provider-specific download module. |
 | Downloads | Multipart audiobook download | Download/file selector | S | P | Verify all asset/file ordering and identity. |
@@ -115,7 +121,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Annotations | Annotation load/write/delete | Reader annotations | S | U | Explicitly unsupported by Komga adapter. |
 | Achievements | Achievement loading | Achievements | S | U | Explicitly unsupported by Komga adapter. |
 | Statistics | Statistics loading | Statistics | S | U | Explicitly unsupported by Komga adapter. |
-| Cache | Catalog/detail cache | Offline/cache screens | S | P | Verify provider/profile cache keys and invalidation. |
+| Cache | Catalog/detail cache | Offline/cache screens | S | P | Local catalog snapshots remain available as fallback; Komga offline metadata-cache lifecycle controls are explicitly unavailable. |
 | Cache | Background refresh | Cache settings/worker | S | U | Provider-specific cache refresh is not implemented for Komga. |
 | Isolation | Provider/profile cache scope | Server change | S | P | Must be manually validated for every target server. |
 | Isolation | Download identity scope | Local Books/server change | S | P | Local files may be shared, identity must remain retained. |
@@ -137,7 +143,7 @@ This provider is implemented but has not received complete authenticated device/
 | Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |
 | Chapter read mutation | V | `/api/Reader/mark-chapter-read` | Read action is exposed after manual validation. |
 | Chapter unread mutation | U | Kavita documents unread at series scope | Hidden/unavailable to avoid broad series mutation. |
-| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. |
+| Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. A single selected-folder EPUB integrity path was verified on 2026-10-30; full Kavita download/format coverage remains pending. |
 | Offline cache and Local Books | V | Kavita browser snapshot, app-private chapter files, and provider-scoped DownloadStore records | Completed downloads reopen through Local Books; cache warming and disposable-cache controls are provider-routed. |
 | Provider/profile isolation | V | `KavitaModuleSet`, provider-scoped profile/session/download identity | Kavita state must not fall back to BookOrbit after a failed request or leak across profiles. |
 | Home shelves, authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |

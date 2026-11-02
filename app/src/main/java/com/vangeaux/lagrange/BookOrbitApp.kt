@@ -119,6 +119,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -156,6 +157,7 @@ import org.json.JSONTokener
 import java.io.File
 import java.net.URI
 import java.util.Locale
+import java.util.UUID
 import java.util.zip.ZipFile
 import kotlin.math.roundToInt
 
@@ -363,6 +365,8 @@ private fun BookOrbitDestination(
             userRatingAvailable = coordinator.userRatingAvailable(),
             seriesDetailLoader = coordinator::loadSeriesDetail,
             seriesCatalogLoader = coordinator::loadSeriesCatalog,
+            libraryBookCatalogAvailable = coordinator.libraryBookCatalogAvailable(),
+            seriesCatalogAvailable = coordinator.seriesCatalogAvailable(),
             smartScopesLoader = coordinator::loadSmartScopes,
             smartScopesAvailable = coordinator.smartScopesAvailable(),
             smartScopeSeriesCatalogLoader = coordinator::loadSmartScopeSeriesCatalog,
@@ -404,6 +408,7 @@ private fun BookOrbitDestination(
             onCheckForUpdates = onCheckForUpdates,
             storageUsageLoader = coordinator::loadStorageUsage,
             onClearCache = coordinator::clearAppCache,
+            offlineCacheAvailable = coordinator.offlineCacheAvailable(),
             offlineCacheStatusLoader = coordinator::loadOfflineCacheStatus,
             onStartOfflineCacheUpdate = coordinator::startOfflineCacheUpdate,
             onCancelOfflineCacheUpdate = coordinator::cancelOfflineCacheUpdate,
@@ -766,12 +771,56 @@ private fun ReaderScreen(
         if (readerFile == null || !readerFile.exists()) {
             ReaderMessage(stringResource(R.string.shell_reader_epub_unpreparable))
         } else {
-            ReadiumEpubReaderLauncher(
+            val context = LocalContext.current
+            val activeProfile = remember(readerFile, state.book.id, state.book.fileId) {
+                ServerProfileStore(context).active()
+            }
+            val accountScope = activeProfile?.id?.let { AuthenticatedAccountScopeStore(context).read(it) }
+            val readerAccountScope = remember(activeProfile?.id, accountScope) {
+                accountScope ?: "unresolved-${UUID.randomUUID()}"
+            }
+            val persistenceScope = activeProfile?.let { profile ->
+                accountScope?.let { account ->
+                    EpubReaderScope(
+                        serverUrl = normalizeServerUrl(profile.serverUrl) ?: profile.serverUrl,
+                        profileId = profile.id,
+                        providerId = profile.providerId,
+                        accountScope = account
+                    )
+                }
+            }
+            val publicationFingerprint by produceState<String?>(
+                initialValue = null,
+                readerFile.absolutePath,
+                readerFile.length(),
+                readerFile.lastModified()
+            ) {
+                value = withContext(Dispatchers.IO) {
+                    runCatching { epubPublicationFingerprint(readerFile) }.getOrDefault("")
+                }
+            }
+            val unavailableFingerprint = remember(readerFile.absolutePath) {
+                "unavailable-${UUID.randomUUID()}"
+            }
+            val resolvedFingerprint = publicationFingerprint
+            if (resolvedFingerprint == null) {
+                ReaderMessage(stringResource(R.string.epub_reader_preparing))
+            } else ReadiumEpubReaderLauncher(
                 file = readerFile,
                 fileId = state.book.fileId,
                 bookId = state.book.id,
                 title = state.book.title,
-                readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
+                readerKey = epubReaderPersistenceKey(
+                    profile = activeProfile,
+                    accountScope = readerAccountScope,
+                    bookId = state.book.id,
+                    fileId = state.book.fileId,
+                    file = readerFile,
+                    publicationFingerprint = resolvedFingerprint.takeIf(String::isNotBlank)
+                        ?: unavailableFingerprint
+                ),
+                publicationFingerprint = resolvedFingerprint.takeIf(String::isNotBlank),
+                persistenceScope = persistenceScope.takeIf { resolvedFingerprint.isNotBlank() },
                 libraryId = state.book.libraryId,
                 launchMode = state.launchMode,
                 initialChapter = if (isPreview) 0 else state.pageIndex,
@@ -913,7 +962,10 @@ internal val EPUB_READER_SYSTEM_BARS_POLICY = EpubReaderSystemBarsPolicy(
 )
 
 internal fun EpubReaderTheme.usesDarkStatusBarIcons(): Boolean =
-    this != EpubReaderTheme.Dark && this != EpubReaderTheme.OledBlack
+    isLightCustomReaderBackground(backgroundColor)
+
+internal fun EpubReaderTheme.usesDarkReaderChrome(): Boolean =
+    !isLightCustomReaderBackground(backgroundColor)
 
 internal data class EpubReaderProgressStatus(
     val completionPercent: Float,
@@ -921,8 +973,9 @@ internal data class EpubReaderProgressStatus(
     val chapterCount: Int,
     val chapterPageNumber: Int,
     val chapterPageCount: Int,
-    val bookPageNumber: Int?,
-    val bookPageCount: Int?
+    val overallPositionNumber: Int?,
+    val overallPositionCount: Int?,
+    val layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED
 )
 
 internal fun epubReaderProgressStatus(
@@ -930,56 +983,88 @@ internal fun epubReaderProgressStatus(
     chapterCount: Int,
     pageIndex: Int,
     pageCount: Int,
-    chapterPageCounts: List<Int>? = null
+    completionPercent: Float = 0f,
+    overallPositionNumber: Int? = null,
+    overallPositionCount: Int? = null,
+    layoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED
 ): EpubReaderProgressStatus {
     val safeChapterCount = chapterCount.coerceAtLeast(1)
     val safeChapterIndex = chapterIndex.coerceIn(0, safeChapterCount - 1)
     val safePageCount = pageCount.coerceAtLeast(1)
     val safePageIndex = pageIndex.coerceIn(0, safePageCount - 1)
-    val measuredPageCounts = chapterPageCounts
-        ?.takeIf { it.size == safeChapterCount }
-        ?.map { it.coerceAtLeast(1) }
-        ?.toMutableList()
-        ?.also { it[safeChapterIndex] = safePageCount }
-    val bookPageCount = measuredPageCounts?.sum()
-    val bookPageNumber = measuredPageCounts?.let { counts ->
-        (counts.take(safeChapterIndex).sum() + safePageIndex + 1)
-            .coerceIn(1, bookPageCount ?: 1)
-    }
-    val chapterProgress = (safePageIndex + 1f) / safePageCount
-    val bookProgress = if (bookPageNumber != null && bookPageCount != null) {
-        bookPageNumber.toFloat() / bookPageCount
-    } else {
-        (safeChapterIndex + chapterProgress) / safeChapterCount
-    }.coerceIn(0f, 1f)
+    val safeOverallCount = overallPositionCount?.takeIf { it > 0 }
+    val safeOverallNumber = overallPositionNumber
+        ?.takeIf { safeOverallCount != null }
+        ?.coerceIn(1, requireNotNull(safeOverallCount))
     return EpubReaderProgressStatus(
-        completionPercent = bookProgress * 100f,
+        completionPercent = completionPercent.takeIf { it.isFinite() }?.coerceIn(0f, 100f) ?: 0f,
         chapterNumber = safeChapterIndex + 1,
         chapterCount = safeChapterCount,
         chapterPageNumber = safePageIndex + 1,
         chapterPageCount = safePageCount,
-        bookPageNumber = bookPageNumber,
-        bookPageCount = bookPageCount
+        overallPositionNumber = safeOverallNumber,
+        overallPositionCount = safeOverallCount,
+        layoutMode = layoutMode
     )
 }
 
-internal fun EpubReaderProgressStatus.displayText(): String =
-    "${completionPercent.roundToInt()}% · Chapter $chapterNumber/$chapterCount · " +
-        "Page $chapterPageNumber/$chapterPageCount · " +
-        if (bookPageNumber != null && bookPageCount != null) {
-            "Book $bookPageNumber/$bookPageCount"
-        } else {
-            "Book pages calculating…"
-        }
+internal fun epubReaderPersistenceKey(
+    profile: ServerProfile?,
+    accountScope: String?,
+    bookId: String,
+    fileId: String?,
+    file: File,
+    publicationFingerprint: String = epubPublicationFingerprint(file)
+): String = epubReaderPersistenceKey(
+    profileId = profile?.id.orEmpty(),
+    providerId = profile?.providerId.orEmpty(),
+    accountScope = accountScope.orEmpty(),
+    serverUrl = profile?.serverUrl.orEmpty(),
+    bookId = bookId,
+    fileId = fileId,
+    publicationFingerprint = publicationFingerprint
+)
 
-internal fun EpubReaderProgressStatus.accessibilityText(): String =
-    "Book completion ${completionPercent.roundToInt()} percent; chapter $chapterNumber of $chapterCount; " +
-        "chapter page $chapterPageNumber of $chapterPageCount; " +
-        if (bookPageNumber != null && bookPageCount != null) {
-            "book page $bookPageNumber of $bookPageCount"
-        } else {
-            "whole-book pages are calculating"
-        }
+internal fun epubReaderPersistenceKey(
+    profileId: String,
+    providerId: String,
+    accountScope: String,
+    serverUrl: String,
+    bookId: String,
+    fileId: String?,
+    publicationFingerprint: String
+): String = epubReaderPersistenceScopePrefix(
+    profileId = profileId,
+    providerId = providerId,
+    accountScope = accountScope,
+    serverUrl = serverUrl
+) + unambiguousPersistenceKey(
+    bookId,
+    fileId.orEmpty(),
+    publicationFingerprint
+)
+
+internal fun EpubReaderProgressStatus.displayText(): String = buildList {
+    add("${completionPercent.roundToInt()}%")
+    add("Chapter $chapterNumber/$chapterCount")
+    if (layoutMode == ReaderLayoutMode.PAGINATED) {
+        add("Page $chapterPageNumber/$chapterPageCount")
+    }
+    if (overallPositionNumber != null && overallPositionCount != null) {
+        add("Overall $overallPositionNumber/$overallPositionCount")
+    }
+}.joinToString(" · ")
+
+internal fun EpubReaderProgressStatus.accessibilityText(): String = buildList {
+    add("Book completion ${completionPercent.roundToInt()} percent")
+    add("chapter $chapterNumber of $chapterCount")
+    if (layoutMode == ReaderLayoutMode.PAGINATED) {
+        add("chapter page $chapterPageNumber of $chapterPageCount")
+    }
+    if (overallPositionNumber != null && overallPositionCount != null) {
+        add("overall page $overallPositionNumber of $overallPositionCount")
+    }
+}.joinToString("; ")
 
 @Composable
 private fun AudioReader(
@@ -1073,53 +1158,111 @@ private fun AudioReader(
 internal fun EpubReaderProgressFooter(
     status: EpubReaderProgressStatus,
     theme: EpubReaderTheme,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    customBackgroundColor: Int? = null
 ) {
+    val footerBackground = customBackgroundColor ?: theme.backgroundColor
+    val footerContent = if (customBackgroundColor != null) {
+        Color(customReaderBackgroundTextColor(customBackgroundColor)).copy(alpha = 0.78f)
+    } else {
+        Color(android.graphics.Color.parseColor(theme.foregroundCss)).copy(alpha = 0.78f)
+    }
     Surface(
         modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
-        color = Color(theme.backgroundColor),
+        color = Color(footerBackground),
         shadowElevation = 2.dp
     ) {
         Box(
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            val bookPages = if (status.bookPageNumber != null && status.bookPageCount != null) {
+            val overallPosition = if (
+                status.overallPositionNumber != null && status.overallPositionCount != null
+            ) {
                 stringResource(
                     R.string.chrome_progress_book_pages,
-                    status.bookPageNumber,
-                    status.bookPageCount
+                    status.overallPositionNumber,
+                    status.overallPositionCount
                 )
             } else {
-                stringResource(R.string.chrome_progress_book_pages_calculating)
+                null
             }
-            val bookPagesAccessibility = if (status.bookPageNumber != null && status.bookPageCount != null) {
+            val overallPositionAccessibility = if (
+                status.overallPositionNumber != null && status.overallPositionCount != null
+            ) {
                 stringResource(
                     R.string.chrome_progress_a11y_book_pages,
-                    status.bookPageNumber,
-                    status.bookPageCount
+                    status.overallPositionNumber,
+                    status.overallPositionCount
                 )
             } else {
-                stringResource(R.string.chrome_progress_a11y_book_pages_calculating)
+                null
             }
-            val displayText = stringResource(
-                R.string.chrome_progress_summary,
-                status.completionPercent.roundToInt(),
-                status.chapterNumber,
-                status.chapterCount,
-                status.chapterPageNumber,
-                status.chapterPageCount,
-                bookPages
-            )
-            val accessibilityText = stringResource(
-                R.string.chrome_progress_a11y_summary,
-                status.completionPercent.roundToInt(),
-                status.chapterNumber,
-                status.chapterCount,
-                status.chapterPageNumber,
-                status.chapterPageCount,
-                bookPagesAccessibility
-            )
+            val paginated = status.layoutMode == ReaderLayoutMode.PAGINATED
+            val displayText = when {
+                paginated && overallPosition != null -> stringResource(
+                    R.string.chrome_progress_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount,
+                    overallPosition
+                )
+                paginated -> stringResource(
+                    R.string.chrome_progress_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount
+                )
+                overallPosition != null -> stringResource(
+                    R.string.chrome_progress_continuous_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    overallPosition
+                )
+                else -> stringResource(
+                    R.string.chrome_progress_continuous_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount
+                )
+            }
+            val accessibilityText = when {
+                paginated && overallPositionAccessibility != null -> stringResource(
+                    R.string.chrome_progress_a11y_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount,
+                    overallPositionAccessibility
+                )
+                paginated -> stringResource(
+                    R.string.chrome_progress_a11y_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    status.chapterPageNumber,
+                    status.chapterPageCount
+                )
+                overallPositionAccessibility != null -> stringResource(
+                    R.string.chrome_progress_a11y_continuous_summary,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount,
+                    overallPositionAccessibility
+                )
+                else -> stringResource(
+                    R.string.chrome_progress_a11y_continuous_summary_without_overall,
+                    status.completionPercent.roundToInt(),
+                    status.chapterNumber,
+                    status.chapterCount
+                )
+            }
             Text(
                 text = displayText,
                 modifier = Modifier.semantics {
@@ -1127,7 +1270,7 @@ internal fun EpubReaderProgressFooter(
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color(android.graphics.Color.parseColor(theme.foregroundCss)).copy(alpha = 0.78f),
+                color = footerContent,
                 style = MaterialTheme.typography.labelSmall
             )
         }
@@ -1215,14 +1358,26 @@ internal data class ReaderTapZoneTutorialRegion(
     val red: Int,
     val green: Int,
     val blue: Int,
-    val alpha: Float
+    val alpha: Float,
+    val useDarkLabel: Boolean = false
 )
 
-private fun readerTapZoneTutorialRegion(region: ReaderTapZoneRegion): ReaderTapZoneTutorialRegion {
-    val (red, green, blue) = when (region.action) {
-        ReaderTapZoneAction.PREVIOUS -> Triple(255, 114, 118)
-        ReaderTapZoneAction.MENU -> Triple(0, 0, 0)
-        ReaderTapZoneAction.NEXT -> Triple(144, 238, 144)
+private fun readerTapZoneTutorialRegion(
+    region: ReaderTapZoneRegion,
+    highContrast: Boolean
+): ReaderTapZoneTutorialRegion {
+    val (red, green, blue) = if (highContrast) {
+        when (region.action) {
+            ReaderTapZoneAction.PREVIOUS -> Triple(197, 26, 26)
+            ReaderTapZoneAction.MENU -> Triple(0, 63, 143)
+            ReaderTapZoneAction.NEXT -> Triple(255, 193, 7)
+        }
+    } else {
+        when (region.action) {
+            ReaderTapZoneAction.PREVIOUS -> Triple(255, 114, 118)
+            ReaderTapZoneAction.MENU -> Triple(0, 0, 0)
+            ReaderTapZoneAction.NEXT -> Triple(144, 238, 144)
+        }
     }
     return ReaderTapZoneTutorialRegion(
         label = region.action.displayName,
@@ -1231,7 +1386,8 @@ private fun readerTapZoneTutorialRegion(region: ReaderTapZoneRegion): ReaderTapZ
         red = red,
         green = green,
         blue = blue,
-        alpha = 0.5f
+        alpha = if (highContrast) 1f else 0.5f,
+        useDarkLabel = highContrast && region.action == ReaderTapZoneAction.NEXT
     )
 }
 
@@ -1240,12 +1396,13 @@ internal fun readerTapZoneTutorialRegions(
     readingDirection: LibraryReadingDirection,
     continuous: Boolean = false,
     layout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
-    invertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE
+    invertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
+    highContrast: Boolean = false
 ): List<ReaderTapZoneTutorialRegion> = readerTapZoneRegions(
     layout = layout,
     readingDirection = readingDirection,
     invertMode = invertMode
-).map(::readerTapZoneTutorialRegion)
+).map { region -> readerTapZoneTutorialRegion(region, highContrast) }
 
 internal val READER_TAP_ZONE_TUTORIAL_REGIONS = readerTapZoneTutorialRegions(
     readingDirection = LibraryReadingDirection.LEFT_TO_RIGHT
@@ -1260,19 +1417,22 @@ internal fun ReaderTapZoneTutorial(
     continuous: Boolean = false,
     tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
     tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
+    highContrast: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val regions = remember(
         readingDirection,
         continuous,
         tapZoneLayout,
-        tapZoneInvertMode
+        tapZoneInvertMode,
+        highContrast
     ) {
         readerTapZoneTutorialRegions(
             readingDirection = readingDirection,
             continuous = continuous,
             layout = tapZoneLayout,
-            invertMode = tapZoneInvertMode
+            invertMode = tapZoneInvertMode,
+            highContrast = highContrast
         )
     }
     val interactionSources = remember(
@@ -1314,7 +1474,7 @@ internal fun ReaderTapZoneTutorial(
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 16.dp)
                         .background(
-                            Color.Black.copy(alpha = 0.7f),
+                            if (highContrast) Color.Black else Color.Black.copy(alpha = 0.7f),
                             RoundedCornerShape(8.dp)
                         )
                         .clickable(onClick = onDismiss)
@@ -1351,7 +1511,7 @@ private fun ReaderTapZoneTutorialRegion(
     ) {
         Text(
             text = stringResource(region.labelRes),
-            color = Color.White,
+            color = if (region.useDarkLabel) Color.Black else Color.White,
             fontWeight = FontWeight.Bold,
             fontSize = READER_TAP_ZONE_TUTORIAL_LABEL_FONT_SIZE_SP.sp
         )
@@ -1484,7 +1644,7 @@ internal fun ReaderLightweightChrome(
     val colors = remember(theme) {
         if (theme.isOled()) {
             oledReaderColorScheme()
-        } else if (theme == EpubReaderTheme.Dark) {
+        } else if (theme.usesDarkReaderChrome()) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -1867,6 +2027,33 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
         surfaceVariant = 0xFFE4D4B9.toInt(),
         outline = 0xFF796A57.toInt()
     )
+    EpubReaderTheme.DarkerSepia -> EpubReaderOptionsPalette(
+        container = 0xFFE6CEA9.toInt(),
+        content = 0xFF2E2014.toInt(),
+        mutedContent = 0xFF6B553D.toInt(),
+        accent = 0xFF704214.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFD6BC94.toInt(),
+        outline = 0xFF62513B.toInt()
+    )
+    EpubReaderTheme.Fern -> EpubReaderOptionsPalette(
+        container = 0xFFDFF0E0.toInt(),
+        content = 0xFF0F2A14.toInt(),
+        mutedContent = 0xFF3E5A42.toInt(),
+        accent = 0xFF286A36.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFC9E2CC.toInt(),
+        outline = 0xFF48694D.toInt()
+    )
+    EpubReaderTheme.Arctic -> EpubReaderOptionsPalette(
+        container = 0xFFE8F0F8.toInt(),
+        content = 0xFF0D1B2A.toInt(),
+        mutedContent = 0xFF40556B.toInt(),
+        accent = 0xFF2457A6.toInt(),
+        onAccent = 0xFFFFFFFF.toInt(),
+        surfaceVariant = 0xFFD5E1EE.toInt(),
+        outline = 0xFF52677D.toInt()
+    )
     EpubReaderTheme.Dark -> EpubReaderOptionsPalette(
         container = 0xFF181512.toInt(),
         content = 0xFFECE4D8.toInt(),
@@ -1875,6 +2062,33 @@ internal fun EpubReaderTheme.readerOptionsPalette(): EpubReaderOptionsPalette = 
         onAccent = 0xFF10284D.toInt(),
         surfaceVariant = 0xFF2B2723.toInt(),
         outline = 0xFF8B8175.toInt()
+    )
+    EpubReaderTheme.Midnight -> EpubReaderOptionsPalette(
+        container = 0xFF121C33.toInt(),
+        content = 0xFFE2E8F0.toInt(),
+        mutedContent = 0xFFADB9CA.toInt(),
+        accent = 0xFF9CC4FF.toInt(),
+        onAccent = 0xFF10284D.toInt(),
+        surfaceVariant = 0xFF202D48.toInt(),
+        outline = 0xFF8492A8.toInt()
+    )
+    EpubReaderTheme.AmberNight -> EpubReaderOptionsPalette(
+        container = 0xFF14100A.toInt(),
+        content = 0xFFFAD08A.toInt(),
+        mutedContent = 0xFFD2B57B.toInt(),
+        accent = 0xFFFAD08A.toInt(),
+        onAccent = 0xFF14100A.toInt(),
+        surfaceVariant = 0xFF2B2418.toInt(),
+        outline = 0xFFA8946C.toInt()
+    )
+    EpubReaderTheme.DarkMoss -> EpubReaderOptionsPalette(
+        container = 0xFF0A1A0A.toInt(),
+        content = 0xFF90C090.toInt(),
+        mutedContent = 0xFF9ABD9A.toInt(),
+        accent = 0xFFA8D98A.toInt(),
+        onAccent = 0xFF102410.toInt(),
+        surfaceVariant = 0xFF172B17.toInt(),
+        outline = 0xFF75A075.toInt()
     )
     EpubReaderTheme.OledBlack -> EpubReaderOptionsPalette(
         container = OLED_BLACK_ARGB,
@@ -1909,7 +2123,7 @@ internal fun EpubReaderOptionsBottomSheet(
         val palette = preferences.theme.readerOptionsPalette()
         if (preferences.theme.isOled()) {
             oledReaderColorScheme()
-        } else if (preferences.theme == EpubReaderTheme.Dark) {
+        } else if (preferences.theme.usesDarkReaderChrome()) {
             darkColorScheme(
                 primary = Color(palette.accent),
                 onPrimary = Color(palette.onAccent),
@@ -2815,6 +3029,10 @@ internal fun formatEpubWordSpacing(wordSpacing: Float): String {
     return String.format(Locale.US, "%.1frem", wordSpacing)
 }
 
+internal fun formatEpubParagraphSpacing(paragraphSpacing: Float): String {
+    return String.format(Locale.US, "%.1frem", paragraphSpacing)
+}
+
 private fun formatEpubCssPercent(value: Float): String {
     return String.format(Locale.US, "%.2f", value)
 }
@@ -2867,12 +3085,17 @@ private const val EPUB_READER_BRIDGE = "BookOrbitReader"
 internal val EPUB_THEME_OPTIONS = listOf(
     EpubReaderTheme.Light,
     EpubReaderTheme.Sepia,
+    EpubReaderTheme.DarkerSepia,
+    EpubReaderTheme.Fern,
+    EpubReaderTheme.Arctic,
     EpubReaderTheme.Dark,
+    EpubReaderTheme.Midnight,
+    EpubReaderTheme.AmberNight,
+    EpubReaderTheme.DarkMoss,
     EpubReaderTheme.OledBlack
 )
 
 enum class EpubReaderTheme(
-    val label: String,
     @StringRes val labelRes: Int,
     val backgroundColor: Int,
     val backgroundCss: String,
@@ -2880,7 +3103,6 @@ enum class EpubReaderTheme(
     val linkCss: String
 ) {
     Light(
-        label = "Light",
         labelRes = R.string.label_theme_light,
         backgroundColor = 0xFFF7F4EE.toInt(),
         backgroundCss = "#F7F4EE",
@@ -2888,23 +3110,62 @@ enum class EpubReaderTheme(
         linkCss = "#2457A6"
     ),
     Sepia(
-        label = "Sepia",
         labelRes = R.string.label_theme_sepia,
         backgroundColor = 0xFFF1E6D2.toInt(),
         backgroundCss = "#F1E6D2",
         foregroundCss = "#3B2E1E",
         linkCss = "#7A4B00"
     ),
+    DarkerSepia(
+        labelRes = R.string.label_theme_darker_sepia,
+        backgroundColor = 0xFFE6CEA9.toInt(),
+        backgroundCss = "#E6CEA9",
+        foregroundCss = "#2E2014",
+        linkCss = "#704214"
+    ),
+    Fern(
+        labelRes = R.string.label_theme_fern,
+        backgroundColor = 0xFFDFF0E0.toInt(),
+        backgroundCss = "#DFF0E0",
+        foregroundCss = "#0F2A14",
+        linkCss = "#286A36"
+    ),
+    Arctic(
+        labelRes = R.string.label_theme_arctic,
+        backgroundColor = 0xFFE8F0F8.toInt(),
+        backgroundCss = "#E8F0F8",
+        foregroundCss = "#0D1B2A",
+        linkCss = "#2457A6"
+    ),
     Dark(
-        label = "Dark",
         labelRes = R.string.label_theme_dark,
         backgroundColor = 0xFF181512.toInt(),
         backgroundCss = "#181512",
         foregroundCss = "#ECE4D8",
         linkCss = "#8DB5FF"
     ),
+    Midnight(
+        labelRes = R.string.label_theme_midnight,
+        backgroundColor = 0xFF121C33.toInt(),
+        backgroundCss = "#121C33",
+        foregroundCss = "#E2E8F0",
+        linkCss = "#9CC4FF"
+    ),
+    AmberNight(
+        labelRes = R.string.label_theme_amber_night,
+        backgroundColor = 0xFF14100A.toInt(),
+        backgroundCss = "#14100A",
+        foregroundCss = "#FAD08A",
+        linkCss = "#FAD08A"
+    ),
+    DarkMoss(
+        labelRes = R.string.label_theme_dark_moss,
+        backgroundColor = 0xFF0A1A0A.toInt(),
+        backgroundCss = "#0A1A0A",
+        foregroundCss = "#90C090",
+        linkCss = "#A8D98A"
+    ),
     OledBlack(
-        label = "OLED black",
         labelRes = R.string.label_theme_oled_black,
         backgroundColor = 0xFF000000.toInt(),
         backgroundCss = "#000000",

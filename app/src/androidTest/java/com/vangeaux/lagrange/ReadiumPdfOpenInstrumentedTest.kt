@@ -7,6 +7,7 @@ import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.runtime.MutableState
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -71,6 +72,71 @@ class ReadiumPdfOpenInstrumentedTest {
             }
         }
         file.delete()
+    }
+
+    @Test
+    fun reports_visible_first_and_last_pdf_pages_without_the_pdfium_offset() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val file = File(context.cacheDir, "readium-page-index-${System.nanoTime()}.pdf")
+        createPdf(file, pageCount = 3)
+
+        ActivityScenario.launch<ReadiumPdfReaderActivity>(
+            ReadiumPdfReaderActivity.createIntent(
+                context = context,
+                file = file,
+                title = "PDF page index",
+                readerKey = "instrumented-pdf-page-index-${System.nanoTime()}",
+                launchMode = ReaderLaunchMode.PREVIEW,
+                initialPage = 0
+            )
+        ).use { scenario ->
+            awaitPage(scenario, expectedPage = 0, expectedCount = 3)
+            scenario.onActivity { activity ->
+                val navigator = activity.supportFragmentManager
+                    .findFragmentByTag("readium_pdf_navigator") as org.readium.r2.navigator.pdf.PdfNavigatorFragment<*, *>
+                val document = navigator.childFragmentManager.fragments
+                    .first() as org.readium.adapter.pdfium.navigator.PdfiumDocumentFragment
+                document.goToPageIndex(1, false)
+            }
+            awaitPage(scenario, expectedPage = 1, expectedCount = 3)
+            scenario.onActivity { activity ->
+                val navigator = activity.supportFragmentManager
+                    .findFragmentByTag("readium_pdf_navigator") as org.readium.r2.navigator.pdf.PdfNavigatorFragment<*, *>
+                val document = navigator.childFragmentManager.fragments
+                    .first() as org.readium.adapter.pdfium.navigator.PdfiumDocumentFragment
+                document.goToPageIndex(2, false)
+            }
+            awaitPage(scenario, expectedPage = 2, expectedCount = 3)
+        }
+        file.delete()
+    }
+
+    private fun awaitPage(
+        scenario: ActivityScenario<ReadiumPdfReaderActivity>,
+        expectedPage: Int,
+        expectedCount: Int
+    ) {
+        var lastPage = -1
+        var lastCount = -1
+        repeat(40) {
+            var page = -1
+            var count = -1
+            scenario.onActivity { activity ->
+                val pageField = ReadiumPdfReaderActivity::class.java
+                    .getDeclaredField("currentPage\$delegate")
+                    .apply { isAccessible = true }
+                val countField = ReadiumPdfReaderActivity::class.java
+                    .getDeclaredField("currentPageCount\$delegate")
+                    .apply { isAccessible = true }
+                page = (pageField.get(activity) as MutableState<*>).value as Int
+                count = (countField.get(activity) as MutableState<*>).value as Int
+            }
+            lastPage = page
+            lastCount = count
+            if (page == expectedPage && count == expectedCount) return
+            SystemClock.sleep(250)
+        }
+        error("Expected PDF page $expectedPage/$expectedCount, observed $lastPage/$lastCount")
     }
 
     private fun awaitPdfLocator(

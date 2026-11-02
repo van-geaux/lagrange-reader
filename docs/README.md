@@ -8,6 +8,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [Provider Module Separation](./modules.md) — provider-neutral feature contracts, composition rules, and migration boundaries.
 - [Provider documentation](./providers/README.md) — provider-specific API, module, authentication, integration, and capability notes.
 - [EPUB Text-to-Speech Module](./epub-tts-module.md) — TTS boundaries, lifecycle isolation, persistence, and implementation pieces.
+- [Reader Appearance](./reader-appearance.md) — independent reader chrome/background themes, custom RGB colors, text-color resolution, storage migration, and UI behavior.
 - [Local Setup](./setup.md) — machine prerequisites and local build setup.
 - [Privacy Notes](./privacy.md) — local storage, network behavior, and current privacy gaps.
 - [Release Policy](./release.md) — versioning, signing, naming, and publishing rules.
@@ -18,6 +19,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
 - [Translation Guide](../TRANSLATIONS.md) — Crowdin workflow and translator contribution rules.
+- [Achievement Text Localization](./achievement-localization.md) — server-owned achievement copy, `Accept-Language`, and the current BookOrbit limitation.
 - BookOrbit OIDC / SSO authentication is documented in [Provider documentation](./providers/bookorbit/oidc-authentication.md).
 - [Security Policy](../SECURITY.md) — responsible-disclosure guidance for security reports.
 

@@ -11,6 +11,7 @@ enum class AppThemeMode(
 ) {
     FOLLOW_SYSTEM("Follow system", R.string.settings_theme_system),
     LIGHT("Light", R.string.settings_theme_light),
+    COLOR_EINK("Colour e-ink", R.string.settings_theme_color_eink),
     CHARCOAL("Charcoal", R.string.settings_theme_charcoal),
     WARM_BLACK("Warm black", R.string.settings_theme_warm_black),
     OLED_BLACK("OLED black", R.string.settings_theme_oled_black)
@@ -557,6 +558,7 @@ internal fun appThemeModeStorageValue(value: AppThemeMode): String = value.name.
 
 internal fun appThemeModeFromStorage(value: String?): AppThemeMode = when (value?.trim()?.lowercase()) {
     "light" -> AppThemeMode.LIGHT
+    "color_eink", "colour_eink", "eink_color", "eink_colour" -> AppThemeMode.COLOR_EINK
     "dark", "charcoal" -> AppThemeMode.CHARCOAL
     "warm_black" -> AppThemeMode.WARM_BLACK
     "oled_black" -> AppThemeMode.OLED_BLACK

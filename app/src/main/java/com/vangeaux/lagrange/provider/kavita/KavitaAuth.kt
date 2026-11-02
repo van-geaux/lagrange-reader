@@ -81,6 +81,7 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
     private val accountScopeStore = AuthenticatedAccountScopeStore(appContext)
     private var serverUrl: String? = null
     private var token: String? = activeProfileId()?.let(credentialStore::read)
+    private var loadedProfileId: String? = activeProfileId()
 
     override fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
         providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
@@ -127,6 +128,7 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
                 "Enter your Kavita password."
             )
         )
+        clearWebCookies()
         val request = Request.Builder()
             .url(kavitaLoginEndpoint(base))
             .header("Content-Type", "application/json")
@@ -175,6 +177,8 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
             this@KavitaAuthModuleImpl.serverUrl = base
             token = authenticatedToken
             activeProfileId()?.let { profileId ->
+                loadedProfileId = profileId
+                credentialStore.clearCookie(profileId)
                 accountScopeStore.writeAuthoritative(
                     profileId = profileId,
                     providerId = "kavita",
@@ -223,6 +227,8 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
     }
 
     override fun requestHeaders(): Map<String, String> {
+        val profileId = activeProfileId()
+        if (profileId == null || profileId != loadedProfileId) return emptyMap()
         val origin = currentServerUrl()
         return kavitaSessionHeaders(
             token = token,
@@ -234,39 +240,72 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
         serverUrl ?: ServerProfileStore(appContext).active()?.serverUrl
 
     override suspend fun clearSession() {
-        activeProfileId()?.let(accountScopeStore::deactivate)
+        activeProfileId()?.let { profileId ->
+            accountScopeStore.deactivate(profileId)
+            credentialStore.clearCookie(profileId)
+        }
         serverUrl = null
         token = null
+        loadedProfileId = activeProfileId()
         activeProfileId()?.let(credentialStore::clear)
-        withContext(Dispatchers.Main.immediate) {
-            suspendCancellableCoroutine { continuation ->
-                CookieManager.getInstance().removeAllCookies {
-                    CookieManager.getInstance().flush()
-                    if (continuation.isActive) continuation.resume(Unit)
-                }
-            }
-        }
+        clearWebCookies()
     }
 
     override suspend fun saveCurrentProfileSession() {
         activeProfileId()?.let { profileId ->
+            if (profileId != loadedProfileId) return
             token?.let {
                 ensureAccountScopeFromToken()
                 credentialStore.write(profileId, it)
+            }
+            val origin = currentServerUrl()
+            val cookie = origin?.let {
+                withContext(Dispatchers.Main.immediate) {
+                    CookieManager.getInstance().getCookie(it)
+                }
+            }
+            if (cookie.isNullOrBlank()) {
+                credentialStore.clearCookie(profileId)
+            } else {
+                credentialStore.writeCookie(profileId, cookie)
             }
         }
     }
 
     override suspend fun restoreCurrentProfileSession(): Boolean {
-        token = activeProfileId()?.let(credentialStore::read)
+        val profileId = activeProfileId()
+        loadedProfileId = profileId
+        token = profileId?.let(credentialStore::read)
         ensureAccountScopeFromToken()
         val configuredServer = ServerProfileStore(appContext).active()?.serverUrl
-        val hasCookie = configuredServer?.let { CookieManager.getInstance().getCookie(it).isNullOrBlank().not() } == true
-        if (token.isNullOrBlank() && hasCookie && configuredServer != null) {
+        clearWebCookies()
+        if (profileId != null && configuredServer != null) {
+            restoreWebCookies(configuredServer, credentialStore.readCookie(profileId))
+        }
+        if (token.isNullOrBlank() && configuredServer != null) {
             sessionState(configuredServer)
         }
-        return !token.isNullOrBlank() || hasCookie
+        return !token.isNullOrBlank()
     }
+
+    private suspend fun clearWebCookies() = withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine { continuation ->
+            CookieManager.getInstance().removeAllCookies {
+                CookieManager.getInstance().flush()
+                if (continuation.isActive) continuation.resume(Unit)
+            }
+        }
+    }
+
+    private suspend fun restoreWebCookies(serverUrl: String, cookie: String?) =
+        withContext(Dispatchers.Main.immediate) {
+            cookie.orEmpty()
+                .split(';')
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .forEach { CookieManager.getInstance().setCookie(serverUrl, it) }
+            CookieManager.getInstance().flush()
+        }
 
     private fun ensureAccountScopeFromToken() {
         val profileId = activeProfileId() ?: return
@@ -285,8 +324,12 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 private class KavitaCredentialStore(context: Context) {
     private val preferences = context.getSharedPreferences("kavita_auth", Context.MODE_PRIVATE)
 
-    fun read(profileId: String): String? = runCatching {
-        val encoded = preferences.getString(profileKey(profileId), null) ?: return null
+    fun read(profileId: String): String? = readValue(profileId, "token")
+
+    fun readCookie(profileId: String): String? = readValue(profileId, "cookie")
+
+    private fun readValue(profileId: String, kind: String): String? = runCatching {
+        val encoded = preferences.getString(profileKey(profileId, kind), null) ?: return null
         val packed = Base64.decode(encoded, Base64.DEFAULT)
         val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
         val encrypted = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
@@ -296,21 +339,33 @@ private class KavitaCredentialStore(context: Context) {
     }.getOrNull()
 
     fun write(profileId: String, value: String) {
+        writeValue(profileId, "token", value)
+    }
+
+    fun writeCookie(profileId: String, value: String) {
+        writeValue(profileId, "cookie", value)
+    }
+
+    private fun writeValue(profileId: String, kind: String, value: String) {
         runCatching {
             val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, key()) }
             val packed = cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
             preferences.edit().putString(
-                profileKey(profileId),
+                profileKey(profileId, kind),
                 Base64.encodeToString(packed, Base64.NO_WRAP)
             ).apply()
         }
     }
 
     fun clear(profileId: String) {
-        preferences.edit().remove(profileKey(profileId)).apply()
+        preferences.edit().remove(profileKey(profileId, "token")).apply()
     }
 
-    private fun profileKey(profileId: String): String = "token_$profileId"
+    fun clearCookie(profileId: String) {
+        preferences.edit().remove(profileKey(profileId, "cookie")).apply()
+    }
+
+    private fun profileKey(profileId: String, kind: String): String = "${kind}_$profileId"
 
     private fun key(): java.security.Key {
         val store = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }

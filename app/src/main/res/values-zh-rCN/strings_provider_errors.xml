@@ -26,9 +26,11 @@
     <string name="perror_komga_server_url_first">请先输入 Komga 服务器地址。</string>
     <string name="perror_komga_not_downloaded">此 Komga 图书尚未下载，无法离线阅读。</string>
     <string name="perror_komga_credentials">Komga 不接受此用户名或密码。</string>
+    <string name="perror_komga_credential_persistence">Komga 登录成功，但无法将凭据保存到此设备。</string>
     <string name="perror_komga_signin_http">Komga 登录失败（HTTP %1$d）。</string>
     <string name="perror_komga_libraries_http">无法加载 Komga 媒体库（HTTP %1$d）。</string>
     <string name="perror_komga_books_http">无法加载 Komga 图书（HTTP %1$d）。</string>
+    <string name="perror_komga_series_http">无法加载 Komga 系列（HTTP %1$d）。</string>
     <string name="perror_komga_home_http">无法加载 Komga 主页书架（HTTP %1$d）。</string>
     <string name="perror_komga_progress_url_unavailable">Komga 服务器地址不可用，无法同步阅读进度。</string>
     <string name="perror_komga_progress_http">无法同步 Komga 阅读进度（HTTP %1$d）。</string>

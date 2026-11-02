@@ -18,6 +18,8 @@ interface KomgaLibraryModule {
 
 interface KomgaBookCatalogModule {
     suspend fun loadBooks(serverUrl: String, libraryId: String, page: Int): LibraryBooksPage
+    suspend fun searchBooks(serverUrl: String, query: String): List<BookSummary>
+    suspend fun loadSeriesBooks(serverUrl: String, seriesId: String): List<BookSummary>
 }
 
 interface KomgaSeriesModule {

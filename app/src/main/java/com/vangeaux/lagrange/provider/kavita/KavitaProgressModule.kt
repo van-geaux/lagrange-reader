@@ -36,6 +36,19 @@ internal fun kavitaChapterContext(
     }
 }
 
+internal fun kavitaProgressPayload(
+    context: KavitaChapterContext,
+    page: Int
+): JSONObject = JSONObject()
+    .put("volumeId", context.volumeId)
+    .put("chapterId", context.chapterId)
+    .put("pageNum", page.coerceAtLeast(0))
+    .put("seriesId", context.seriesId)
+    .put("libraryId", context.libraryId)
+
+internal fun kavitaReaderPageIndex(pagesRead: Int): Int? =
+    pagesRead.takeIf { it > 0 }?.minus(1)?.coerceAtLeast(0)
+
 internal fun kavitaProgressBook(book: BookSummary, progress: JSONObject): BookSummary {
     val page = progress.optInt("pageNum", 0).takeIf { it > 0 }
     val pages = book.readerPageCount
@@ -43,14 +56,15 @@ internal fun kavitaProgressBook(book: BookSummary, progress: JSONObject): BookSu
         (current.toFloat() / total.toFloat() * 100f).coerceIn(0f, 100f)
     } }
     val completed = percent != null && percent >= 99.5f
+    val readerPageIndex = kavitaReaderPageIndex(page ?: 0)
     return book.copy(
-        progressLabel = page?.let { "Page $it" } ?: book.progressLabel,
-        progressPageIndex = page?.minus(1)?.coerceAtLeast(0) ?: book.progressPageIndex,
-        progressPercent = percent ?: book.progressPercent,
+        progressLabel = page?.let { "Page $it" },
+        progressPageIndex = readerPageIndex,
+        progressPercent = percent,
         readStatus = when {
             completed -> BookReadStatus.READ
             page != null -> BookReadStatus.READING
-            else -> book.readStatus ?: BookReadStatus.UNREAD
+            else -> BookReadStatus.UNREAD
         },
         isRead = completed
     )
@@ -68,13 +82,7 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
     ) = withContext(Dispatchers.IO) {
         val context = loadChapterContext(book)
         val page = (pageIndex + 1).coerceAtLeast(1)
-        val payload = JSONObject()
-            .put("volumeId", context.volumeId)
-            .put("chapterId", context.chapterId)
-            .put("pageNum", page)
-            .put("seriesId", context.seriesId)
-            .put("libraryId", context.libraryId)
-        executeJson("$serverBase/api/Reader/progress", payload)
+        executeJson("$serverBase/api/Reader/progress", kavitaProgressPayload(context, page))
     }
 
     override suspend fun pendingProgressCount(): Int = 0
@@ -164,21 +172,15 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
             .put("chapterId", context.chapterId)
             .put("generateReadingSession", true))
         context.pages?.let { pages ->
-            execute(
-                "$base/api/Reader/progress",
-                JSONObject()
-                    .put("volumeId", context.volumeId)
-                    .put("chapterId", context.chapterId)
-                    .put("pageNum", pages)
-                    .put("seriesId", context.seriesId)
-                    .put("libraryId", context.libraryId)
-            )
+            execute("$base/api/Reader/progress", kavitaProgressPayload(context, pages))
         }
         Unit
     }
 
-    override suspend fun resetBookReadingState(book: BookSummary) {
-        throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_unread_scope, "Kavita exposes unread status at series scope, not chapter scope."))
+    override suspend fun resetBookReadingState(book: BookSummary) = withContext(Dispatchers.IO) {
+        val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
+        val context = loadChapterContext(book)
+        execute("$base/api/Reader/progress", kavitaProgressPayload(context, page = 0))
     }
 
     private suspend fun loadChapterContext(book: BookSummary): KavitaChapterContext {

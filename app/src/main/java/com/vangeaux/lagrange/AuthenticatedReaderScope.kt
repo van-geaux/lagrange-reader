@@ -20,6 +20,26 @@ data class EpubReaderScope(
     val accountScope: String
 )
 
+internal fun epubReaderPersistenceScopePrefix(
+    profileId: String,
+    providerId: String,
+    accountScope: String,
+    serverUrl: String
+): String = "v3|" + unambiguousPersistenceKey(
+    profileId,
+    providerId,
+    accountScope,
+    normalizeServerUrl(serverUrl).orEmpty()
+)
+
+internal fun epubReaderPersistenceScopePrefix(scope: EpubReaderScope): String =
+    epubReaderPersistenceScopePrefix(
+        profileId = scope.profileId,
+        providerId = scope.providerId,
+        accountScope = scope.accountScope,
+        serverUrl = scope.serverUrl
+    )
+
 internal fun resolveEpubReaderScope(context: Context, serverUrl: String? = null): EpubReaderScope? {
     val requestedServer = serverUrl?.takeIf(String::isNotBlank)
     val active = ServerProfileStore(context.applicationContext).active()

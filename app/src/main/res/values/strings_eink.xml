@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- English source strings. Crowdin supplies translated resource files after merge. -->
+    <string name="settings_theme_color_eink">Colour e-ink</string>
+</resources>

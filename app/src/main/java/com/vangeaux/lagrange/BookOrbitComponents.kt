@@ -51,7 +51,13 @@ internal fun BookOrbitTopBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_launcher_foreground),
+                        painter = painterResource(
+                            if (LocalColorEinkTheme.current) {
+                                R.drawable.ic_lagrange_color_eink
+                            } else {
+                                R.drawable.ic_launcher_foreground
+                            }
+                        ),
                         contentDescription = stringResource(R.string.cd_lagrange_logo),
                         modifier = Modifier.size(28.dp)
                     )

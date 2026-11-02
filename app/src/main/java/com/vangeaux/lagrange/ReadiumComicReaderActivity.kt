@@ -229,6 +229,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
     private var readerPreferences by mutableStateOf(LibraryReaderPreferences())
     private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
+    private var appThemeMode = AppThemeMode.FOLLOW_SYSTEM
     private val continuousComicPageCache = object : LruCache<String, Bitmap>(
         continuousComicCacheBudgetBytes()
     ) {
@@ -304,6 +305,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val appPreferences = AppPreferencesStore(this).read()
         showTapZoneTutorialAfterChanges = appPreferences.showComicTapZoneTutorialAfterChanges
+        appThemeMode = appPreferences.themeMode
         readerPreferences = appPreferences.readerPreferencesFor(libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
@@ -379,7 +381,11 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         )
         viewOnlyBannerView = ComposeView(this).apply {
             visibility = if (isPreview) View.VISIBLE else View.GONE
-            setContent { BookOrbitTheme { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
+            setContent {
+                BookOrbitTheme(themeMode = appThemeMode) {
+                    ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode)
+                }
+            }
             addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
                 val topMargin = (view.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
                 readerContainer.setPadding(
@@ -422,7 +428,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         footerView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     ComicReaderProgressFooter(
                         currentPage = currentPage,
                         pageCount = currentPageCount,
@@ -442,7 +448,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         chromeView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     ReaderLightweightChrome(
                         title = if (isPreview) getString(R.string.reader_preview_title, displayTitle) else displayTitle,
                         theme = EpubReaderTheme.Dark,
@@ -468,7 +474,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         optionsView = ComposeView(this).apply {
             visibility = View.GONE
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         EpubReaderDismissScrim(onDismiss = ::hideOptions)
                         ComicReaderOptionsBottomSheet(
@@ -498,12 +504,13 @@ class ReadiumComicReaderActivity : FragmentActivity() {
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     ReaderTapZoneTutorial(
                         onDismiss = ::hideTapZoneTutorial,
                         readingDirection = readingDirection,
                         tapZoneLayout = readerPreferences.tapZoneLayout,
                         tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
+                        highContrast = isColorEinkTheme(appThemeMode),
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -518,7 +525,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         )
         val comicPageViewerView = ComposeView(this).apply {
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     comicPageViewer?.let { (pageIndex, bitmap) ->
                         ComicPageImageViewer(
                             title = displayTitle,
@@ -757,7 +764,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         currentPage = initialPage
         continuousComicView = ComposeView(this).apply {
             setContent {
-                BookOrbitTheme {
+                BookOrbitTheme(themeMode = appThemeMode) {
                     ContinuousComicReader(
                         pageIndexes = openedPublication.readingOrder.indices.toList(),
                         initialPage = initialPage,
@@ -1030,13 +1037,14 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         tapZoneTutorialHasShown = true
         tapZoneTutorialView.visibility = View.VISIBLE
         tapZoneTutorialView.setContent {
-            BookOrbitTheme {
+            BookOrbitTheme(themeMode = appThemeMode) {
                 ReaderTapZoneTutorial(
                     onDismiss = ::hideTapZoneTutorial,
                     readingDirection = readingDirection,
                     continuous = continuous,
                     tapZoneLayout = readerPreferences.tapZoneLayout,
                     tapZoneInvertMode = readerPreferences.tapZoneInvertMode,
+                    highContrast = isColorEinkTheme(appThemeMode),
                     modifier = Modifier.fillMaxSize()
                 )
             }

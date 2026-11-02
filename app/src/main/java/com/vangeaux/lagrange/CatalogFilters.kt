@@ -99,7 +99,9 @@ data class SeriesCatalogFilter(
     val libraryId: String? = null,
     val completion: SeriesCompletionFilter = SeriesCompletionFilter.ALL,
     val sort: SeriesSortOption = SeriesSortOption.NAME,
-    val direction: SortDirection = SortDirection.ASCENDING
+    val direction: SortDirection = SortDirection.ASCENDING,
+    val includeCounts: Boolean = true,
+    val homeSection: HomeSection? = null
 ) {
     val isActive: Boolean
         get() = !author.isNullOrBlank() || !genre.isNullOrBlank() || !libraryId.isNullOrBlank() ||

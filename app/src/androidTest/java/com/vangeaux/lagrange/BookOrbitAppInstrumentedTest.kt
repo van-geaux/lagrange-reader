@@ -18,6 +18,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -939,6 +940,10 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("First Volume").performClick()
         composeRule.onNodeWithContentDescription("Open series Grouped Series").performClick()
+        composeRule.onNodeWithTag("download-series").performClick()
+        composeRule.onNodeWithTag("bulk-download-continue")
+            .assertIsDisplayed()
+            .assertTextEquals("Download series")
         composeRule.onNodeWithTag("series-group-by-library").performScrollTo().assertIsSelected()
         composeRule.onNodeWithTag("series-group-by-format").assertIsNotSelected()
         composeRule.onNodeWithTag("series-section-lib-books").assertIsDisplayed()
