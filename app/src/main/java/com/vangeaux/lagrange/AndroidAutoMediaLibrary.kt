@@ -445,6 +445,8 @@ private fun mergeAudiobookMetadata(existing: BookSummary, candidate: BookSummary
         },
         streamUrl = existing.streamUrl ?: candidate.streamUrl,
         coverUrl = existing.coverUrl ?: candidate.coverUrl,
+        audiobookCoverUrl = existing.audiobookCoverUrl ?: candidate.audiobookCoverUrl,
+        coverAspectRatio = if (existing.audiobookCoverUrl != null || candidate.audiobookCoverUrl != null) CoverAspectRatio.SQUARE else existing.coverAspectRatio,
         localPath = existing.localPath ?: candidate.localPath,
         progressPercent = existing.progressPercent ?: candidate.progressPercent,
         progressPositionMs = existing.progressPositionMs ?: candidate.progressPositionMs,
@@ -1537,17 +1539,18 @@ internal class AndroidAutoCatalogBridge private constructor(
                     title = ""
                 )
             }
-            if (serverUrl.isNotBlank() && !baseBook.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(serverUrl, baseBook.id, baseBook.coverUrl)?.let {
-                    return@withContext it
+            val preferredBaseCover = baseBook.audiobookCoverUrl?.takeIf { it.isNotBlank() } ?: baseBook.coverUrl
+            if (serverUrl.isNotBlank() && !preferredBaseCover.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, baseBook.id, preferredBaseCover)?.let {
+                    return@withContext padAndroidAutoCoverToSquare(it)
                 }
             }
             val coverModule = resolveProviderBookCoverModule(repository)
-            // Try loading directly if coverUrl is already present
-            if (!baseBook.coverUrl.isNullOrBlank()) {
+            // Try loading directly if coverUrl or audiobookCoverUrl is already present
+            if (!preferredBaseCover.isNullOrBlank()) {
                 runCatching { coverModule.loadBookCover(baseBook) }.getOrNull()
                     ?.takeIf { it.isNotEmpty() }
-                    ?.let { return@withContext it }
+                    ?.let { return@withContext padAndroidAutoCoverToSquare(it) }
             }
             // Otherwise hydrate via BookDetailModule so missing/expired coverUrl is populated
             val detailModule = resolveProviderBookDetailModule(repository)
@@ -1558,14 +1561,15 @@ internal class AndroidAutoCatalogBridge private constructor(
             } else {
                 baseBook
             }
-            if (serverUrl.isNotBlank() && !hydratedBook.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(serverUrl, hydratedBook.id, hydratedBook.coverUrl)?.let {
-                    return@withContext it
+            val preferredHydratedCover = hydratedBook.audiobookCoverUrl?.takeIf { it.isNotBlank() } ?: hydratedBook.coverUrl
+            if (serverUrl.isNotBlank() && !preferredHydratedCover.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, hydratedBook.id, preferredHydratedCover)?.let {
+                    return@withContext padAndroidAutoCoverToSquare(it)
                 }
             }
             runCatching {
                 coverModule.loadBookCover(hydratedBook)
-            }.getOrNull()?.takeIf { it.isNotEmpty() }
+            }.getOrNull()?.takeIf { it.isNotEmpty() }?.let(::padAndroidAutoCoverToSquare)
         }
 
     fun recordHeadlessProgress(
@@ -1667,6 +1671,8 @@ internal class AndroidAutoCatalogBridge private constructor(
             return matchedOption.book.copy(
                 libraryId = matchedOption.book.libraryId.ifBlank { baseBook.libraryId },
                 coverUrl = matchedOption.book.coverUrl ?: baseBook.coverUrl,
+                audiobookCoverUrl = matchedOption.book.audiobookCoverUrl ?: baseBook.audiobookCoverUrl,
+                coverAspectRatio = if (matchedOption.book.audiobookCoverUrl != null || baseBook.audiobookCoverUrl != null) CoverAspectRatio.SQUARE else matchedOption.book.coverAspectRatio,
                 audioChapters = chapters
             )
         }
@@ -3044,4 +3050,174 @@ internal suspend fun ReadiumAudioPlaybackService.currentSessionMediaItemsWithPos
     val currentIndex = player.currentMediaItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val currentPos = (librarySessionPlayer?.currentPosition ?: player.currentPosition).coerceAtLeast(0L)
     MediaItemsWithStartPosition(items, currentIndex, currentPos) // i18n-ignore: AA accessibility label
+}
+
+internal fun padAndroidAutoCoverToSquare(bytes: ByteArray): ByteArray {
+    if (bytes.isEmpty()) return bytes
+
+    // Fast header check for PNG (width at bytes 16..19, height at bytes 20..23)
+    if (bytes.size >= 24 &&
+        bytes[0] == 0x89.toByte() &&
+        bytes[1] == 0x50.toByte() &&
+        bytes[2] == 0x4E.toByte() &&
+        bytes[3] == 0x47.toByte()
+    ) {
+        val headerBuf = java.nio.ByteBuffer.wrap(bytes, 16, 8)
+        val pngW = headerBuf.int
+        val pngH = headerBuf.int
+        if (pngW > 0 && pngH > 0 && pngW == pngH) {
+            return bytes
+        }
+    }
+
+    // 1. Android runtime path (BitmapFactory + Canvas)
+    val androidResult = runCatching {
+        val boundsOpts = android.graphics.BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+        val width = boundsOpts.outWidth
+        val height = boundsOpts.outHeight
+        if (width <= 0 || height <= 0) return@runCatching null
+        if (width == height) return bytes
+
+        val source = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: return@runCatching null
+        val srcW = source.width
+        val srcH = source.height
+        if (srcW <= 0 || srcH <= 0) return@runCatching null
+        if (srcW == srcH) return bytes
+
+        val size = maxOf(srcW, srcH)
+        val padded = android.graphics.Bitmap.createBitmap(
+            size,
+            size,
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(padded)
+        canvas.drawBitmap(source, (size - srcW) / 2f, (size - srcH) / 2f, null)
+        val out = java.io.ByteArrayOutputStream()
+        val compressed = padded.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        if (padded !== source) source.recycle()
+        padded.recycle()
+        if (compressed) out.toByteArray().takeIf { it.isNotEmpty() } else null
+    }.getOrNull()
+
+    if (androidResult != null) return androidResult
+
+    // 2. Pure-JVM fallback for RGBA PNGs in headless unit tests (uses only java.base / java.util.zip)
+    return runCatching { padRgbaPngToSquareFallback(bytes) }.getOrNull() ?: bytes
+}
+
+internal fun padRgbaPngToSquareFallback(bytes: ByteArray): ByteArray? {
+    if (bytes.size < 33 ||
+        bytes[0] != 0x89.toByte() ||
+        bytes[1] != 0x50.toByte() ||
+        bytes[2] != 0x4E.toByte() ||
+        bytes[3] != 0x47.toByte()
+    ) return null
+
+    var offset = 8
+    var srcW = 0
+    var srcH = 0
+    val idatOut = java.io.ByteArrayOutputStream()
+
+    while (offset + 8 <= bytes.size) {
+        val len = java.nio.ByteBuffer.wrap(bytes, offset, 4).int
+        val type = String(bytes, offset + 4, 4, Charsets.US_ASCII)
+        val dataStart = offset + 8
+        if (len < 0 || dataStart + len + 4 > bytes.size) return null
+        when (type) {
+            "IHDR" -> {
+                val buf = java.nio.ByteBuffer.wrap(bytes, dataStart, len)
+                srcW = buf.int
+                srcH = buf.int
+                val bitDepth = buf.get().toInt() and 0xFF
+                val colorType = buf.get().toInt() and 0xFF
+                if (bitDepth != 8 || colorType != 6) return null
+            }
+            "IDAT" -> idatOut.write(bytes, dataStart, len)
+            "IEND" -> break
+        }
+        offset = dataStart + len + 4
+    }
+
+    if (srcW <= 0 || srcH <= 0) return null
+    if (srcW == srcH) return bytes
+
+    val rawRows = java.util.zip.InflaterInputStream(
+        java.io.ByteArrayInputStream(idatOut.toByteArray())
+    ).use { it.readBytes() }
+    val rowStride = 1 + srcW * 4
+    if (rawRows.size < rowStride * srcH) return null
+
+    val srcPixels = IntArray(srcW * srcH)
+    for (y in 0 until srcH) {
+        val rowStart = y * rowStride
+        if (rawRows[rowStart].toInt() != 0) return null // Filter 0 (None)
+        for (x in 0 until srcW) {
+            val px = rowStart + 1 + x * 4
+            val r = rawRows[px].toInt() and 0xFF
+            val g = rawRows[px + 1].toInt() and 0xFF
+            val b = rawRows[px + 2].toInt() and 0xFF
+            val a = rawRows[px + 3].toInt() and 0xFF
+            srcPixels[y * srcW + x] = (a shl 24) or (r shl 16) or (g shl 8) or b
+        }
+    }
+
+    val size = maxOf(srcW, srcH)
+    val left = (size - srcW) / 2
+    val top = (size - srcH) / 2
+    val dstPixels = IntArray(size * size)
+    for (y in 0 until srcH) {
+        for (x in 0 until srcW) {
+            dstPixels[(top + y) * size + (left + x)] = srcPixels[y * srcW + x]
+        }
+    }
+    return encodeRgbaPng(size, size, dstPixels)
+}
+
+internal fun encodeRgbaPng(width: Int, height: Int, argbPixels: IntArray): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    out.write(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+
+    fun writeChunk(type: String, data: ByteArray) {
+        val typeBytes = type.toByteArray(Charsets.US_ASCII)
+        out.write(java.nio.ByteBuffer.allocate(4).putInt(data.size).array())
+        out.write(typeBytes)
+        out.write(data)
+        val crc = java.util.zip.CRC32().apply {
+            update(typeBytes)
+            update(data)
+        }.value.toInt()
+        out.write(java.nio.ByteBuffer.allocate(4).putInt(crc).array())
+    }
+
+    val ihdr = java.nio.ByteBuffer.allocate(13)
+        .putInt(width)
+        .putInt(height)
+        .put(8.toByte()) // 8-bit depth
+        .put(6.toByte()) // RGBA color type
+        .put(0.toByte())
+        .put(0.toByte())
+        .put(0.toByte())
+        .array()
+    writeChunk("IHDR", ihdr)
+
+    val rawScanlines = java.io.ByteArrayOutputStream(height * (1 + width * 4))
+    for (y in 0 until height) {
+        rawScanlines.write(0) // filter type 0 (None)
+        for (x in 0 until width) {
+            val argb = argbPixels[y * width + x]
+            rawScanlines.write((argb ushr 16) and 0xFF) // R
+            rawScanlines.write((argb ushr 8) and 0xFF)  // G
+            rawScanlines.write(argb and 0xFF)           // B
+            rawScanlines.write((argb ushr 24) and 0xFF) // A
+        }
+    }
+    val compressed = java.io.ByteArrayOutputStream()
+    java.util.zip.DeflaterOutputStream(compressed).use { it.write(rawScanlines.toByteArray()) }
+    writeChunk("IDAT", compressed.toByteArray())
+    writeChunk("IEND", ByteArray(0))
+    return out.toByteArray()
 }
