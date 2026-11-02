@@ -175,6 +175,10 @@
     <string name="settings_volume_page_navigation_summary">使用音量加、音量减键进行阅读导航，而不是调节音量。</string>
     <string name="settings_swap_volume_buttons">交换音量键功能</string>
     <string name="settings_swap_volume_buttons_summary">使用音量减键上一页，音量加键下一页</string>
+    <string name="settings_show_header">显示页眉</string>
+    <string name="settings_show_header_summary">在页面顶部显示图书作者和标题。</string>
+    <string name="settings_show_header_footer_borders">显示页眉/页脚边框</string>
+    <string name="settings_show_header_footer_borders_summary">启用后，在页眉下方和/或页脚上方绘制边框。</string>
     <string name="settings_show_page_progress">显示阅读进度</string>
     <string name="settings_show_page_progress_summary">阅读时以及显示阅读控件时显示页码。</string>
     <string name="settings_tap_zone_tutorial_epub">更改后显示 EPUB 点击区域引导</string>

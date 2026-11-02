@@ -1,6 +1,7 @@
 package com.vangeaux.lagrange
 
 import androidx.annotation.StringRes
+import android.content.Context
 import org.json.JSONObject
 
 enum class LibraryReadingDirection(
@@ -120,7 +121,9 @@ data class LibraryReaderPreferences(
     val preferServerProgressOnReopen: Boolean = false,
     val padding: EpubPaddingPercentages = EpubPaddingPercentages(),
     val epubLayoutMode: ReaderLayoutMode = ReaderLayoutMode.PAGINATED,
+    val showHeader: Boolean = false,
     val showPageProgress: Boolean = true,
+    val showHeaderFooterBorders: Boolean = false,
     val pdfLayoutMode: ReaderLayoutMode = ReaderLayoutMode.CONTINUOUS,
     val pdfPageGapDp: Float = DEFAULT_READER_PAGE_GAP_DP,
     val joinPdfFacingPages: Boolean = false,
@@ -164,6 +167,30 @@ internal fun readerViewportBottomInset(
     navigationBarBottomInset: Int,
     hideNavigationBar: Boolean
 ): Int = if (hideNavigationBar) 0 else navigationBarBottomInset.coerceAtLeast(0)
+
+internal fun readerHeaderTopMargin(
+    viewportTopOnScreen: Int,
+    decorTopOnScreen: Int,
+    statusBarTopInset: Int,
+    statusBarHeight: Int,
+    visibleDisplayFrameTop: Int,
+    statusBarVisible: Boolean
+): Int {
+    if (!statusBarVisible) return 0
+    val statusBarBottom = maxOf(
+        decorTopOnScreen + statusBarTopInset.coerceAtLeast(0),
+        decorTopOnScreen + statusBarHeight.coerceAtLeast(0),
+        visibleDisplayFrameTop
+    )
+    return (statusBarBottom - viewportTopOnScreen).coerceAtLeast(0)
+}
+
+internal fun readerStatusBarHeight(context: Context): Int =
+    context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        .takeIf { it != 0 }
+        ?.let(context.resources::getDimensionPixelSize)
+        ?.coerceAtLeast(0)
+        ?: 0
 
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
     libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
@@ -257,7 +284,9 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("left", normalized.padding.left.toDouble())
             put("right", normalized.padding.right.toDouble())
             put("epubLayout", readerLayoutModeStorageValue(normalized.epubLayoutMode))
+            put("showHeader", normalized.showHeader)
             put("showPageProgress", normalized.showPageProgress)
+            put("showHeaderFooterBorders", normalized.showHeaderFooterBorders)
             put("pdfLayout", readerLayoutModeStorageValue(normalized.pdfLayoutMode))
             put("pdfPageGapDp", normalized.pdfPageGapDp.toDouble())
             put("joinPdfFacingPages", normalized.joinPdfFacingPages)
@@ -337,7 +366,9 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                             item.optString("epubLayout"),
                             ReaderLayoutMode.PAGINATED
                         ),
+                        showHeader = item.optBoolean("showHeader", false),
                         showPageProgress = item.optBoolean("showPageProgress", true),
+                        showHeaderFooterBorders = item.optBoolean("showHeaderFooterBorders", false),
                         pdfLayoutMode = readerLayoutModeFromStorage(
                             item.optString("pdfLayout"),
                             ReaderLayoutMode.CONTINUOUS

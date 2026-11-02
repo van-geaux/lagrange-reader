@@ -810,6 +810,7 @@ private fun ReaderScreen(
                 fileId = state.book.fileId,
                 bookId = state.book.id,
                 title = state.book.title,
+                author = state.book.author,
                 readerKey = epubReaderPersistenceKey(
                     profile = activeProfile,
                     accountScope = readerAccountScope,
@@ -880,6 +881,7 @@ private fun ReaderScreen(
             file = requireNotNull(state.localFile),
             fileId = state.book.fileId,
             title = state.book.title,
+            author = state.book.author,
             readerKey = listOf(state.book.id, state.book.fileId.orEmpty()).joinToString("|"),
             libraryId = state.book.libraryId,
             launchMode = state.launchMode,
@@ -1159,7 +1161,8 @@ internal fun EpubReaderProgressFooter(
     status: EpubReaderProgressStatus,
     theme: EpubReaderTheme,
     modifier: Modifier = Modifier,
-    customBackgroundColor: Int? = null
+    customBackgroundColor: Int? = null,
+    showBorder: Boolean = false
 ) {
     val footerBackground = customBackgroundColor ?: theme.backgroundColor
     val footerContent = if (customBackgroundColor != null) {
@@ -1173,7 +1176,7 @@ internal fun EpubReaderProgressFooter(
         shadowElevation = 2.dp
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             val overallPosition = if (
@@ -1265,7 +1268,7 @@ internal fun EpubReaderProgressFooter(
             }
             Text(
                 text = displayText,
-                modifier = Modifier.semantics {
+                modifier = Modifier.padding(horizontal = 8.dp).semantics {
                     contentDescription = accessibilityText
                 },
                 maxLines = 1,
@@ -1273,6 +1276,13 @@ internal fun EpubReaderProgressFooter(
                 color = footerContent,
                 style = MaterialTheme.typography.labelSmall
             )
+            if (showBorder) {
+                HorizontalDivider(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    color = footerContent,
+                    thickness = 0.5.dp
+                )
+            }
         }
     }
 }
@@ -2407,7 +2417,8 @@ private class EpubPageMeasurementBridge(
 internal fun ComicReaderProgressFooter(
     currentPage: Int,
     pageCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBorder: Boolean = false
 ) {
     Surface(
         modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
@@ -2415,7 +2426,7 @@ internal fun ComicReaderProgressFooter(
         shadowElevation = 2.dp
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             val comicFooterDescription = stringResource(
@@ -2425,7 +2436,7 @@ internal fun ComicReaderProgressFooter(
             )
             Text(
                 text = stringResource(R.string.chrome_footer_page_of, currentPage + 1, pageCount),
-                modifier = Modifier.semantics {
+                modifier = Modifier.padding(horizontal = 8.dp).semantics {
                     contentDescription = comicFooterDescription
                 },
                 maxLines = 1,
@@ -2433,6 +2444,13 @@ internal fun ComicReaderProgressFooter(
                 color = Color.White.copy(alpha = 0.78f),
                 style = MaterialTheme.typography.labelSmall
             )
+            if (showBorder) {
+                HorizontalDivider(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    color = Color.White.copy(alpha = 0.78f),
+                    thickness = 0.5.dp
+                )
+            }
         }
     }
 }
@@ -3073,6 +3091,58 @@ private data class EpubMeasurementRenderState(
 
 internal const val EPUB_DEFAULT_PADDING_PERCENT = 15f
 internal const val EPUB_DEFAULT_TOP_PADDING_PERCENT = 30f
+@Composable
+internal fun ReaderBookHeader(
+    title: String,
+    author: String?,
+    textColor: Color,
+    showBorder: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(EPUB_READER_PROGRESS_FOOTER_HEIGHT)
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)
+        ) {
+            val maxAuthorWidth = maxWidth / 2
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = textColor,
+                    style = MaterialTheme.typography.labelSmall
+                )
+                author?.trim()?.takeIf(String::isNotEmpty)?.let {
+                    Text(
+                        text = it,
+                        modifier = Modifier.widthIn(max = maxAuthorWidth),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = textColor,
+                        textAlign = TextAlign.End,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+        if (showBorder) {
+            HorizontalDivider(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                color = textColor.copy(alpha = 0.78f),
+                thickness = 0.5.dp
+            )
+        }
+    }
+}
+
 internal const val EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP = 30
 private val EPUB_READER_PROGRESS_FOOTER_HEIGHT = EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP.dp
 

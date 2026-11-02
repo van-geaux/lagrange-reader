@@ -2165,6 +2165,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
+    private lateinit var headerView: ComposeView
     private lateinit var continuousChapterProgressView: ComposeView
 
     private lateinit var tapZoneTutorialView: ComposeView
@@ -2177,6 +2178,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var ttsOwnerToken: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
+    private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var bookId: String? = null
@@ -2353,6 +2355,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         }
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        displayAuthor = intent.getStringExtra(EXTRA_AUTHOR).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         publicationFingerprint = intent.getStringExtra(EXTRA_PUBLICATION_FINGERPRINT)
             ?.takeIf(String::isNotBlank)
@@ -2673,7 +2676,10 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         viewOnlyBannerView = ComposeView(this).apply {
             visibility = if (isPreview) View.VISIBLE else View.GONE
             setContent { EpubReaderMaterialTheme(selectedTheme) { ViewOnlyModeBanner(onConfirmReadMode = ::enableReadMode) } }
-            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                applyReaderPadding()
+                if (::headerView.isInitialized) syncReaderHeader()
+            }
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val statusBarTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
                 (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
@@ -2736,7 +2742,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                                 selectedCustomBackgroundColor
                             } else {
                                 null
-                            }
+                            },
+                            showBorder = readerPreferences.showHeaderFooterBorders &&
+                                readerPreferences.showPageProgress
                         )
                     }
                 }
@@ -2748,6 +2756,45 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
                 Gravity.BOTTOM
+            )
+        )
+        headerView = ComposeView(this).apply {
+            visibility = if (readerPreferences.showHeader) View.VISIBLE else View.GONE
+            setContent {
+                EpubReaderMaterialTheme(selectedTheme) {
+                    val textColor = when {
+                        readerPreferences.useCustomTextColor ->
+                            readerPreferences.customTextColor?.let {
+                                androidx.compose.ui.graphics.Color(it)
+                            }
+                        readerPreferences.useCustomBackground ->
+                            readerPreferences.customBackgroundColor?.let {
+                                androidx.compose.ui.graphics.Color(customReaderBackgroundTextColor(it))
+                            }
+                        else -> androidx.compose.ui.graphics.Color(
+                            android.graphics.Color.parseColor(selectedBackgroundTheme.foregroundCss)
+                        )
+                    } ?: androidx.compose.ui.graphics.Color.White
+                    ReaderBookHeader(
+                        title = displayTitle,
+                        author = displayAuthor,
+                        textColor = textColor,
+                        showBorder = readerPreferences.showHeaderFooterBorders,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                updateReaderHeaderTopMargin(view, insets)
+                insets
+            }
+        }
+        readerViewport.addView(
+            headerView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+                Gravity.TOP
             )
         )
         chromeView = ComposeView(this).apply {
@@ -2966,6 +3013,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         setContentView(rootView)
         syncProgressFooter()
+        syncReaderHeader()
         readerViewport.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyReaderPadding() }
         ViewCompat.requestApplyInsets(readerViewport)
     }
@@ -5393,6 +5441,45 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         }
         if (controlsVisible) footerView.bringToFront()
         applyReaderPadding()
+        syncReaderHeader()
+    }
+
+    private fun updateReaderHeaderTopMargin(view: View, insets: WindowInsetsCompat) {
+        val bannerBottom = if (isPreview && viewOnlyBannerView.visibility == View.VISIBLE) {
+            val bannerParams = viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams
+            occupiedPreviewBannerBottom(bannerParams?.topMargin ?: 0, viewOnlyBannerView.height)
+        } else 0
+        val decorLocation = IntArray(2)
+        val viewportLocation = IntArray(2)
+        window.decorView.getLocationOnScreen(decorLocation)
+        readerViewport.getLocationOnScreen(viewportLocation)
+        val visibleFrame = Rect()
+        window.decorView.getWindowVisibleDisplayFrame(visibleFrame)
+        val topInset = readerHeaderTopMargin(
+            viewportTopOnScreen = viewportLocation[1],
+            decorTopOnScreen = decorLocation[1],
+            statusBarTopInset = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.statusBars()
+            ).top,
+            statusBarHeight = readerStatusBarHeight(this),
+            visibleDisplayFrameTop = visibleFrame.top,
+            statusBarVisible = !appPreferencesStore.read().hideStatusBarWhileReading
+        )
+        (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val topMargin = maxOf(topInset, bannerBottom)
+            if (params.topMargin != topMargin) {
+                params.topMargin = topMargin
+                view.layoutParams = params
+            }
+        }
+    }
+
+    private fun syncReaderHeader() {
+        if (!::headerView.isInitialized) return
+        headerView.visibility = if (readerPreferences.showHeader) View.VISIBLE else View.GONE
+        ViewCompat.getRootWindowInsets(window.decorView)?.let { insets ->
+            updateReaderHeaderTopMargin(headerView, insets)
+        }
     }
 
     private fun toggleChrome() {
@@ -5911,6 +5998,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     companion object {
         private const val EXTRA_FILE_PATH = "readium_epub_file_path"
         private const val EXTRA_TITLE = "readium_epub_title"
+        private const val EXTRA_AUTHOR = "readium_epub_author"
         private const val EXTRA_READER_KEY = "readium_epub_reader_key"
         private const val EXTRA_PUBLICATION_FINGERPRINT = "readium_epub_publication_fingerprint"
         private const val EXTRA_PERSISTENCE_SERVER = "readium_epub_persistence_server"
@@ -5970,6 +6058,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             fileId: String? = null,
             bookId: String? = null,
             title: String,
+            author: String? = null,
             readerKey: String,
             publicationFingerprint: String? = null,
             persistenceScope: EpubReaderScope? = null,
@@ -6000,6 +6089,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_BOOK_ID, bookId)
             .putExtra(EXTRA_TITLE, title)
+            .putExtra(EXTRA_AUTHOR, author)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .apply {
                 publicationFingerprint?.takeIf(String::isNotBlank)?.let {
