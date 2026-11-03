@@ -12,6 +12,22 @@ import org.junit.Test
 
 class AutomaticDownloadsTest {
     @Test
+    fun `session verification distinguishes sign-in from temporary unavailability`() {
+        assertEquals(
+            AutomaticDownloadSessionDisposition.CONTINUE,
+            automaticDownloadSessionDisposition(SessionState.Authenticated)
+        )
+        assertEquals(
+            AutomaticDownloadSessionDisposition.SIGN_IN_REQUIRED,
+            automaticDownloadSessionDisposition(SessionState.Unauthenticated)
+        )
+        assertEquals(
+            AutomaticDownloadSessionDisposition.RETRY,
+            automaticDownloadSessionDisposition(SessionState.Unavailable)
+        )
+    }
+
+    @Test
     fun `transfer protection is local to the owning storage root`() {
         val filesDir = Files.createTempDirectory("automatic-root-candidates").toFile()
         val firstRoot = File(filesDir, "profiles/first").apply { mkdirs() }

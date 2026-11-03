@@ -90,6 +90,7 @@
     </plurals>
     <string name="error_auto_download_none_eligible">No eligible downloads found in this %1$s batch.</string>
     <string name="error_auto_download_paused_sign_in">Automatic downloads are paused until you sign in again.</string>
+    <string name="error_auto_download_session_check_failed">The server could not verify the automatic-download session. The app will try again.</string>
     <string name="error_auto_download_planning_failed">Automatic download planning failed.</string>
     <string name="error_auto_download_no_storage">No additional storage is available for this download.</string>
     <string name="error_auto_download_policy_changed_removal">The automatic-download policy changed before removal completed.</string>

@@ -90,6 +90,7 @@
     </plurals>
     <string name="error_auto_download_none_eligible">本批 %1$s 中没有符合条件的新内容。</string>
     <string name="error_auto_download_paused_sign_in">自动下载已暂停，直到你重新登录。</string>
+    <string name="error_auto_download_session_check_failed">服务器无法验证自动下载会话。应用将重试。</string>
     <string name="error_auto_download_planning_failed">自动下载规划失败。</string>
     <string name="error_auto_download_no_storage">没有足够的可用存储空间来下载此内容。</string>
     <string name="error_auto_download_policy_changed_removal">删除完成前自动下载策略已更改。</string>
