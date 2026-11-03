@@ -5960,6 +5960,18 @@ private fun LibraryReaderConfiguration(
                 testTagPrefix = "options-reading-tap-zone"
             )
             AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_show_header),
+                summary = stringResource(R.string.settings_show_header_summary),
+                checked = value.showHeader,
+                testTag = "options-reading-show-header",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(showHeader = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
                 title = stringResource(R.string.settings_show_page_progress),
                 summary = stringResource(R.string.settings_show_page_progress_summary),
                 checked = value.showPageProgress,
@@ -5968,6 +5980,18 @@ private fun LibraryReaderConfiguration(
                     onPreferencesChange(
                         selectedLibrary.id,
                         value.copy(showPageProgress = enabled)
+                    )
+                }
+            )
+            AppPreferenceSwitchRow(
+                title = stringResource(R.string.settings_show_header_footer_borders),
+                summary = stringResource(R.string.settings_show_header_footer_borders_summary),
+                checked = value.showHeaderFooterBorders,
+                testTag = "options-reading-show-header-footer-borders",
+                onCheckedChange = { enabled ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(showHeaderFooterBorders = enabled)
                     )
                 }
             )
@@ -6600,6 +6624,15 @@ internal fun ReaderConfigurationControls(
         onPreferencesChange = onPreferencesChange,
         testTagPrefix = "$testTagPrefix-tap-zone"
     )
+    AppPreferenceSwitchRow(
+        title = stringResource(R.string.settings_show_header),
+        summary = stringResource(R.string.settings_show_header_summary),
+        checked = value.showHeader,
+        testTag = "$testTagPrefix-show-header",
+        onCheckedChange = { enabled ->
+            onPreferencesChange(value.copy(showHeader = enabled))
+        }
+    )
     if (format != ReaderConfigurationFormat.PDF) {
         AppPreferenceSwitchRow(
             title = stringResource(R.string.settings_show_page_progress),
@@ -6611,6 +6644,15 @@ internal fun ReaderConfigurationControls(
             }
         )
     }
+    AppPreferenceSwitchRow(
+        title = stringResource(R.string.settings_show_header_footer_borders),
+        summary = stringResource(R.string.settings_show_header_footer_borders_summary),
+        checked = value.showHeaderFooterBorders,
+        testTag = "$testTagPrefix-show-header-footer-borders",
+        onCheckedChange = { enabled ->
+            onPreferencesChange(value.copy(showHeaderFooterBorders = enabled))
+        }
+    )
     AppPreferenceSwitchRow(
         title = stringResource(format.tapZoneTutorialPreferenceTitleRes()),
         summary = stringResource(R.string.settings_tap_zone_tutorial_summary),

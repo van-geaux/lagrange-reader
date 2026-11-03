@@ -175,6 +175,10 @@
     <string name="settings_volume_page_navigation_summary">Use Volume Up and Volume Down for reader navigation instead of changing volume.</string>
     <string name="settings_swap_volume_buttons">Swap volume button actions</string>
     <string name="settings_swap_volume_buttons_summary">Use Volume Down for previous and Volume Up for next</string>
+    <string name="settings_show_header">Show header</string>
+    <string name="settings_show_header_summary">Show the book\'s author and title at the top of the page.</string>
+    <string name="settings_show_header_footer_borders">Show header/footer borders</string>
+    <string name="settings_show_header_footer_borders_summary">When enabled draw a border below the header and/or above the footer.</string>
     <string name="settings_show_page_progress">Show page progress</string>
     <string name="settings_show_page_progress_summary">Show the page counter while reading and with reader controls.</string>
     <string name="settings_tap_zone_tutorial_epub">Show EPUB tap-zone tutorial after changes</string>

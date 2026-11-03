@@ -11,14 +11,36 @@ import java.io.File
 
 class LibraryReaderPreferencesTest {
     @Test
+    fun `reader header adds only missing visible status bar space`() {
+        assertEquals(24, readerHeaderTopMargin(0, 0, 24, 24, 0, statusBarVisible = true))
+        assertEquals(0, readerHeaderTopMargin(24, 0, 24, 24, 24, statusBarVisible = true))
+        assertEquals(24, readerHeaderTopMargin(0, 0, 0, 24, 24, statusBarVisible = true))
+        assertEquals(0, readerHeaderTopMargin(48, 0, 24, 24, 48, statusBarVisible = true))
+        assertEquals(0, readerHeaderTopMargin(0, 0, 24, 24, 24, statusBarVisible = false))
+    }
+
+    @Test
+    fun `PDF and comic header reservation preserves hidden-header layout`() {
+        assertEquals(30, readerHeaderReservedTopSpace(0, 30, 0, showHeader = true))
+        assertEquals(54, readerHeaderReservedTopSpace(24, 30, 0, showHeader = true))
+        assertEquals(48, readerHeaderReservedTopSpace(0, 30, 48, showHeader = true))
+        assertEquals(48, readerHeaderReservedTopSpace(24, 30, 48, showHeader = false))
+        assertEquals(0, readerHeaderReservedTopSpace(24, 30, 0, showHeader = false))
+    }
+
+    @Test
     fun `page progress is enabled by default and legacy profiles keep it enabled`() {
         assertTrue(LibraryReaderPreferences().showPageProgress)
+        assertFalse(LibraryReaderPreferences().showHeader)
+        assertFalse(LibraryReaderPreferences().showHeaderFooterBorders)
 
         val legacy = libraryReaderPreferencesFromStorage(
             """{"version":2,"profiles":{"library":{"theme":"dark"}}}"""
         ).getValue("library")
 
         assertTrue(legacy.showPageProgress)
+        assertFalse(legacy.showHeader)
+        assertFalse(legacy.showHeaderFooterBorders)
     }
 
     @Test
@@ -41,6 +63,7 @@ class LibraryReaderPreferencesTest {
             preferServerProgressOnReopen = true,
             padding = EpubPaddingPercentages(10f, 20f, 30f, 40f),
             epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
+            showHeader = true,
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 8f,
             invertPdfColors = true,
@@ -89,6 +112,7 @@ class LibraryReaderPreferencesTest {
             pdfLayoutMode = ReaderLayoutMode.PAGINATED,
             pdfPageGapDp = 4f,
             showPageProgress = false,
+            showHeaderFooterBorders = true,
             comicLayoutMode = ReaderLayoutMode.CONTINUOUS,
             comicPageGapDp = 24f
         )

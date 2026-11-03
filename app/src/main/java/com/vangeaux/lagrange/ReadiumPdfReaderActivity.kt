@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
@@ -177,11 +178,13 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     private lateinit var chromeView: ComposeView
     private lateinit var optionsView: ComposeView
     private lateinit var footerView: ComposeView
+    private lateinit var headerView: ComposeView
     private lateinit var tapZoneTutorialView: ComposeView
 
     private lateinit var readerKey: String
     private lateinit var libraryId: String
     private lateinit var displayTitle: String
+    private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
     private var readingDirection by mutableStateOf(LibraryReadingDirection.LEFT_TO_RIGHT)
@@ -250,6 +253,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         }
 
         displayTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        displayAuthor = intent.getStringExtra(EXTRA_AUTHOR).orEmpty()
         readerKey = intent.getStringExtra(EXTRA_READER_KEY).orEmpty()
         libraryId = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val appPreferences = AppPreferencesStore(this).read()
@@ -324,6 +328,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     readerContainer.paddingRight,
                     readerContainer.paddingBottom
                 )
+                if (::headerView.isInitialized) syncReaderHeader()
             }
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val statusBarTop = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
@@ -357,7 +362,8 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                     ComicReaderProgressFooter(
                         currentPage = currentPage,
                         pageCount = currentPageCount,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        showBorder = readerPreferences.showHeaderFooterBorders
                     )
                 }
             }
@@ -368,6 +374,32 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
                 Gravity.BOTTOM
+            )
+        )
+        headerView = ComposeView(this).apply {
+            visibility = if (readerPreferences.showHeader) View.VISIBLE else View.GONE
+            setContent {
+                BookOrbitTheme(themeMode = appThemeMode) {
+                    ReaderBookHeader(
+                        title = displayTitle,
+                        author = displayAuthor,
+                        textColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.78f),
+                        showBorder = readerPreferences.showHeaderFooterBorders,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                updateReaderHeaderTopMargin(view, insets)
+                insets
+            }
+        }
+        readerViewport.addView(
+            headerView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+                Gravity.TOP
             )
         )
         chromeView = ComposeView(this).apply {
@@ -452,6 +484,70 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         optionsView.bringToFront()
         addReadiumAudioPlayerOverlay(rootView, readerViewport)
         setContentView(rootView)
+        syncReaderHeader()
+    }
+
+    private fun updateReaderHeaderTopMargin(view: View, insets: WindowInsetsCompat) {
+        val bannerBottom = if (isPreview && viewOnlyBannerView.visibility == View.VISIBLE) {
+            val bannerParams = viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams
+            occupiedPreviewBannerBottom(bannerParams?.topMargin ?: 0, viewOnlyBannerView.height)
+        } else 0
+        val decorLocation = IntArray(2)
+        val viewportLocation = IntArray(2)
+        window.decorView.getLocationOnScreen(decorLocation)
+        readerViewport.getLocationOnScreen(viewportLocation)
+        val visibleFrame = Rect()
+        window.decorView.getWindowVisibleDisplayFrame(visibleFrame)
+        val topInset = readerHeaderTopMargin(
+            viewportTopOnScreen = viewportLocation[1],
+            decorTopOnScreen = decorLocation[1],
+            statusBarTopInset = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.statusBars()
+            ).top,
+            statusBarHeight = readerStatusBarHeight(this),
+            visibleDisplayFrameTop = visibleFrame.top,
+            statusBarVisible = !AppPreferencesStore(this).read().hideStatusBarWhileReading
+        )
+        (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val topMargin = maxOf(topInset, bannerBottom)
+            if (params.topMargin != topMargin) {
+                params.topMargin = topMargin
+                view.layoutParams = params
+            }
+            updateReaderContainerTopPadding(bannerBottom, topMargin)
+        }
+    }
+
+    private fun syncReaderHeader() {
+        if (!::headerView.isInitialized) return
+        headerView.visibility = if (readerPreferences.showHeader) View.VISIBLE else View.GONE
+        val bannerBottom = if (isPreview && viewOnlyBannerView.visibility == View.VISIBLE) {
+            val bannerParams = viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams
+            occupiedPreviewBannerBottom(bannerParams?.topMargin ?: 0, viewOnlyBannerView.height)
+        } else 0
+        val headerTopMargin =
+            (headerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+        updateReaderContainerTopPadding(bannerBottom, headerTopMargin)
+        ViewCompat.getRootWindowInsets(window.decorView)?.let { insets ->
+            updateReaderHeaderTopMargin(headerView, insets)
+        }
+    }
+
+    private fun updateReaderContainerTopPadding(bannerBottom: Int, headerTopMargin: Int) {
+        val topPadding = readerHeaderReservedTopSpace(
+            headerTopMargin = headerTopMargin,
+            headerHeight = dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+            previewBannerBottom = bannerBottom,
+            showHeader = readerPreferences.showHeader
+        )
+        if (readerContainer.paddingTop != topPadding) {
+            readerContainer.setPadding(
+                readerContainer.paddingLeft,
+                topPadding,
+                readerContainer.paddingRight,
+                readerContainer.paddingBottom
+            )
+        }
     }
 
     private fun restoreReaderUi(savedInstanceState: Bundle?) {
@@ -653,6 +749,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val normalized = next.normalized()
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
         readerPreferences = normalized
+        syncReaderHeader()
         readingDirection = normalized.readingDirection
         navigator?.publicationView?.layoutDirection = if (
             normalized.readingDirection == LibraryReadingDirection.RIGHT_TO_LEFT
@@ -858,6 +955,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
     companion object {
         private const val EXTRA_FILE_PATH = "readium_pdf_file_path"
         private const val EXTRA_TITLE = "readium_pdf_title"
+        private const val EXTRA_AUTHOR = "readium_pdf_author"
         private const val EXTRA_READER_KEY = "readium_pdf_reader_key"
         private const val EXTRA_LIBRARY_ID = "readium_pdf_library_id"
         private const val EXTRA_FILE_ID = "readium_pdf_file_id"
@@ -874,6 +972,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             file: File,
             fileId: String? = null,
             title: String,
+            author: String? = null,
             readerKey: String,
             libraryId: String = "",
             launchMode: ReaderLaunchMode,
@@ -882,6 +981,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
             .putExtra(EXTRA_FILE_PATH, file.absolutePath)
             .putExtra(EXTRA_FILE_ID, fileId)
             .putExtra(EXTRA_TITLE, title)
+            .putExtra(EXTRA_AUTHOR, author)
             .putExtra(EXTRA_READER_KEY, readerKey)
             .putExtra(EXTRA_LIBRARY_ID, libraryId)
             .putExtra(EXTRA_IS_PREVIEW, launchMode == ReaderLaunchMode.PREVIEW)
