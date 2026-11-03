@@ -78,8 +78,8 @@ class LibraryNavigationTest {
         val counts = collapsedSeriesBookCounts(books)
 
         assertEquals(mapOf("series-a" to 2, "series-b" to 1), counts)
-        assertEquals("2 books", seriesBookCountLabel(counts.getValue("series-a")))
-        assertEquals("1 book", seriesBookCountLabel(counts.getValue("series-b")))
+        assertEquals(R.string.browse_books_count, seriesBookCountLabelRes(counts.getValue("series-a")))
+        assertEquals(R.string.browse_book_count_one, seriesBookCountLabelRes(counts.getValue("series-b")))
     }
 
     @Test
