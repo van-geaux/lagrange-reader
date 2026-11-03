@@ -27,6 +27,8 @@
     <string name="comic_some_page_url_invalid">存在无效的漫画页面地址。</string>
     <string name="comic_remote_not_image_publication">Readium 未能将远程漫画识别为图片出版物。</string>
     <string name="comic_reader_source_unavailable">漫画阅读源不可用。</string>
+    <string name="comic_spread_pages">第 %1$d 和 %2$d 页</string>
+    <string name="comic_spread_page">第 %1$d 页</string>
     <string name="comic_no_readable_images">此漫画没有可显示的图片。</string>
     <string name="comic_page_open_failed">无法打开此漫画页面。</string>
 </resources>

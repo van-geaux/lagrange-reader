@@ -193,6 +193,10 @@
     <string name="settings_two_page_spread">Two-page spread when unfolded</string>
     <string name="settings_two_page_spread_summary_paginated">On a large screen held horizontally, show two pages side by side</string>
     <string name="settings_two_page_spread_summary_other">Applies to paginated layout on a large screen held horizontally</string>
+    <string name="settings_comic_spread_cover_alone">Show cover alone</string>
+    <string name="settings_comic_spread_cover_alone_summary">Keep the first page by itself so later pages pair like a printed book</string>
+    <string name="settings_comic_spread_shift">Shift page pairs</string>
+    <string name="settings_comic_spread_shift_summary">Move pairs by one page when two-page artwork is split across spreads</string>
 
     <!-- Choice labels: app preferences -->
     <string name="settings_theme_system">Follow system</string>
