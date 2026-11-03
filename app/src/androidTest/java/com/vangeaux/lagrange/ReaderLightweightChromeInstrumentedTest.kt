@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -68,6 +69,7 @@ class ReaderLightweightChromeInstrumentedTest {
         composeRule.onNodeWithTag("reader-lightweight-position-control").assertIsDisplayed()
         composeRule.onNodeWithTag("reader-lightweight-bottom-bar").assertIsDisplayed()
         composeRule.onNodeWithText("Test Book").assertIsDisplayed()
+        composeRule.onAllNodesWithContentDescription("Bookmarks").assertCountEquals(0)
         composeRule.onAllNodesWithText("Back").assertCountEquals(0)
         composeRule.onNodeWithText("Exit").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Previous chapter").assertIsNotEnabled()
@@ -103,6 +105,28 @@ class ReaderLightweightChromeInstrumentedTest {
             controlBounds.height,
             2f
         )
+    }
+
+    @Test
+    fun epubChromeShowsBookmarkActionOnlyWhenProvided() {
+        val openedCount = mutableIntStateOf(0)
+        composeRule.setContent {
+            ReaderLightweightChrome(
+                title = "Test Book",
+                theme = EpubReaderTheme.Sepia,
+                positionKind = "Page",
+                positionTitles = listOf("Page 1"),
+                currentPosition = 0,
+                onBackToReading = {},
+                onCloseBook = {},
+                onOpenSettings = {},
+                onPositionSelected = {},
+                onOpenBookmarks = { openedCount.intValue++ }
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("Bookmarks").assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertEquals(1, openedCount.intValue) }
     }
 
     @Test

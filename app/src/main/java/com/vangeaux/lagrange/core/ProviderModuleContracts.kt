@@ -136,6 +136,15 @@ interface AnnotationModule {
     suspend fun syncPendingMutations(): SyncAttemptResult
 }
 
+interface EpubBookmarkModule {
+    val isAvailable: Boolean
+    val supportsEditing: Boolean get() = true
+    suspend fun loadBookmarks(bookId: String, readerFileId: String): List<EpubBookmark>
+    suspend fun createBookmark(bookId: String, bookFileId: String, position: EpubBookmarkPosition, title: String): EpubBookmark
+    suspend fun updateBookmark(bookId: String, bookmarkId: String, title: String?, note: String?)
+    suspend fun deleteBookmark(bookId: String, bookmarkId: String)
+}
+
 interface AchievementModule { suspend fun loadAchievements(): AchievementCatalogue }
 interface StatisticsModule { suspend fun loadUserStatistics(): UserStatistics }
 interface CacheModule {
@@ -200,6 +209,7 @@ data class ProviderModules(
     val readingProgress: ReadingProgressModule,
     val readingSessions: ReadingSessionModule,
     val annotations: AnnotationModule,
+    val epubBookmarks: EpubBookmarkModule,
     val achievements: AchievementModule,
     val statistics: StatisticsModule,
     val cache: CacheModule

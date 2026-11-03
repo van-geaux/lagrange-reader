@@ -215,6 +215,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Closing Preview resets its temporary location and does not overwrite the normal reading/listening resume position.
 - [x] Go to read from Preview opens the normal reader at the expected location and reconciles progress when the reader closes. (User confirmed the issue-233 fix for BookOrbit; device and server identifiers were not supplied.)
 - [x] Reader controls, Back, Close, orientation change, backgrounding, and process recreation work.
+- [x] Opening a saved mid-chapter EPUB bookmark returns to its saved reading position. (User confirmed the complete BookOrbit bookmark list/create/open/edit/delete flow, correct mid-chapter return, and normal top/bottom spacing on 2026-11-03. Exact build, server label, device, and evidence location were not supplied.)
 - [x] Unsupported formats show an honest unavailable state.
 - [x] Reader/player errors identify the affected provider operation.
 - [x] Read/listen progress behavior matches the provider capability contract.

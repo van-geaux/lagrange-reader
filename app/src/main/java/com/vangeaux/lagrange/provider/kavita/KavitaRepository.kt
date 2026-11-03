@@ -56,7 +56,8 @@ internal fun kavitaHomeFallback(cached: HomeShelfData?, error: Exception): HomeS
 internal class KavitaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAware {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences("kavita_connection", Context.MODE_PRIVATE)
-    private val authModule = KavitaAuthModuleImpl(appContext)
+    internal val authModule = KavitaAuthModuleImpl(appContext)
+    internal val epubBookmarkModule by lazy { KavitaEpubBookmarkModuleImpl(authModule) }
     private val libraryModule = KavitaLibraryModuleImpl(authModule)
     private val homeModule = KavitaHomeShelfModuleImpl(authModule)
     private val homeSnapshotStore = KavitaHomeSnapshotStore(appContext)

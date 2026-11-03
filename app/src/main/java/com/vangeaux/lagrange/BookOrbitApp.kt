@@ -65,6 +65,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -1610,6 +1611,7 @@ internal fun ReaderLightweightChrome(
     secondaryPositionCount: Int = 0,
     onSecondaryPositionSelected: ((Int) -> Unit)? = null,
     onListenToNarration: (() -> Unit)? = null,
+    onOpenBookmarks: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val entries = positionTitles.ifEmpty { listOf(positionKind) }
@@ -1648,6 +1650,7 @@ internal fun ReaderLightweightChrome(
     } else null
     val listenNarrationDescription = stringResource(R.string.chrome_listen_narration)
     val readerSettingsDescription = stringResource(R.string.chrome_reader_settings)
+    val bookmarksDescription = stringResource(R.string.epub_bookmarks_title)
     val palette = theme.readerOptionsPalette()
     val parentTypography = MaterialTheme.typography
     val parentShapes = MaterialTheme.shapes
@@ -1726,6 +1729,16 @@ internal fun ReaderLightweightChrome(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
+                    if (onOpenBookmarks != null) {
+                        IconButton(
+                            onClick = onOpenBookmarks,
+                            modifier = Modifier.semantics {
+                                contentDescription = bookmarksDescription
+                            }
+                        ) {
+                            Icon(Icons.Default.Bookmark, contentDescription = null)
+                        }
+                    }
                 }
             }
 

@@ -18,6 +18,8 @@ On 2026-10-29, the user confirmed Komga Libraries → Browse displays books rath
 
 On 2026-10-30, the maintainer verified the Kavita selected-folder EPUB integrity path on Samsung SM-S931B / Android 17 over ADB (`100.90.237.107:45013`) with `Lagrange-debug-202610301648.apk` (SHA-256 `7fecacc03425c1ef6fb82bf0c715b6e9d4f542f630bb91fa1263c7b95adc4b29`) by downloading `Secrets of the Silent Witch, Vol. 4` into a user-selected SAF folder. The user confirmed that the fix works. This is narrower than full Kavita download validation and does not change the broader pending status.
 
+On 2026-11-03, the user confirmed the complete BookOrbit EPUB bookmark flow (list/create/open/edit/delete), including correct mid-chapter return with normal top/bottom spacing, and the complete Kavita PToC flow (list/add/open/delete) with page-number and `BookScrollId` mapping. Exact build, server labels, device, and evidence location were not supplied. Preview/Komga UI gating and Kavita's unmappable-location rejection were not checked on-device.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -39,6 +41,7 @@ A provider-exclusive function is a real capability supplied by one provider but 
 | Shelves and shelf bulk download | BookOrbit, where enabled | Shelves destination, shelf actions, bulk download | Do not render Shelf actions when the provider has no Shelf module. |
 | Server reading sessions/attempts | BookOrbit, where enabled | Session/history surfaces and lifecycle actions | Hide session actions or show explicit unavailable state. |
 | Annotations | BookOrbit, where enabled | Reader annotation actions and annotation lists | Do not render annotation actions for providers without an Annotation module. |
+| EPUB bookmarks | BookOrbit, Kavita | EPUB reader bookmark list and actions | Hide bookmark actions or report unavailable for providers without an EPUB bookmark module. |
 | Achievements | BookOrbit | Achievements destination and progress cards | Hide the destination for unsupported providers. |
 | Statistics | BookOrbit, where enabled | Statistics destination and refresh actions | Hide the destination for unsupported providers. |
 | Provider read-status mutations | BookOrbit, where enabled | Mark as menu, read-status filters, status cards | Do not show successful status actions for providers without a status module. |
@@ -96,6 +99,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Covers | Book covers | Cards/detail | S | S | Komga authenticated thumbnail requests. |
 | Covers | Catalog/Series images | Home/catalog/Series | S | S | Komga authenticated catalog image loading. |
 | Reader | EPUB reading | Read/Preview | S | S | Verify authenticated file preparation and local reopen. |
+| Reader | EPUB bookmark operations | EPUB reader bookmark list/actions | S | U | User confirmed BookOrbit list/create/open/edit/delete and Kavita PToC list/add/open/delete with location mapping on-device. Build/server/device/evidence details were not supplied. Preview/Komga gating and Kavita unmappable-location rejection remain unconfirmed on-device; source and automated capability-gate evidence exist. |
 | Reader | PDF reading | Read/Preview | S | S | Verify provider file mapping. |
 | Reader | Comic reading | Read/Preview | S | S | Verify supported comic formats. |
 | Reader | Audiobook streaming/listening | Listen/player | S | P | BookOrbit runtime playback rebinding after provider/server switch was user-confirmed under issue [#216](https://github.com/van-geaux/lagrange-reader/issues/216); Komga audio file access exists, while progress/session behavior is unsupported. |
@@ -143,6 +147,7 @@ This provider is implemented but has not received complete authenticated device/
 | Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |
 | Chapter read mutation | V | `/api/Reader/mark-chapter-read` | Read action is exposed after manual validation. |
 | Chapter unread mutation | U | Kavita documents unread at series scope | Hidden/unavailable to avoid broad series mutation. |
+| EPUB bookmarks | S | `GET /api/Reader/ptoc`, `POST /api/Reader/create-ptoc`, `DELETE /api/Reader/ptoc` | User confirmed list/add/open/delete and page/`BookScrollId` mapping on-device on 2026-11-03. Build/server/device/evidence details were not supplied; Preview/Komga gating and unmappable-location rejection remain unconfirmed on-device. |
 | Chapter downloads and local deletion | V | `/api/Download/chapter` | Shared DownloadStore identity is provider-scoped. A single selected-folder EPUB integrity path was verified on 2026-10-30; full Kavita download/format coverage remains pending. |
 | Offline cache and Local Books | V | Kavita browser snapshot, app-private chapter files, and provider-scoped DownloadStore records | Completed downloads reopen through Local Books; cache warming and disposable-cache controls are provider-routed. |
 | Provider/profile isolation | V | `KavitaModuleSet`, provider-scoped profile/session/download identity | Kavita state must not fall back to BookOrbit after a failed request or leak across profiles. |

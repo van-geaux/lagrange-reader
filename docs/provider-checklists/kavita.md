@@ -220,6 +220,9 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Reader/player errors identify the affected provider operation.
 - [x] Read/listen progress behavior matches the provider capability contract.
 - [x] Provider-specific unsupported progress/session behavior is not represented as a false success.
+- [x] Kavita EPUB PToC text bookmarks list, create, open, and delete against the active chapter; verify page-number-to-XHTML reading-order and `BookScrollId`-to-Readium selector mapping. (User confirmed the complete flow and mapping on-device on 2026-11-03; exact build, server label, device, and evidence location were not supplied.)
+- [ ] Kavita bookmarks without a reliable mapped location fail visibly; title/note editing is not offered.
+- [ ] Bookmark actions appear for normal Kavita EPUB reading, are absent in Preview, and remain unavailable for Komga. Preview/Komga visibility was not checked during the reported run.
 
 ### Lagrange ↔ target-server book progress synchronization
 

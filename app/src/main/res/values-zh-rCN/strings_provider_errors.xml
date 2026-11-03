@@ -67,6 +67,9 @@
     <string name="perror_kavita_status_unsupported">Kavita 仅支持已读和未读章节状态。</string>
     <string name="perror_kavita_unread_scope">Kavita 仅在系列范围提供未读状态，不支持章节范围。</string>
     <string name="perror_kavita_status_sync_http">无法同步 Kavita 阅读状态（HTTP %1$d）。</string>
+    <string name="perror_kavita_bookmarks_http">无法访问 Kavita EPUB 书签（HTTP %1$d）。</string>
+    <string name="perror_kavita_bookmark_edit_unsupported">Kavita PToC 书签不支持编辑标题或备注。</string>
+    <string name="perror_kavita_bookmark_location_unavailable">无法将此 EPUB 位置映射到 Kavita 阅读顺序。</string>
     <string name="perror_kavita_reader_info_http">无法加载 Kavita 阅读器信息（HTTP %1$d）。</string>
     <string name="perror_kavita_not_implemented">Kavita 目录与阅读支持尚未实现。</string>
     <!-- 本地阅读文件可用性 -->
@@ -79,6 +82,7 @@
     <string name="perror_komga_ratings_unavailable">Komga 不支持书籍评分。</string>
     <string name="perror_komga_reading_sessions_unavailable">Komga 不支持阅读会话同步。</string>
     <string name="perror_komga_annotations_unavailable">Komga 不支持标注。</string>
+    <string name="perror_komga_bookmarks_unavailable">Komga 不支持 EPUB 书签。</string>
     <string name="perror_komga_smart_scopes_unavailable">Komga 不支持智能范围。</string>
     <string name="perror_komga_authors_unavailable">Komga 不支持作者。</string>
     <string name="perror_kavita_reader_unavailable">Kavita 阅读器暂不支持 %1$s 章节。</string>

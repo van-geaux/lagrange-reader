@@ -123,6 +123,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
             override suspend fun pendingMutationCount(): Int = 0
             override suspend fun syncPendingMutations(): SyncAttemptResult = SyncAttemptResult.Unsupported
         },
+        epubBookmarks = repository.epubBookmarkModule,
         achievements = object : AchievementModule {
             override suspend fun loadAchievements() = AchievementCatalogue(status = AchievementCatalogueStatus.UNSUPPORTED)
         },

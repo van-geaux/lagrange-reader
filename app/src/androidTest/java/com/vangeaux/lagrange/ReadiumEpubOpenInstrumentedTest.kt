@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.SystemClock
+import android.util.Log
 import android.util.Size
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -15,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.CRC32
@@ -152,6 +154,88 @@ class ReadiumEpubOpenInstrumentedTest {
                 delay(750L)
                 scenario.moveToState(Lifecycle.State.RESUMED)
                 awaitEpubLocator(scenario, context, readerKey)
+            }
+        } finally {
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun bookmarkCfiOpensAtItsSavedMidChapterPage() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-bookmark-position.epub")
+        val readerKey = "instrumented-bookmark-position-${System.nanoTime()}"
+        writeMultiResourceEpub(epub)
+        val pointScript = context.assets.open("foliate-bookmark-point-cfi.js")
+            .bufferedReader()
+            .use { it.readText() }
+        try {
+            ActivityScenario.launch<ReadiumEpubReaderActivity>(
+                ReadiumEpubReaderActivity.createIntent(
+                    context = context,
+                    file = epub,
+                    title = "Bookmark position regression",
+                    readerKey = readerKey,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    initialChapter = 0,
+                    initialPage = 0,
+                    initialPageCount = 1,
+                    initialPercent = null
+                )
+            ).use { scenario ->
+                val initial = awaitEpubLocator(scenario, context, readerKey)
+                scenario.onActivity { activity ->
+                    val navigator = activity.supportFragmentManager
+                        .findFragmentByTag("readium_epub_navigator") as? EpubNavigatorFragment
+                    assertNotNull(navigator)
+                    val target = requireNotNull(navigator).currentLocator.value
+                        .copyWithLocations(progression = 0.72)
+                    assertTrue("Could not move to the bookmark fixture's middle page", navigator.go(target))
+                }
+                awaitEpubLocatorProgression(scenario, minimumProgression = 0.4)
+
+                val cfiResult = CompletableDeferred<String?>()
+                scenario.onActivity { activity ->
+                    activity.lifecycleScope.launch {
+                        cfiResult.complete(activity.evaluateReaderJavascript(pointScript))
+                    }
+                }
+                val innerCfi = decodeJavascriptString(withTimeout(10_000L) { cfiResult.await() })
+                val cfi = requireNotNull(combineEpubPointCfi(spineIndex = 0, innerPointCfi = innerCfi))
+
+                scenario.onActivity { activity ->
+                    val navigator = activity.supportFragmentManager
+                        .findFragmentByTag("readium_epub_navigator") as? EpubNavigatorFragment
+                    val activeNavigator = requireNotNull(navigator)
+                    assertTrue(
+                        "Could not move away from the saved bookmark page",
+                        activeNavigator.go(activeNavigator.currentLocator.value.copyWithLocations(progression = 0.0))
+                    )
+                }
+                awaitEpubLocatorProgression(scenario, maximumProgression = 0.1)
+
+                scenario.onActivity { activity ->
+                    val navigator = activity.supportFragmentManager
+                        .findFragmentByTag("readium_epub_navigator") as? EpubNavigatorFragment
+                    Log.i(
+                        "EpubBookmarkGeometry",
+                        "before-open progression=${navigator?.currentLocator?.value?.locations?.progression} " +
+                            readerGeometrySnapshot(activity)
+                    )
+                }
+                scenario.onActivity { activity -> activity.openEpubBookmarkForTest(cfi) }
+                val reopened = awaitEpubLocatorProgression(scenario, minimumProgression = 0.2)
+                scenario.onActivity { activity ->
+                    Log.i(
+                        "EpubBookmarkGeometry",
+                        "after-open progression=${reopened.locations.progression} ${readerGeometrySnapshot(activity)}"
+                    )
+                }
+                assertEquals(initial.href.toString(), reopened.href.toString())
+                assertTrue(
+                    "Bookmark navigation returned to chapter start: progression=${reopened.locations.progression}",
+                    requireNotNull(reopened.locations.progression) > 0.2
+                )
             }
         } finally {
             epub.delete()
@@ -862,6 +946,42 @@ class ReadiumEpubOpenInstrumentedTest {
             SystemClock.sleep(250)
         }
         error("EPUB navigator and locator did not become ready")
+    }
+
+    private suspend fun awaitEpubLocatorProgression(
+        scenario: ActivityScenario<ReadiumEpubReaderActivity>,
+        minimumProgression: Double? = null,
+        maximumProgression: Double? = null
+    ): org.readium.r2.shared.publication.Locator = withTimeout(10_000L) {
+        var reached: org.readium.r2.shared.publication.Locator? = null
+        while (reached == null) {
+            var current: org.readium.r2.shared.publication.Locator? = null
+            scenario.onActivity { activity ->
+                val navigator = activity.supportFragmentManager
+                    .findFragmentByTag("readium_epub_navigator") as? EpubNavigatorFragment
+                current = navigator?.currentLocator?.value
+            }
+            reached = current?.takeIf {
+                it.locations.progression?.let { progression ->
+                    (minimumProgression == null || progression >= minimumProgression) &&
+                        (maximumProgression == null || progression <= maximumProgression)
+                } == true
+            }
+            if (reached == null) delay(100L)
+        }
+        requireNotNull(reached)
+    }
+
+    private fun readerGeometrySnapshot(activity: ReadiumEpubReaderActivity): String {
+        val activityClass = activity.javaClass
+        val viewport = activityClass.getDeclaredField("readerViewport").apply { isAccessible = true }
+            .get(activity) as android.view.View
+        val container = activityClass.getDeclaredField("readerContainer").apply { isAccessible = true }
+            .get(activity) as android.view.View
+        return "viewport=${viewport.width}x${viewport.height} " +
+            "container=${container.width}x${container.height} " +
+            "padding=[${container.paddingLeft},${container.paddingTop},${container.paddingRight},${container.paddingBottom}] " +
+            "translationY=${container.translationY}"
     }
 
     private fun writeMultiResourceEpub(target: File) {

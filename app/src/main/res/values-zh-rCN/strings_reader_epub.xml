@@ -15,6 +15,17 @@
     <string name="epub_options_status">第 %1$d/%2$d 章 · 第 %3$d/%4$d 页</string>
     <string name="epub_error_press_back">请按返回键返回。</string>
     <string name="epub_dismiss_reader_options_cd">关闭阅读选项并继续阅读</string>
+    <string name="epub_bookmarks_title">书签</string>
+    <string name="epub_bookmarks_add_current">为此位置添加书签</string>
+    <string name="epub_bookmarks_empty">暂无书签。</string>
+    <string name="epub_bookmarks_open">打开</string>
+    <string name="epub_bookmarks_edit">编辑标题或备注</string>
+    <string name="epub_bookmarks_delete">删除</string>
+    <string name="epub_bookmarks_title_hint">书签标题</string>
+    <string name="epub_bookmarks_note_hint">备注（可选）</string>
+    <string name="epub_bookmarks_delete_confirm">删除此书签？</string>
+    <string name="epub_bookmarks_location_unavailable">无法为此阅读位置添加书签。</string>
+    <string name="epub_bookmarks_action_failed">无法完成书签操作。请检查网络连接后重试。</string>
 
     <!-- EPUB 阅读器：朗读方式选择 -->
     <string name="epub_listen_title">朗读</string>
