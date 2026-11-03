@@ -896,8 +896,9 @@ internal fun collapsedSeriesBookCounts(books: List<BookSummary>): Map<String, In
     .groupingBy { it }
     .eachCount()
 
+@Composable
 internal fun seriesBookCountLabel(count: Int): String =
-    "$count ${if (count == 1) "book" else "books"}"
+    stringResource(seriesBookCountLabelRes(count), count)
 
 @StringRes
 internal fun seriesBookCountLabelRes(count: Int): Int =
@@ -9239,7 +9240,7 @@ private fun LibraryBooks(
                     book.title
                 },
                 supportingText = seriesKey?.let { key ->
-                    stringResource(seriesBookCountLabelRes(seriesBookCounts[key] ?: 1))
+                    seriesBookCountLabel(seriesBookCounts[key] ?: 1)
                 },
                 onMarkAsRead = if (seriesKey == null && !state.isOfflineSnapshot) {
                     onMarkAsRead?.let { mark -> { mark(book) } }
