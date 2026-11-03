@@ -9,6 +9,7 @@ import com.vangeaux.lagrange.provider.bookorbit.BookOrbitOidcModuleImpl
 
 import com.vangeaux.lagrange.core.AchievementModule
 import com.vangeaux.lagrange.core.AnnotationModule
+import com.vangeaux.lagrange.core.EpubBookmarkModule
 import com.vangeaux.lagrange.core.DownloadModule
 import com.vangeaux.lagrange.core.LocalBooksModule
 import com.vangeaux.lagrange.core.ReadingProgressModule
@@ -89,6 +90,13 @@ internal fun resolveProviderAnnotationModule(repository: BookOrbitDataSource): A
         is KomgaRepository -> KomgaModuleSet(repository).annotations
         is KavitaRepository -> KavitaModuleSet(repository).modules.annotations
         else -> BookOrbitModuleSet(repository).modules.annotations
+    }
+
+internal fun resolveProviderEpubBookmarkModule(repository: BookOrbitDataSource): EpubBookmarkModule =
+    when (repository) {
+        is KomgaRepository -> KomgaModuleSet(repository).epubBookmarks
+        is KavitaRepository -> KavitaModuleSet(repository).modules.epubBookmarks
+        else -> BookOrbitModuleSet(repository).modules.epubBookmarks
     }
 
 internal fun resolveProviderAchievementModule(repository: BookOrbitDataSource): AchievementModule =

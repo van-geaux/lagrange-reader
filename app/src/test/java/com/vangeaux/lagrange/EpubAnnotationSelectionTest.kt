@@ -120,6 +120,24 @@ class EpubAnnotationSelectionTest {
     }
 
     @Test
+    fun `full epub point cfi combines selected spine item with foliate point`() {
+        assertEquals(
+            "epubcfi(/6/20!/4/2[id]/1:5)",
+            combineEpubPointCfi(
+                spineIndex = 9,
+                innerPointCfi = "epubcfi(/4/2[id]/1:5)"
+            )
+        )
+    }
+
+    @Test
+    fun `full epub point cfi rejects range and malformed generator values`() {
+        assertEquals(null, combineEpubPointCfi(0, "epubcfi(/4/2,/1:3,/1:9)"))
+        assertEquals(null, combineEpubPointCfi(0, "null"))
+        assertEquals(null, combineEpubPointCfi(-1, "epubcfi(/4/2/1:3)"))
+    }
+
+    @Test
     fun `webview cfi result decodes a JSON encoded javascript string`() {
         val encoded = JSONObject.quote("epubcfi(/4/2,/1:3,/1:9)")
 
@@ -145,7 +163,9 @@ class EpubAnnotationSelectionTest {
     @Test
     fun `spine index is recovered from a complete epub cfi`() {
         assertEquals(2, epubCfiSpineIndex("epubcfi(/6/6!/4/2,/1:3,/1:9)"))
+        assertEquals(2, epubCfiSpineIndex("epubcfi(/6/6[chapter^]one]!/4/2,/1:3,/1:9)"))
         assertEquals(null, epubCfiSpineIndex("epubcfi(/4/2,/1:3,/1:9)"))
+        assertEquals(null, epubCfiSpineIndex("epubcfi(/6/6[unfinished!/4/2,/1:3,/1:9)"))
         assertEquals(null, epubCfiSpineIndex("not-a-cfi"))
     }
 

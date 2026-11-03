@@ -69,6 +69,9 @@
     <string name="perror_kavita_status_unsupported">Kavita supports only read and unread chapter status.</string>
     <string name="perror_kavita_unread_scope">Kavita exposes unread status at series scope, not chapter scope.</string>
     <string name="perror_kavita_status_sync_http">Unable to synchronize Kavita reading status (HTTP %1$d).</string>
+    <string name="perror_kavita_bookmarks_http">Unable to access Kavita EPUB bookmarks (HTTP %1$d).</string>
+    <string name="perror_kavita_bookmark_edit_unsupported">Kavita PToC bookmarks do not support title or note editing.</string>
+    <string name="perror_kavita_bookmark_location_unavailable">This EPUB location cannot be mapped to a Kavita reading-order position.</string>
     <string name="perror_kavita_reader_info_http">Unable to load Kavita reader information (HTTP %1$d).</string>
     <string name="perror_kavita_not_implemented">Kavita catalog and reading support are not implemented yet.</string>
     <!-- local reader availability -->
@@ -81,6 +84,7 @@
     <string name="perror_komga_ratings_unavailable">Book ratings are not available for Komga.</string>
     <string name="perror_komga_reading_sessions_unavailable">Komga reading-session synchronization is not available.</string>
     <string name="perror_komga_annotations_unavailable">Komga annotations are not available.</string>
+    <string name="perror_komga_bookmarks_unavailable">EPUB bookmarks are not available for Komga.</string>
     <string name="perror_komga_smart_scopes_unavailable">Smart scopes are not available for Komga.</string>
     <string name="perror_komga_authors_unavailable">Authors are not available for Komga.</string>
     <string name="perror_kavita_reader_unavailable">Kavita reader support is not available for %1$s chapters.</string>

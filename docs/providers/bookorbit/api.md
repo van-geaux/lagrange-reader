@@ -182,6 +182,53 @@ POST /api/v1/books/query
 
 The Android client sends `q`, an empty `sort` list, and pagination capped at 100 results. Search results retain their returned `libraryId` so details and reading actions target the correct library.
 
+### EPUB bookmarks
+
+Bookmarks are authenticated, online-only BookOrbit records for an EPUB book/file. The Android client does not queue bookmark mutations or restore them from an offline cache; list, create, update, and delete operations require the active BookOrbit session and a reachable server.
+
+List bookmarks for the selected reader file:
+
+```text
+GET /api/v1/books/{bookId}/bookmarks?readerFileId={readerFileId}
+```
+
+Create a bookmark at the current EPUB location:
+
+```text
+POST /api/v1/books/{bookId}/bookmarks
+```
+
+```json
+{
+  "cfi": "epubcfi(/6/2!/4/2/1:0)",
+  "bookFileId": 15663,
+  "title": "Chapter 1"
+}
+```
+
+Update the title and/or note:
+
+```text
+PATCH /api/v1/books/{bookId}/bookmarks/{bookmarkId}
+```
+
+```json
+{
+  "title": "Renamed bookmark",
+  "note": "Optional note, or null to clear it"
+}
+```
+
+Delete a bookmark:
+
+```text
+DELETE /api/v1/books/{bookId}/bookmarks/{bookmarkId}
+```
+
+The client accepts a list response as an array or under `data`, `items`, `bookmarks`, or `results`. Each bookmark contains `id`, `bookId`, `cfi`, `title`, and optional `note`, `createdAt`, and `updatedAt` fields. Create requests require a complete EPUB CFI of 1–2,000 characters, a positive numeric `bookFileId`, and a nonblank title of at most 500 characters. Update titles use the same 500-character limit; notes may be cleared with JSON `null` and are limited to 4,000 characters. The server prevents duplicate live bookmarks at the same CFI; creating at an existing or previously deleted location may reuse or restore that record. Delete is a soft delete.
+
+Bookmarks are a separate EPUB-reader capability, not part of the annotation contract. BookOrbit supplies server-backed CFI bookmarks; Kavita supplies a separate PToC text-bookmark contract with page/structural-selector mapping and no title/note editing. Komga reports EPUB bookmarks unavailable.
+
 ### Global annotations hub
 
 Endpoint:

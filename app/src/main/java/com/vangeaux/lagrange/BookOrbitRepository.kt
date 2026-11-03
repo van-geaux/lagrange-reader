@@ -13,6 +13,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import com.vangeaux.lagrange.core.ActiveReaderSession
+import com.vangeaux.lagrange.provider.bookorbit.BookOrbitAuthenticatedJsonRequestExecutor
 import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -570,7 +571,7 @@ internal fun bookOrbitAuthenticatedPrincipal(payload: String): AuthenticatedAcco
         )
     )
 
-class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, ProfileSessionAware {
+class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, ProfileSessionAware, BookOrbitAuthenticatedJsonRequestExecutor {
     /**
      * Feature modules are composed around the existing BookOrbit implementation.
      * The legacy data-source surface remains temporarily for compatibility while
@@ -1665,6 +1666,11 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             throw error
         }
     }
+
+    override suspend fun executeAuthenticatedJsonRequest(path: String, method: String, jsonBody: String?): String =
+        withContext(Dispatchers.IO) {
+            request(path, method, jsonBody?.toRequestBody(JSON))
+        }
 
     override suspend fun loadAnnotations(
         filter: AnnotationsFilter,

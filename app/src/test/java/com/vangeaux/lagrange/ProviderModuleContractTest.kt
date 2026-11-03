@@ -10,7 +10,7 @@ class ProviderModuleContractTest {
     @Test
     fun providerCompositionHasIndependentFeatureSlots() {
         val fields = ProviderModules::class.java.declaredFields.map { it.name }.toSet()
-        assertTrue(fields.containsAll(setOf("login", "libraries", "bookCatalog", "reader", "downloads")))
+        assertTrue(fields.containsAll(setOf("login", "libraries", "bookCatalog", "reader", "downloads", "epubBookmarks")))
         assertTrue(fields.size >= 20)
     }
 

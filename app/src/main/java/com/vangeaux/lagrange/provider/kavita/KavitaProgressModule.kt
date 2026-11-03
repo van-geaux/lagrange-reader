@@ -19,6 +19,10 @@ internal data class KavitaChapterContext(
     val pages: Int? = null
 )
 
+internal fun kavitaChapterId(bookId: String, fallbackFileId: String?): Int? =
+    bookId.removePrefix("chapter:").substringBefore(':').toIntOrNull()
+        ?: fallbackFileId?.toIntOrNull()
+
 internal fun kavitaChapterContext(
     chapter: JSONObject,
     fallbackSeriesId: Int? = null,
@@ -145,10 +149,7 @@ internal class KavitaReadingProgressModuleImpl(private val auth: KavitaAuthModul
     private val serverBase: String
         get() = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
 
-    private fun chapterId(book: BookSummary): Int = book.id.removePrefix("chapter:")
-        .substringBefore(':')
-        .toIntOrNull()
-        ?: book.fileId?.toIntOrNull()
+    private fun chapterId(book: BookSummary): Int = kavitaChapterId(book.id, book.fileId)
         ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_chapter_identity, "Kavita chapter identity is unavailable."))
 }
 
@@ -185,8 +186,10 @@ internal class KavitaReadingStatusModuleImpl(private val auth: KavitaAuthModule)
 
     private suspend fun loadChapterContext(book: BookSummary): KavitaChapterContext {
         val base = auth.serverUrl() ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
+        val chapterId = kavitaChapterId(book.id, book.fileId)
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_chapter_identity, "Kavita chapter identity is unavailable."))
         val request = Request.Builder()
-            .url("$base/api/Series/chapter?chapterId=${book.id.removePrefix("chapter:").substringBefore(':')}")
+            .url("$base/api/Series/chapter?chapterId=$chapterId")
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
             .get().build()
         return client.newCall(request).execute().use { response ->

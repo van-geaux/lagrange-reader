@@ -15,6 +15,17 @@
     <string name="epub_options_status">Chapter %1$d/%2$d · Page %3$d/%4$d</string>
     <string name="epub_error_press_back">Press Back to return.</string>
     <string name="epub_dismiss_reader_options_cd">Dismiss reader options and continue reading</string>
+    <string name="epub_bookmarks_title">Bookmarks</string>
+    <string name="epub_bookmarks_add_current">Bookmark this location</string>
+    <string name="epub_bookmarks_empty">No bookmarks yet.</string>
+    <string name="epub_bookmarks_open">Open</string>
+    <string name="epub_bookmarks_edit">Edit title or note</string>
+    <string name="epub_bookmarks_delete">Delete</string>
+    <string name="epub_bookmarks_title_hint">Bookmark title</string>
+    <string name="epub_bookmarks_note_hint">Note (optional)</string>
+    <string name="epub_bookmarks_delete_confirm">Delete this bookmark?</string>
+    <string name="epub_bookmarks_location_unavailable">This reading location cannot be bookmarked.</string>
+    <string name="epub_bookmarks_action_failed">Could not complete the bookmark action. Check your connection and try again.</string>
 
     <!-- EPUB reader: listen / narration choices -->
     <string name="epub_listen_title">Listen</string>

@@ -21,6 +21,7 @@ import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.text.InputFilter
 import android.util.Log
 import android.view.ActionMode
 import android.view.Gravity
@@ -39,6 +40,7 @@ import android.widget.FrameLayout
 import android.widget.ArrayAdapter
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.activity.OnBackPressedCallback
@@ -105,6 +107,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -2013,13 +2016,47 @@ internal fun combineEpubCfi(spineIndex: Int, innerRangeCfi: String?): String? {
     return "epubcfi(/6/${(spineIndex + 1) * 2}!$inner)"
 }
 
+internal fun combineEpubPointCfi(spineIndex: Int, innerPointCfi: String?): String? {
+    if (spineIndex < 0) return null
+    val inner = innerPointCfi
+        ?.trim()
+        ?.takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+        ?.removePrefix("epubcfi(")
+        ?.removeSuffix(")")
+        ?: return null
+    if (inner.count { it == ',' } != 0 || !inner.startsWith('/')) return null
+    return "epubcfi(/6/${(spineIndex + 1) * 2}!$inner)"
+}
+
 internal fun epubCfiSpineIndex(cfi: String?): Int? {
-    val spineStep = Regex("^epubcfi\\(/6/(\\d+)!")
-        .find(cfi.orEmpty())
+    val value = cfi?.takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+        ?: return null
+    val match = Regex("^epubcfi\\(/6/(\\d+)")
+        .find(value)
+    val spineStep = match
         ?.groupValues
         ?.getOrNull(1)
         ?.toIntOrNull()
         ?: return null
+    var cursor = match.range.last + 1
+    if (value.getOrNull(cursor) == '[') {
+        cursor++
+        var assertionClosed = false
+        while (cursor < value.length) {
+            when (value[cursor++]) {
+                '^' -> {
+                    if (cursor >= value.length) return null
+                    cursor++
+                }
+                ']' -> {
+                    assertionClosed = true
+                    break
+                }
+            }
+        }
+        if (!assertionClosed) return null
+    }
+    if (value.getOrNull(cursor) != '!') return null
     if (spineStep < 2 || spineStep % 2 != 0) return null
     return spineStep / 2 - 1
 }
@@ -2054,6 +2091,59 @@ internal fun annotationLocatorJson(
         put("text", JSONObject().put("highlight", selectedText))
     }
 }
+
+internal fun epubBookmarkNavigationLocatorJson(href: String, context: JSONObject): JSONObject? {
+    val before = context.optString("before").takeIf { it.isNotBlank() }
+    val highlight = context.optString("highlight").takeIf { it.isNotBlank() }
+    val after = context.optString("after").takeIf { it.isNotBlank() }
+    val cssSelector = context.optString("cssSelector").takeIf { it.isNotBlank() }
+    val progression = context.optDouble("progression", Double.NaN)
+        .takeIf { it.isFinite() && it in 0.0..1.0 }
+    if (progression == null) return null
+
+    val locations = JSONObject().apply {
+        cssSelector?.let { put("cssSelector", it) }
+        put("progression", progression)
+    }
+    return JSONObject().apply {
+        put("href", href)
+        put("type", MediaType.XHTML.toString())
+        put("locations", locations)
+        if (highlight != null) {
+            put("text", JSONObject().apply {
+                before?.let { put("before", it) }
+                put("highlight", highlight)
+                after?.let { put("after", it) }
+            })
+        }
+    }
+}
+
+internal fun epubBookmarkLocationLocatorJson(href: String, cssSelector: String?): JSONObject? {
+    val selector = cssSelector?.takeIf { it.isNotBlank() } ?: return null
+    return JSONObject().apply {
+        put("href", href)
+        put("type", MediaType.XHTML.toString())
+        put("locations", JSONObject().put("cssSelector", selector))
+    }
+}
+
+internal fun shouldShowEpubBookmarks(
+    isPreview: Boolean,
+    moduleAvailable: Boolean,
+    bookId: String?,
+    readerFileId: String?
+): Boolean = !isPreview && moduleAvailable &&
+    !bookId.isNullOrBlank() && !readerFileId.isNullOrBlank()
+
+internal fun epubBookmarkCfiFromLocatorJson(locatorJson: String): String? = runCatching {
+    val fragments = JSONObject(locatorJson)
+        .optJSONObject("locations")
+        ?.optJSONArray("fragments")
+        ?: return@runCatching null
+    fragments.optString(0)
+        .takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+}.getOrNull()
 
 internal fun resolveAnnotationChapterHref(
     cfi: String,
@@ -2181,6 +2271,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
     private var isPreview: Boolean = false
+    private var bookmarkGeometryTraceActive = false
     private var bookId: String? = null
     private val annotationRepository by lazy { resolveProviderAnnotationModule(
         resolveProviderRepository(
@@ -2188,6 +2279,13 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             ServerProfileStore(applicationContext).active()?.serverUrl.orEmpty()
         )
     ) }
+    private val epubBookmarkModule by lazy { resolveProviderEpubBookmarkModule(
+        resolveProviderRepository(
+            applicationContext,
+            ServerProfileStore(applicationContext).active()?.serverUrl.orEmpty()
+        )
+    ) }
+    private var epubBookmarks by mutableStateOf(emptyList<EpubBookmark>())
     private val highlightAnnotations = mutableMapOf<String, BookAnnotation>()
     private val highlightLocators = mutableMapOf<String, Locator>()
     private var selectedTheme by mutableStateOf(EpubReaderTheme.Sepia)
@@ -2839,6 +2937,14 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                                 showListenChoices()
                             }
                         } else null,
+                        onOpenBookmarks = if (shouldShowEpubBookmarks(
+                            isPreview = isPreview,
+                            moduleAvailable = epubBookmarkModule.isAvailable,
+                            bookId = bookId,
+                            readerFileId = intent.getStringExtra(EXTRA_FILE_ID)
+                        )) {
+                            { showEpubBookmarks() }
+                        } else null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -3440,6 +3546,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         } else if (isPreview) {
             applyPreviewAnnotationDecoration(fragment, openedPublication)
         }
+        if (!isPreview && epubBookmarkModule.isAvailable) refreshEpubBookmarks(showList = false)
         startEpubImageGestureBridge(fragment)
         progressView?.visibility = View.GONE
         if (showTapZoneTutorialAfterChanges && !tapZoneTutorialHasShown) showTapZoneTutorial()
@@ -5399,6 +5506,21 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         )
     }
 
+    private fun logBookmarkGeometry(stage: String, locator: Locator? = null) {
+        if (!BuildConfig.DEBUG || !::readerViewport.isInitialized || !::readerContainer.isInitialized) return
+        Log.i(
+            "EpubBookmarkGeometry",
+            "$stage preview=$isPreview pageProgress=${readerPreferences.showPageProgress} " +
+                "paddingPreference=$padding bannerVisible=${::viewOnlyBannerView.isInitialized && viewOnlyBannerView.visibility == View.VISIBLE} " +
+                "spread=$twoPageSpreadActive fixedLayout=$fixedLayoutPublication " +
+                "viewport=${readerViewport.width}x${readerViewport.height} " +
+                "container=${readerContainer.width}x${readerContainer.height} " +
+                "padding=[${readerContainer.paddingLeft},${readerContainer.paddingTop}," +
+                "${readerContainer.paddingRight},${readerContainer.paddingBottom}] " +
+                "translationY=${readerContainer.translationY} progression=${locator?.locations?.progression}"
+        )
+    }
+
     private fun applyReaderPadding() {
         if (!::readerViewport.isInitialized || readerViewport.width <= 0 || readerViewport.height <= 0) return
         fun horizontal(value: Float): Int =
@@ -5428,6 +5550,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 0
             }
         )
+        if (bookmarkGeometryTraceActive) {
+            logBookmarkGeometry("padding-applied", navigator?.currentLocator?.value)
+        }
     }
 
     private fun syncProgressFooter() {
@@ -5511,6 +5636,360 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         hideChrome()
     }
 
+    private fun showEpubBookmarks() {
+        refreshEpubBookmarks(showList = true)
+    }
+
+    private fun refreshEpubBookmarks(showList: Boolean) {
+        val currentBookId = bookId?.takeIf { it.isNotBlank() } ?: return
+        val readerFileId = intent.getStringExtra(EXTRA_FILE_ID)?.takeIf { it.isNotBlank() } ?: return
+        lifecycleScope.launch {
+            try {
+                epubBookmarks = epubBookmarkModule.loadBookmarks(currentBookId, readerFileId)
+                if (showList) showEpubBookmarksDialog()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                if (showList) showBookmarkActionError()
+            }
+        }
+    }
+
+    private fun showEpubBookmarksDialog() {
+        val builder = AlertDialog.Builder(this)
+            .setTitle(R.string.epub_bookmarks_title)
+            .setPositiveButton(R.string.epub_bookmarks_add_current) { _, _ -> promptCreateEpubBookmark() }
+            .setNegativeButton(android.R.string.cancel, null)
+        if (epubBookmarks.isEmpty()) {
+            builder.setMessage(R.string.epub_bookmarks_empty)
+        } else {
+            builder.setItems(epubBookmarks.map { bookmark ->
+                bookmark.note?.takeIf { it.isNotBlank() }?.let { "${bookmark.title}\n$it" } ?: bookmark.title
+            }.toTypedArray()) { _, index ->
+                epubBookmarks.getOrNull(index)?.let(::showEpubBookmarkActions)
+            }
+        }
+        builder.show()
+    }
+
+    private fun showEpubBookmarkActions(bookmark: EpubBookmark) {
+        val actions = buildList<Pair<Int, () -> Unit>> {
+            add(R.string.epub_bookmarks_open to { openEpubBookmark(bookmark) })
+            if (epubBookmarkModule.supportsEditing) {
+                add(R.string.epub_bookmarks_edit to { promptEditEpubBookmark(bookmark) })
+            }
+            add(R.string.epub_bookmarks_delete to { confirmDeleteEpubBookmark(bookmark) })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(bookmark.title)
+            .setItems(actions.map { (label, _) -> getString(label) }.toTypedArray()) { _, index ->
+                actions.getOrNull(index)?.second?.invoke()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private suspend fun currentEpubBookmarkCfi(): String? {
+        val fragment = navigator ?: return null
+        val locator = fragment.currentLocator.value
+        val locatorJson = locator.toJSON().toString()
+        epubBookmarkCfiFromLocatorJson(locatorJson)?.let { return it }
+        val openedPublication = publication ?: return null
+        val spineIndex = selectedSpineIndex(
+            selectedHref = locator.href.toString(),
+            readingOrderHrefs = openedPublication.readingOrder.map { it.url().toString() }
+        ) ?: return null
+        val script = assets.open(FOLIATE_BOOKMARK_POINT_CFI_ASSET).bufferedReader().use { it.readText() }
+        val innerPointCfi = decodeJavascriptString(fragment.evaluateJavascript(script))
+        return combineEpubPointCfi(spineIndex, innerPointCfi)
+    }
+
+    private suspend fun currentEpubBookmarkPosition(): EpubBookmarkPosition? {
+        val fragment = navigator ?: return null
+        val currentLocator = fragment.currentLocator.value
+        val cfi = currentEpubBookmarkCfi() ?: return null
+        val openedPublication = publication ?: return null
+        val context = runCatching {
+            val script = assets.open(FOLIATE_BOOKMARK_CFI_LOCATOR_ASSET)
+                .bufferedReader()
+                .use { it.readText() }
+            withTimeoutOrNull(5_000L) {
+                decodeJavascriptString(
+                    fragment.evaluateJavascript(
+                        "$script\nJSON.stringify(window.bookorbitResolveBookmarkCfi(${JSONObject.quote(cfi)}));"
+                    )
+                )?.let { value -> runCatching { JSONObject(value) }.getOrNull() }
+            }
+        }.getOrNull()
+        return EpubBookmarkPosition(
+            cfi = cfi,
+            href = currentLocator.href.toString(),
+            cssSelector = context?.optString("cssSelector")?.takeIf { it.isNotBlank() },
+            readingOrder = openedPublication.readingOrder.map { link ->
+                EpubBookmarkResource(
+                    href = link.url().toString(),
+                    mediaType = link.mediaType?.toString()
+                )
+            }
+        )
+    }
+
+    private fun promptCreateEpubBookmark() {
+        val currentBookId = bookId?.takeIf { it.isNotBlank() } ?: return showBookmarkActionError()
+        val readerFileId = intent.getStringExtra(EXTRA_FILE_ID)?.takeIf { it.isNotBlank() }
+            ?: return showBookmarkActionError()
+        lifecycleScope.launch {
+            val position = currentEpubBookmarkPosition() ?: return@launch showBookmarkLocationUnavailable()
+            showEpubBookmarkTitleDialog(currentBookId, readerFileId, position)
+        }
+    }
+
+    private fun showEpubBookmarkTitleDialog(currentBookId: String, readerFileId: String, position: EpubBookmarkPosition) {
+        val titleInput = EditText(this).apply {
+            hint = getString(R.string.epub_bookmarks_title_hint)
+            filters = arrayOf(InputFilter.LengthFilter(500))
+            setText(chapterTitles.getOrNull(currentChapter)?.takeIf { it.isNotBlank() }
+                ?: getString(R.string.epub_chapter_fallback, currentChapter + 1))
+            setSingleLine(true)
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(24), dpToPx(8), dpToPx(24), 0)
+            addView(titleInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.epub_bookmarks_add_current)
+            .setView(container)
+            .setPositiveButton(R.string.epub_note_save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val title = titleInput.text?.toString()?.trim().orEmpty()
+            if (title.isBlank()) {
+                titleInput.error = getString(R.string.epub_bookmarks_title_hint)
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            lifecycleScope.launch {
+                try {
+                    epubBookmarkModule.createBookmark(currentBookId, readerFileId, position, title)
+                    refreshEpubBookmarks(showList = true)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    showBookmarkActionError()
+                }
+            }
+        }
+    }
+
+    private fun promptEditEpubBookmark(bookmark: EpubBookmark) {
+        val titleInput = EditText(this).apply {
+            hint = getString(R.string.epub_bookmarks_title_hint)
+            filters = arrayOf(InputFilter.LengthFilter(500))
+            setText(bookmark.title)
+            setSingleLine(true)
+        }
+        val noteInput = EditText(this).apply {
+            hint = getString(R.string.epub_bookmarks_note_hint)
+            filters = arrayOf(InputFilter.LengthFilter(4000))
+            setText(bookmark.note.orEmpty())
+            minLines = 2
+            maxLines = 4
+        }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(24), dpToPx(8), dpToPx(24), 0)
+            addView(titleInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(noteInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.epub_bookmarks_edit)
+            .setView(container)
+            .setPositiveButton(R.string.epub_note_save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val title = titleInput.text?.toString()?.trim().orEmpty()
+            if (title.isBlank()) {
+                titleInput.error = getString(R.string.epub_bookmarks_title_hint)
+                return@setOnClickListener
+            }
+            dialog.dismiss()
+            lifecycleScope.launch {
+                try {
+                    epubBookmarkModule.updateBookmark(
+                        bookmark.bookId,
+                        bookmark.id,
+                        title,
+                        noteInput.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                    )
+                    refreshEpubBookmarks(showList = true)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    showBookmarkActionError()
+                }
+            }
+        }
+    }
+
+    private fun confirmDeleteEpubBookmark(bookmark: EpubBookmark) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.epub_bookmarks_delete)
+            .setMessage(R.string.epub_bookmarks_delete_confirm)
+            .setPositiveButton(R.string.epub_bookmarks_delete) { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        epubBookmarkModule.deleteBookmark(bookmark.bookId, bookmark.id)
+                        refreshEpubBookmarks(showList = true)
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        showBookmarkActionError()
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun openEpubBookmark(bookmark: EpubBookmark) {
+        val cfi = bookmark.cfi?.takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+        val savedLocation = bookmark.location?.takeIf {
+            it.readingOrderIndex >= 0 && !it.cssSelector.isNullOrBlank()
+        }
+        if (cfi == null && savedLocation == null) return showBookmarkLocationUnavailable()
+        val openedPublication = publication ?: return showBookmarkLocationUnavailable()
+        val readingOrderLinks = openedPublication.readingOrder
+        val readingOrderHrefs = readingOrderLinks.map { it.url().toString() }
+        val xhtmlLinks = readingOrderLinks.filter {
+            it.mediaType?.toString().equals(MediaType.XHTML.toString(), ignoreCase = true)
+        }
+        val href = if (cfi != null) {
+            val spineIndex = epubCfiSpineIndex(cfi)?.takeIf { it in readingOrderHrefs.indices }
+                ?: return showBookmarkLocationUnavailable()
+            readingOrderHrefs[spineIndex]
+        } else {
+            xhtmlLinks.getOrNull(savedLocation!!.readingOrderIndex)?.url()?.toString()
+                ?: return showBookmarkLocationUnavailable()
+        }
+        val targetSpineIndex = selectedSpineIndex(href, readingOrderHrefs)
+            ?: return showBookmarkLocationUnavailable()
+        val activeNavigator = navigator ?: return showBookmarkLocationUnavailable()
+        val previousLocator = activeNavigator.currentLocator.value
+        bookmarkGeometryTraceActive = BuildConfig.DEBUG
+        logBookmarkGeometry("before-open", previousLocator)
+        lifecycleScope.launch {
+            suspend fun restorePreviousLocation() {
+                if (activeNavigator.currentLocator.value != previousLocator) {
+                    expectSemanticReaderMovement(previousLocator)
+                    if (!activeNavigator.go(previousLocator)) cancelExpectedReaderMovement()
+                }
+            }
+
+            val currentSpineIndex = selectedSpineIndex(
+                activeNavigator.currentLocator.value.href.toString(),
+                readingOrderHrefs
+            )
+            if (currentSpineIndex != targetSpineIndex) {
+                val chapterLocator = runCatching {
+                    Locator.fromJSON(
+                        JSONObject()
+                            .put("href", href)
+                            .put("type", MediaType.XHTML.toString())
+                    )
+                }.getOrNull() ?: return@launch showBookmarkLocationUnavailable()
+                if (!activeNavigator.go(chapterLocator)) {
+                    restorePreviousLocation()
+                    return@launch showBookmarkLocationUnavailable()
+                }
+                val targetResourceLoaded = withTimeoutOrNull(10_000L) {
+                    activeNavigator.currentLocator.first { locator ->
+                        selectedSpineIndex(locator.href.toString(), readingOrderHrefs) == targetSpineIndex
+                    }
+                }
+                if (targetResourceLoaded == null) {
+                    restorePreviousLocation()
+                    return@launch showBookmarkLocationUnavailable()
+                }
+            }
+
+            var resolvedContext: JSONObject? = null
+            val targetLocator = if (cfi != null) {
+                resolvedContext = try {
+                    withTimeoutOrNull(5_000L) {
+                        val script = assets.open(FOLIATE_BOOKMARK_CFI_LOCATOR_ASSET)
+                            .bufferedReader()
+                            .use { it.readText() }
+                        val javascriptResult = activeNavigator.evaluateJavascript(
+                            "$script\nJSON.stringify(window.bookorbitResolveBookmarkCfi(${JSONObject.quote(cfi)}));"
+                        )
+                        decodeJavascriptString(javascriptResult)
+                            ?.let { value -> runCatching { JSONObject(value) }.getOrNull() }
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    null
+                }
+                resolvedContext?.let { context -> epubBookmarkNavigationLocatorJson(href, context) }
+            } else {
+                epubBookmarkLocationLocatorJson(href, savedLocation?.cssSelector)
+            }
+            val resolvedLocator = targetLocator?.let { json ->
+                runCatching { Locator.fromJSON(json) }.getOrNull()
+            }
+            if (resolvedLocator == null) {
+                restorePreviousLocation()
+                return@launch showBookmarkLocationUnavailable()
+            }
+
+            val expectedProgression = resolvedLocator.locations.progression
+            val expectedCssSelector = savedLocation?.cssSelector?.takeIf { cfi == null }
+            val progressionTolerance = resolvedContext
+                ?.optDouble("progressionTolerance", 0.02)
+                ?.takeIf { it.isFinite() && it in 0.0..0.25 }
+                ?: 0.02
+            fun hasReachedTarget(locator: Locator): Boolean =
+                selectedSpineIndex(locator.href.toString(), readingOrderHrefs) == targetSpineIndex &&
+                    (expectedProgression == null || locator.locations.progression?.let { actual ->
+                        abs(actual - expectedProgression) <= progressionTolerance
+                    } == true) &&
+                    (expectedCssSelector == null || locator.toJSON()
+                        .optJSONObject("locations")
+                        ?.optString("cssSelector") == expectedCssSelector)
+
+            expectSemanticReaderMovement(resolvedLocator)
+            val navigationAccepted = activeNavigator.go(resolvedLocator)
+            if (!navigationAccepted && !hasReachedTarget(activeNavigator.currentLocator.value)) {
+                cancelExpectedReaderMovement()
+                restorePreviousLocation()
+                return@launch showBookmarkLocationUnavailable()
+            }
+            val targetReached = if (hasReachedTarget(activeNavigator.currentLocator.value)) {
+                activeNavigator.currentLocator.value
+            } else {
+                withTimeoutOrNull(5_000L) {
+                    activeNavigator.currentLocator.first(::hasReachedTarget)
+                }
+            }
+            if (targetReached == null) {
+                cancelExpectedReaderMovement()
+                restorePreviousLocation()
+                showBookmarkLocationUnavailable()
+            } else {
+                logBookmarkGeometry("target-reached", targetReached)
+            }
+            bookmarkGeometryTraceActive = false
+        }
+    }
+
+    private fun showBookmarkActionError() {
+        Toast.makeText(this, R.string.epub_bookmarks_action_failed, Toast.LENGTH_LONG).show()
+    }
+
+    private fun showBookmarkLocationUnavailable() {
+        bookmarkGeometryTraceActive = false
+        Toast.makeText(this, R.string.epub_bookmarks_location_unavailable, Toast.LENGTH_LONG).show()
+    }
+
     private fun enableReadMode() {
         if (!isPreview) return
         isPreview = false
@@ -5583,6 +6062,17 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
 
     internal suspend fun evaluateReaderJavascript(script: String): String? =
         navigator?.evaluateJavascript(script)
+
+    internal fun openEpubBookmarkForTest(cfi: String) {
+        openEpubBookmark(
+            EpubBookmark(
+                id = "instrumented-bookmark",
+                bookId = "instrumented-book",
+                cfi = cfi,
+                title = "Instrumented bookmark"
+            )
+        )
+    }
 
     private fun updateResult(reason: ReaderCompletionReason? = null) {
         val preserved = passiveRecoveryGuard.positionToPreserve
@@ -6035,6 +6525,8 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         private const val NAVIGATOR_TAG = "readium_epub_navigator"
         private const val TAG = "ReadiumEpubReader"
         private const val FOLIATE_SELECTION_CFI_ASSET = "foliate-selection-cfi.js"
+        private const val FOLIATE_BOOKMARK_POINT_CFI_ASSET = "foliate-bookmark-point-cfi.js"
+        private const val FOLIATE_BOOKMARK_CFI_LOCATOR_ASSET = "foliate-bookmark-cfi-locator.js"
         private const val ACTION_COPY = 1000
         private const val ACTION_HIGHLIGHT = 1001
         private const val ACTION_HIGHLIGHT_WITH_NOTE = 1002

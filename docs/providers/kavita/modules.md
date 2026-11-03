@@ -33,6 +33,10 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
   - read and write chapter page progress;
   - mark a chapter read;
   - report chapter unread as unavailable because Kavita exposes unread at series scope.
+- `KavitaEpubBookmarkModule`
+  - loads, creates, and deletes Kavita Personal Table of Contents (PToC) text bookmarks;
+  - maps Kavita's XHTML reading-order page number and `BookScrollId` XPath to a shared Readium resource/structural selector;
+  - rejects locations that cannot be mapped and does not offer title/note editing.
 - `KavitaDownloadModule`
   - downloads chapters from `/api/Download/chapter`;
   - stores files in app-private storage and shared `DownloadStore` metadata;
@@ -45,7 +49,7 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
 
 ## Unsupported capabilities
 
-Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, offline-cache operations, and background cache warming are supported. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, and server reading-session history remain unavailable or unsupported as described by their modules.
+Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, offline-cache operations, background cache warming, and EPUB PToC text bookmarks are implemented. The user confirmed an on-device Kavita bookmark list/add/open/delete flow, including page and structural mapping, on 2026-11-03; the build, server, device, and evidence location were not supplied. Unmappable-location rejection and Preview/Komga UI gating still require device confirmation. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, and server reading-session history remain unavailable or unsupported as described by their modules.
 
 ## Composition
 

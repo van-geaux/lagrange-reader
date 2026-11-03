@@ -639,6 +639,34 @@ data class BookAnnotation(
     val jumpFileFormat: String? = null
 )
 
+data class EpubBookmark(
+    val id: String,
+    val bookId: String,
+    val cfi: String?,
+    val title: String,
+    val note: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+    val location: EpubBookmarkLocation? = null
+)
+
+data class EpubBookmarkLocation(
+    val readingOrderIndex: Int,
+    val cssSelector: String?
+)
+
+data class EpubBookmarkResource(
+    val href: String,
+    val mediaType: String?
+)
+
+data class EpubBookmarkPosition(
+    val cfi: String,
+    val href: String,
+    val cssSelector: String?,
+    val readingOrder: List<EpubBookmarkResource>
+)
+
 data class AnnotationsFilter(
     val search: String? = null,
     val bookId: String? = null,

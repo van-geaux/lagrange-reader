@@ -105,6 +105,7 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
             override suspend fun pendingMutationCount() = source.pendingAnnotationMutationCount()
             override suspend fun syncPendingMutations() = source.syncPendingAnnotationMutations()
         },
+        epubBookmarks = BookOrbitEpubBookmarkModule(source as? BookOrbitAuthenticatedJsonRequestExecutor),
         achievements = object : AchievementModule { override suspend fun loadAchievements() = source.loadAchievements() },
         statistics = object : StatisticsModule { override suspend fun loadUserStatistics() = source.loadUserStatistics() },
         cache = object : CacheModule {

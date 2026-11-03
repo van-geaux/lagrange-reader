@@ -103,6 +103,15 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
         override suspend fun syncPendingMutations(): SyncAttemptResult = unavailableAnnotations()
     }
 
+    val epubBookmarks: EpubBookmarkModule = object : EpubBookmarkModule {
+        override val isAvailable: Boolean = false
+        override val supportsEditing: Boolean = false
+        override suspend fun loadBookmarks(bookId: String, readerFileId: String): List<EpubBookmark> = unavailableBookmarks()
+        override suspend fun createBookmark(bookId: String, bookFileId: String, position: EpubBookmarkPosition, title: String): EpubBookmark = unavailableBookmarks()
+        override suspend fun updateBookmark(bookId: String, bookmarkId: String, title: String?, note: String?) = unavailableBookmarks()
+        override suspend fun deleteBookmark(bookId: String, bookmarkId: String) = unavailableBookmarks()
+    }
+
     val achievements: AchievementModule = object : AchievementModule {
         override suspend fun loadAchievements() = AchievementCatalogue(status = AchievementCatalogueStatus.UNSUPPORTED)
     }
@@ -197,6 +206,14 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
         repository.localizedMessage(
             R.string.perror_komga_annotations_unavailable,
             "Komga annotations are not available."
+        ),
+        UserFacingReason.CAPABILITY_UNAVAILABLE
+    )
+
+    private fun unavailableBookmarks(): Nothing = throw UserFacingException(
+        repository.localizedMessage(
+            R.string.perror_komga_bookmarks_unavailable,
+            "EPUB bookmarks are not available for Komga."
         ),
         UserFacingReason.CAPABILITY_UNAVAILABLE
     )
