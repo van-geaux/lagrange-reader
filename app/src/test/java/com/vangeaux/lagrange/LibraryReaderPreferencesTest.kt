@@ -20,6 +20,15 @@ class LibraryReaderPreferencesTest {
     }
 
     @Test
+    fun `PDF and comic header reservation preserves hidden-header layout`() {
+        assertEquals(30, readerHeaderReservedTopSpace(0, 30, 0, showHeader = true))
+        assertEquals(54, readerHeaderReservedTopSpace(24, 30, 0, showHeader = true))
+        assertEquals(48, readerHeaderReservedTopSpace(0, 30, 48, showHeader = true))
+        assertEquals(48, readerHeaderReservedTopSpace(24, 30, 48, showHeader = false))
+        assertEquals(0, readerHeaderReservedTopSpace(24, 30, 0, showHeader = false))
+    }
+
+    @Test
     fun `page progress is enabled by default and legacy profiles keep it enabled`() {
         assertTrue(LibraryReaderPreferences().showPageProgress)
         assertFalse(LibraryReaderPreferences().showHeader)

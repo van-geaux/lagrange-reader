@@ -192,6 +192,20 @@ internal fun readerStatusBarHeight(context: Context): Int =
         ?.coerceAtLeast(0)
         ?: 0
 
+internal fun readerHeaderReservedTopSpace(
+    headerTopMargin: Int,
+    headerHeight: Int,
+    previewBannerBottom: Int,
+    showHeader: Boolean
+): Int = maxOf(
+    previewBannerBottom.coerceAtLeast(0),
+    if (showHeader) {
+        headerTopMargin.coerceAtLeast(0) + headerHeight.coerceAtLeast(0)
+    } else {
+        0
+    }
+)
+
 internal fun AppPreferences.readerPreferencesFor(libraryId: String): LibraryReaderPreferences =
     libraryReaderPreferences[libraryId]?.normalized() ?: LibraryReaderPreferences()
 

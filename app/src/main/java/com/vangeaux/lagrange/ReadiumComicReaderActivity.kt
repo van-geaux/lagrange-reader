@@ -605,14 +605,39 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                 params.topMargin = topMargin
                 view.layoutParams = params
             }
+            updateReaderContainerTopPadding(bannerBottom, topMargin)
         }
     }
 
     private fun syncReaderHeader() {
         if (!::headerView.isInitialized) return
         headerView.visibility = if (readerPreferences.showHeader) View.VISIBLE else View.GONE
+        val bannerBottom = if (isPreview && viewOnlyBannerView.visibility == View.VISIBLE) {
+            val bannerParams = viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams
+            occupiedPreviewBannerBottom(bannerParams?.topMargin ?: 0, viewOnlyBannerView.height)
+        } else 0
+        val headerTopMargin =
+            (headerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+        updateReaderContainerTopPadding(bannerBottom, headerTopMargin)
         ViewCompat.getRootWindowInsets(window.decorView)?.let { insets ->
             updateReaderHeaderTopMargin(headerView, insets)
+        }
+    }
+
+    private fun updateReaderContainerTopPadding(bannerBottom: Int, headerTopMargin: Int) {
+        val topPadding = readerHeaderReservedTopSpace(
+            headerTopMargin = headerTopMargin,
+            headerHeight = dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+            previewBannerBottom = bannerBottom,
+            showHeader = readerPreferences.showHeader
+        )
+        if (readerContainer.paddingTop != topPadding) {
+            readerContainer.setPadding(
+                readerContainer.paddingLeft,
+                topPadding,
+                readerContainer.paddingRight,
+                readerContainer.paddingBottom
+            )
         }
     }
 
