@@ -99,6 +99,7 @@
     <string name="error_auto_download_waiting_conditions">正在等待所选网络和充电条件。</string>
     <string name="error_auto_download_cancelled">自动下载规划已取消，已完成的文件已保留。</string>
     <string name="error_auto_download_paused_profile_inactive">此服务器配置处于非活动状态，自动下载已暂停。</string>
+    <string name="error_auto_download_transfer_failed">一个自动下载失败。正在继续处理其余图书。</string>
 
     <!-- 自动下载：存储准入提示 -->
     <string name="error_storage_reserve_and_limit">将超出预留可用空间和本地图书存储上限。</string>

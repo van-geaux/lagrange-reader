@@ -397,6 +397,22 @@ internal data class AutomaticDownloadStatus(
     val messageQuantity: Int? = null
 )
 
+internal const val AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE =
+    "An automatic download failed. Continuing with the remaining books."
+
+internal fun automaticDownloadTransferFailedStatus(
+    previous: AutomaticDownloadStatus,
+    nowMillis: Long
+): AutomaticDownloadStatus = previous.copy(
+    state = AutomaticDownloadRunState.RUNNING,
+    failed = previous.failed + 1,
+    lastRunAtMillis = nowMillis,
+    message = AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE,
+    messageRes = R.string.error_auto_download_transfer_failed,
+    messageArgs = emptyList(),
+    messageQuantity = null
+)
+
 /**
  * UI-side localized variant of [message].
  *
@@ -442,6 +458,8 @@ private fun AutomaticDownloadStatus.messageResFromStoredMessage(): Int? = when (
         R.string.error_auto_download_no_storage
     "The automatic-download policy changed before removal completed." ->
         R.string.error_auto_download_policy_changed_removal
+    AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE ->
+        R.string.error_auto_download_transfer_failed
     else -> null
 }
 

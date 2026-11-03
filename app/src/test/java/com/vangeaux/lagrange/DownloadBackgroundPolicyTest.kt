@@ -286,6 +286,45 @@ class DownloadBackgroundPolicyTest {
         assertFalse(isRetryableDownloadHttpCode(400))
         assertFalse(isRetryableDownloadHttpCode(403))
     }
+
+    @Test
+    fun `only user initiated downloads require a foreground service`() {
+        assertTrue(downloadRequiresForegroundService(DownloadOrigin.MANUAL))
+        assertFalse(downloadRequiresForegroundService(DownloadOrigin.AUTOMATIC))
+    }
+
+    @Test
+    fun `terminal automatic failures continue the bounded scan`() {
+        assertTrue(terminalDownloadContinuesAutomaticScan(DownloadOrigin.AUTOMATIC))
+        assertFalse(terminalDownloadContinuesAutomaticScan(DownloadOrigin.MANUAL))
+    }
+
+    @Test
+    fun `terminal automatic failure preserves progress and increments failure count`() {
+        val previous = AutomaticDownloadStatus(
+            state = AutomaticDownloadRunState.RUNNING,
+            checked = 12,
+            queued = 4,
+            skipped = 3,
+            failed = 2,
+            lastRunAtMillis = 100L,
+            message = "Downloading"
+        )
+
+        val updated = automaticDownloadTransferFailedStatus(previous, nowMillis = 250L)
+
+        assertEquals(AutomaticDownloadRunState.RUNNING, updated.state)
+        assertEquals(12, updated.checked)
+        assertEquals(4, updated.queued)
+        assertEquals(3, updated.skipped)
+        assertEquals(3, updated.failed)
+        assertEquals(250L, updated.lastRunAtMillis)
+        assertEquals(AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE, updated.message)
+        assertEquals(R.string.error_auto_download_transfer_failed, updated.messageRes)
+        assertEquals(emptyList<String>(), updated.messageArgs)
+        assertEquals(null, updated.messageQuantity)
+    }
+
     @Test
     fun `persisted attempt restores active download identity`() {
         val book = downloadAttemptBookSummary(

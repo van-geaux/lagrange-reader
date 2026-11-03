@@ -99,6 +99,7 @@
     <string name="error_auto_download_waiting_conditions">Waiting for the selected network and charging conditions.</string>
     <string name="error_auto_download_cancelled">Automatic download planning cancelled. Completed files were kept.</string>
     <string name="error_auto_download_paused_profile_inactive">Automatic downloads are paused while this server profile is inactive.</string>
+    <string name="error_auto_download_transfer_failed">An automatic download failed. Continuing with the remaining books.</string>
 
     <!-- Automatic downloads: storage admission messages -->
     <string name="error_storage_reserve_and_limit">The free-space reserve and maximum local-book storage limit would be exceeded.</string>
