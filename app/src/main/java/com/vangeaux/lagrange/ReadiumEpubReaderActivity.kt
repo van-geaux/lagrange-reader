@@ -6069,7 +6069,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 id = "instrumented-bookmark",
                 bookId = "instrumented-book",
                 cfi = cfi,
-                title = "Instrumented bookmark"
+                title = "", // Test hook opens by CFI and does not display a title.
             )
         )
     }
