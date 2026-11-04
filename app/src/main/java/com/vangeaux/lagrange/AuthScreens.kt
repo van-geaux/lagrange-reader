@@ -30,12 +30,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.autofill.AutofillNode
+import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalAutofill
+import androidx.compose.ui.platform.LocalAutofillTree
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -285,7 +294,7 @@ internal fun ConfiguredServerCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 internal fun LoginScreen(
     serverUrl: String,
@@ -323,6 +332,28 @@ internal fun LoginScreen(
         R.string.login_password_description,
         serverProviderDisplayName(providerId)
     )
+    val autofill = LocalAutofill.current
+    val autofillTree = LocalAutofillTree.current
+    val usernameAutofillNode = remember {
+        AutofillNode(
+            autofillTypes = listOf(AutofillType.Username),
+            onFill = { username = it }
+        )
+    }
+    val passwordAutofillNode = remember {
+        AutofillNode(
+            autofillTypes = listOf(AutofillType.Password),
+            onFill = { password = it }
+        )
+    }
+    DisposableEffect(autofillTree, usernameAutofillNode, passwordAutofillNode) {
+        autofillTree += usernameAutofillNode
+        autofillTree += passwordAutofillNode
+        onDispose {
+            autofillTree.children.remove(usernameAutofillNode.id)
+            autofillTree.children.remove(passwordAutofillNode.id)
+        }
+    }
     Scaffold(
         topBar = {
             BookOrbitTopBar(
@@ -390,6 +421,14 @@ internal fun LoginScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                usernameAutofillNode.boundingBox = coordinates.boundsInWindow()
+                            }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    autofill?.requestAutofillForNode(usernameAutofillNode)
+                                }
+                            }
                             .semantics { contentDescription = usernameDescription },
                         label = { Text(stringResource(R.string.login_username_label)) },
                         singleLine = true,
@@ -407,6 +446,14 @@ internal fun LoginScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                passwordAutofillNode.boundingBox = coordinates.boundsInWindow()
+                            }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    autofill?.requestAutofillForNode(passwordAutofillNode)
+                                }
+                            }
                             .semantics { contentDescription = passwordDescription },
                         label = { Text(stringResource(R.string.login_password_label)) },
                         singleLine = true,
