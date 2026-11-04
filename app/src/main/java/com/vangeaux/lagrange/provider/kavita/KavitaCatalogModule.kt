@@ -390,6 +390,7 @@ internal class KavitaBookCatalogModuleImpl(
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
+            if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
             if (!response.isSuccessful) throw UserFacingException(
                 auth.localizedMessage(R.string.perror_kavita_series_details_http, "Unable to load Kavita series details (HTTP ${response.code}).", response.code)
             )
@@ -696,6 +697,7 @@ internal class KavitaCollectionCatalogModuleImpl(
             .build()
         val collections = client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
+            if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
             if (!response.isSuccessful) {
                 throw UserFacingException(
                     auth.localizedMessage(
@@ -756,6 +758,7 @@ internal class KavitaCollectionCatalogModuleImpl(
                                 .build()
                             val result = client.newCall(request).execute().use { response ->
                                 val payload = response.body?.string().orEmpty()
+                                if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                                 if (!response.isSuccessful) {
                                     throw UserFacingException(
                                         auth.localizedMessage(
@@ -812,6 +815,7 @@ internal class KavitaCollectionCatalogModuleImpl(
                 .build()
             val result = client.newCall(request).execute().use { response ->
                 val payload = response.body?.string().orEmpty()
+                if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                 if (!response.isSuccessful) {
                     throw UserFacingException(
                         auth.localizedMessage(

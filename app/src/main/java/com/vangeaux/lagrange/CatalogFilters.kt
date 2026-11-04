@@ -332,6 +332,32 @@ internal fun filterAndSortSeriesCatalog(
 internal fun mergeSmartScopeBookPages(pages: List<List<BookSummary>>): List<BookSummary> =
     pages.flatten().asReversed().distinctBy { it.id to it.fileId }.asReversed()
 
+internal fun cachedSmartScopeBooksPage(
+    scopeId: Long,
+    requestedPage: Int,
+    cachedPayloads: List<String>,
+    downloads: Map<String, DownloadRecord>,
+    serverBase: String
+): LibraryBooksPage? {
+    val page = requestedPage.coerceAtLeast(0)
+    for ((index, payload) in cachedPayloads.withIndex()) {
+        val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
+        val cachedPage = parsed.page ?: index
+        if (cachedPage == page) {
+            val size = parsed.size
+            return LibraryBooksPage(
+                items = parsed.books,
+                total = parsed.total,
+                page = cachedPage,
+                size = size,
+                isComplete = parsed.total?.let { (page + 1) * (size ?: parsed.books.size) >= it }
+                    ?: (parsed.books.size < (size ?: 100))
+            )
+        }
+    }
+    return null
+}
+
 internal fun BookSummary.isUnread(): Boolean {
     return !isRead && !hasStartedReading()
 }

@@ -200,7 +200,7 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     put("coverAspectRatio", coverAspectRatio.wireValue)
     putNullable("localPath", localPath)
     putNullable("progressLabel", progressLabel)
-    putNullable("progressPercent", progressPercent)
+    putNullable("progressPercent", normalizeStoredProgressPercent(progressPercent))
     putNullable("progressPositionMs", progressPositionMs)
     putNullable("progressPageIndex", progressPageIndex)
     putNullable("seriesId", seriesId)
@@ -214,8 +214,13 @@ private fun BookSummary.toJson(): JSONObject = JSONObject().apply {
     put("isServerMissing", isServerMissing)
     putNullable("readerPageIndex", readerPageIndex)
     putNullable("readerPageCount", readerPageCount)
+    put("availableFormats", JSONArray(availableFormats))
+    put("downloadedFormats", JSONArray(downloadedFormats))
+    put("genres", JSONArray(genres))
     put("audioChapters", audioChapters.toJson())
 }
+
+internal fun BookSummary.toBookCacheJson(): JSONObject = toJson()
 
 private fun JSONObject.toBookDetail(): BookDetailInfo? {
     val book = optJSONObject("book")?.toBookSummary() ?: return null
@@ -258,7 +263,7 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     coverAspectRatio = CoverAspectRatio.fromWireValue(optionalString("coverAspectRatio")),
     localPath = optionalString("localPath"),
     progressLabel = optionalString("progressLabel"),
-    progressPercent = optionalFloat("progressPercent"),
+    progressPercent = normalizeStoredProgressPercent(optionalFloat("progressPercent")),
     progressPositionMs = optionalLong("progressPositionMs"),
     progressPageIndex = optionalInt("progressPageIndex"),
     seriesId = optionalString("seriesId"),
@@ -272,8 +277,13 @@ private fun JSONObject.toBookSummary(): BookSummary = BookSummary(
     readerPageIndex = optionalInt("readerPageIndex"),
     readerPageCount = optionalInt("readerPageCount"),
     audioChapters = audiobookChapters("audioChapters"),
-    isServerMissing = optBoolean("isServerMissing")
+    isServerMissing = optBoolean("isServerMissing"),
+    availableFormats = stringList("availableFormats"),
+    downloadedFormats = stringList("downloadedFormats"),
+    genres = stringList("genres")
 )
+
+internal fun JSONObject.toBookCacheSummary(): BookSummary = toBookSummary()
 
 private fun JSONArray?.toBookSummaries(): List<BookSummary> {
     if (this == null) return emptyList()

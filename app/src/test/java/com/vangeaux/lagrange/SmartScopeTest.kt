@@ -65,6 +65,39 @@ class SmartScopeTest {
         assertEquals(listOf("One refreshed", "Two"), books.map { it.title })
     }
 
+    @Test fun cachedSmartScopeBooksPageReturnsTheRequestedSavedPage() {
+        val cachedPage = cachedSmartScopeBooksPage(
+            scopeId = 12,
+            requestedPage = 1,
+            cachedPayloads = listOf(
+                """{"items":[{"id":"book-1","title":"One"}],"total":2,"page":0,"size":1}""",
+                """{"items":[{"id":"book-2","title":"Two"}],"total":2,"page":1,"size":1}"""
+            ),
+            downloads = emptyMap(),
+            serverBase = "https://books.example"
+        )
+
+        assertEquals(listOf("book-2"), cachedPage?.items?.map { it.id })
+        assertEquals(1, cachedPage?.page)
+        assertEquals(2, cachedPage?.total)
+        assertEquals(true, cachedPage?.isComplete)
+    }
+
+    @Test fun cachedSmartScopeBooksPageDoesNotPretendAnUncachedPageIsAvailable() {
+        assertEquals(
+            null,
+            cachedSmartScopeBooksPage(
+                scopeId = 12,
+                requestedPage = 1,
+                cachedPayloads = listOf(
+                    """{"items":[{"id":"book-1","title":"One"}],"total":2,"page":0,"size":1}"""
+                ),
+                downloads = emptyMap(),
+                serverBase = "https://books.example"
+            )
+        )
+    }
+
     @Test fun catalogImageCacheIdentityIsStableForTheSameUrl() {
         val url = "https://example.test/api/v1/books/files/cover-1/serve"
         assertEquals(url, catalogImageCacheKey(url))

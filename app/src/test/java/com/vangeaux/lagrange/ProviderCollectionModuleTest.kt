@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class ProviderCollectionModuleTest {
@@ -96,6 +97,35 @@ class ProviderCollectionModuleTest {
             assertEquals("/api/Series/series-detail", wantToReadSeriesRequest.requestUrl?.encodedPath)
             assertEquals("seriesId=12", wantToReadSeriesRequest.requestUrl?.query)
             assertEquals("Bearer test-token", wantToReadSeriesRequest.getHeader("Authorization"))
+        }
+    }
+
+    @Test
+    fun `collection catalog requests preserve authentication failures`() {
+        MockWebServer().use { komgaServer ->
+            komgaServer.enqueue(MockResponse().setResponseCode(401))
+            val komga = KomgaCollectionModuleImpl(
+                auth = FakeKomgaCollectionAuth(komgaServer.url("/").toString().trimEnd('/')),
+                catalog = FakeKomgaBookCatalog(),
+                client = OkHttpClient()
+            )
+            assertThrows(AuthenticationRequiredException::class.java) {
+                runBlocking { komga.loadCollections() }
+            }
+        }
+
+        MockWebServer().use { kavitaServer ->
+            kavitaServer.enqueue(MockResponse().setResponseCode(401))
+            val auth = FakeKavitaAuth(kavitaServer.url("/").toString().trimEnd('/'))
+            val client = OkHttpClient()
+            val kavita = KavitaCollectionCatalogModuleImpl(
+                auth,
+                KavitaBookCatalogModuleImpl(auth, client),
+                client
+            )
+            assertThrows(AuthenticationRequiredException::class.java) {
+                runBlocking { kavita.loadCollections() }
+            }
         }
     }
 

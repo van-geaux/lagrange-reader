@@ -611,6 +611,7 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
                     .build()
                 val result = client.newCall(request).execute().use { response ->
                     val payload = response.body?.string().orEmpty()
+                    if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                     if (!response.isSuccessful) {
                         throw UserFacingException(auth.localizedMessage(R.string.perror_komga_books_http, "Unable to load Komga series books (HTTP ${response.code}).", response.code))
                     }
@@ -717,6 +718,7 @@ internal class KomgaCollectionModuleImpl(
                     .build()
                 val result = client.newCall(request).execute().use { response ->
                     val payload = response.body?.string().orEmpty()
+                    if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                     if (!response.isSuccessful) {
                         throw UserFacingException(
                             auth.localizedMessage(
@@ -764,6 +766,7 @@ internal class KomgaCollectionModuleImpl(
                     .build()
                 val result = client.newCall(request).execute().use { response ->
                     val payload = response.body?.string().orEmpty()
+                    if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                     if (!response.isSuccessful) {
                         throw UserFacingException(
                             auth.localizedMessage(
@@ -836,6 +839,7 @@ internal class KomgaCollectionModuleImpl(
                             .build()
                         val result = client.newCall(request).execute().use { response ->
                             val payload = response.body?.string().orEmpty()
+                            if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                             if (!response.isSuccessful) {
                                 throw UserFacingException(
                                     auth.localizedMessage(
@@ -875,6 +879,7 @@ internal class KomgaCollectionModuleImpl(
                         .build()
                     val result = client.newCall(request).execute().use { response ->
                         val payload = response.body?.string().orEmpty()
+                        if (response.code == 401 || response.code == 403) throw AuthenticationRequiredException()
                         if (!response.isSuccessful) {
                             throw UserFacingException(
                                 auth.localizedMessage(

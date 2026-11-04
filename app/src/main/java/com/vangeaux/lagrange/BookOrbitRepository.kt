@@ -1566,46 +1566,89 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun loadCollections(): List<BookCollection> = withContext(Dispatchers.IO) {
-        BookOrbitPayloadParser.parseCollections(
-            request("/api/v1/collections", "GET", null)
-        )
+        val serverUrl = getServerUrl().orEmpty()
+        val collections = try {
+            BookOrbitPayloadParser.parseCollections(
+                request("/api/v1/collections", "GET", null)
+            )
+        } catch (error: Exception) {
+            if (error is CancellationException || error is AuthenticationRequiredException) throw error
+            try {
+                browserSnapshotStore.readCollections(serverUrl)?.let { return@withContext it }
+            } catch (cacheError: Exception) {
+                if (cacheError is CancellationException) throw cacheError
+                error.addSuppressed(cacheError)
+            }
+            throw error
+        }
+        browserSnapshotStore.saveCollections(serverUrl, collections)
+        collections
     }
 
     override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
         withContext(Dispatchers.IO) {
             val serverUrl = getServerUrl().orEmpty()
             val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-            val payload = request(
-                "/api/v1/collections/${Uri.encode(collectionId)}/books?page=$page&size=100",
-                "GET",
-                null
-            )
-            val result = BookOrbitPayloadParser.parseLibraryBooksPage("", payload, downloads, serverUrl)
-            result.copy(
-                isComplete = result.total?.let {
-                    (page + 1) * (result.size ?: result.items.size) >= it
-                } ?: (result.items.size < (result.size ?: 100))
-            )
+            val result = try {
+                val payload = request(
+                    "/api/v1/collections/${Uri.encode(collectionId)}/books?page=$page&size=100",
+                    "GET",
+                    null
+                )
+                val parsed = BookOrbitPayloadParser.parseLibraryBooksPage("", payload, downloads, serverUrl)
+                parsed.copy(
+                    isComplete = parsed.total?.let {
+                        (page + 1) * (parsed.size ?: parsed.items.size) >= it
+                    } ?: (parsed.items.size < (parsed.size ?: 100))
+                )
+            } catch (error: Exception) {
+                if (error is CancellationException || error is AuthenticationRequiredException) throw error
+                try {
+                    browserSnapshotStore.readCollectionBooksPage(serverUrl, collectionId, page)
+                        ?.let { return@withContext it.copy(items = it.items.withCurrentDownloads(downloads)) }
+                } catch (cacheError: Exception) {
+                    if (cacheError is CancellationException) throw cacheError
+                    error.addSuppressed(cacheError)
+                }
+                throw error
+            }
+            browserSnapshotStore.saveCollectionBooksPage(serverUrl, collectionId, page, result)
+            result
         }
 
     override suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
         withContext(Dispatchers.IO) {
             val serverUrl = getServerUrl().orEmpty()
+            val serverBase = serverBase()
             val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-            val payload = request(
-                "/api/v1/smart-scopes/$scopeId/books?page=$page&size=100",
-                "GET",
-                null
-            )
-            val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverUrl)
-            LibraryBooksPage(
-                items = parsed.books,
-                total = parsed.total,
-                page = parsed.page ?: page,
-                size = parsed.size,
-                isComplete = parsed.total?.let { (page + 1) * (parsed.size ?: parsed.books.size) >= it }
-                    ?: (parsed.books.size < (parsed.size ?: 100))
-            )
+            try {
+                val payload = request(
+                    "/api/v1/smart-scopes/$scopeId/books?page=$page&size=100",
+                    "GET",
+                    null
+                )
+                val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
+                catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, page, payload)
+                LibraryBooksPage(
+                    items = parsed.books,
+                    total = parsed.total,
+                    page = parsed.page ?: page,
+                    size = parsed.size,
+                    isComplete = parsed.total?.let { (page + 1) * (parsed.size ?: parsed.books.size) >= it }
+                        ?: (parsed.books.size < (parsed.size ?: 100))
+                )
+            } catch (error: Exception) {
+                if (error is CancellationException || error is AuthenticationRequiredException) throw error
+                try {
+                    val cached = catalogSnapshotStore.readScopedBookPages(serverUrl, scopeId)
+                    cachedSmartScopeBooksPage(scopeId, page, cached, downloads, serverBase)
+                        ?.let { return@withContext it }
+                } catch (cacheError: Exception) {
+                    if (cacheError is CancellationException) throw cacheError
+                    error.addSuppressed(cacheError)
+                }
+                throw error
+            }
         }
 
     override suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = withContext(Dispatchers.IO) {
