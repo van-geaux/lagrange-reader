@@ -149,8 +149,10 @@ internal fun kavitaMediaKind(format: String?): MediaKind = when (format) {
     else -> MediaKind.UNKNOWN
 }
 
-internal class KavitaBookCatalogModuleImpl(private val auth: KavitaAuthModule) : BookCatalogModule {
-    private val client = OkHttpClient()
+internal class KavitaBookCatalogModuleImpl(
+    private val auth: KavitaAuthModule,
+    private val client: OkHttpClient = OkHttpClient()
+) : BookCatalogModule {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     internal suspend fun serverUrl(): String? = auth.serverUrl()
@@ -678,9 +680,9 @@ internal fun JSONArray?.jsonTitles(): List<String> = buildList {
 
 internal class KavitaCollectionCatalogModuleImpl(
     private val auth: KavitaAuthModule,
-    private val catalog: KavitaBookCatalogModuleImpl
+    private val catalog: KavitaBookCatalogModuleImpl,
+    private val client: OkHttpClient = OkHttpClient()
 ) : CollectionCatalogModule {
-    private val client = OkHttpClient()
     private val cacheMutex = Mutex()
     private val booksByCollectionId = mutableMapOf<String, List<BookSummary>>()
 

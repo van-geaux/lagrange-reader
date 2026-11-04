@@ -303,7 +303,7 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
     private var authorization: String? = ServerProfileStore(appContext).active()?.id?.let(::readCredential)
 
     /** Localizes a provider error message, falling back to the original English text. */
-    internal fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
+    override fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String =
         providerErrorMessage(appContext, messageRes, fallback, *formatArgs)
 
     override suspend fun checkServer(serverUrl: String): ServerCheckResult = withContext(Dispatchers.IO) {
@@ -502,12 +502,12 @@ class KomgaAuthModuleImpl(context: Context) : KomgaAuthModule {
 
     private fun activeProfileId(): String? = ServerProfileStore(appContext).active()?.id
 
-    internal fun requestHeaders(serverUrl: String): Map<String, String> = komgaSessionHeaders(
+    override fun requestHeaders(serverUrl: String): Map<String, String> = komgaSessionHeaders(
         authorization = authorization,
         cookie = CookieManager.getInstance().getCookie(serverUrl)
     )
 
-    internal fun credentialOrigin(): String? = serverUrl
+    override fun credentialOrigin(): String? = serverUrl
         ?: ServerProfileStore(appContext).active()?.serverUrl
 
     internal fun hasSession(serverUrl: String): Boolean = requestHeaders(serverUrl).isNotEmpty()
@@ -657,46 +657,49 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
         }
     }
 
-    internal fun parseBookSummary(item: JSONObject, base: String, libraryIdOverride: String? = null): BookSummary? {
-        val id = item.optString("id").takeIf { it.isNotBlank() } ?: return null
-        val metadata = item.optJSONObject("metadata") ?: JSONObject()
-        val projection = komgaBookProjection(item)
-        val readState = projection.readState
-        return BookSummary(
-            libraryId = libraryIdOverride ?: item.optString("libraryId"),
-            id = id,
-            fileId = id,
-            title = metadata.optString("title", item.optString("name", id)),
-            author = metadata.optJSONArray("authors")?.optJSONObject(0)?.optString("name"),
-            filename = projection.filename,
-            format = projection.format,
-            mediaKind = projection.mediaKind,
-            availableFormats = projection.availableFormats,
-            coverUrl = "$base/api/v1/books/$id/thumbnail",
-            seriesId = item.optString("seriesId").takeIf { it.isNotBlank() }
-                ?: metadata.optString("seriesId").takeIf { it.isNotBlank() },
-            seriesName = item.optString("seriesTitle").takeIf { it.isNotBlank() }
-                ?: metadata.optString("series").takeIf { it.isNotBlank() }
-                ?: metadata.optJSONObject("series")?.optString("name")?.takeIf { it.isNotBlank() },
-            seriesIndex = item.optDouble("number", Double.NaN).takeIf { !it.isNaN() },
-            progressLabel = readState.page?.let { "Page $it" },
-            progressPercent = readState.progressPercent,
-            progressPageIndex = readState.page,
-            readStatus = readState.status,
-            isRead = readState.isRead,
-            addedAtMillis = komgaParseInstantMillis(item.optString("created")),
-            updatedAtMillis = komgaParseInstantMillis(item.optString("lastModified")),
-            lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress")),
-            genres = metadata.optJSONArray("genres").toStringList()
-        )
-    }
+    internal fun parseBookSummary(item: JSONObject, base: String, libraryIdOverride: String? = null): BookSummary? =
+        komgaBookSummary(item, base, libraryIdOverride)
+}
+
+internal fun komgaBookSummary(item: JSONObject, base: String, libraryIdOverride: String? = null): BookSummary? {
+    val id = item.optString("id").takeIf { it.isNotBlank() } ?: return null
+    val metadata = item.optJSONObject("metadata") ?: JSONObject()
+    val projection = komgaBookProjection(item)
+    val readState = projection.readState
+    return BookSummary(
+        libraryId = libraryIdOverride ?: item.optString("libraryId"),
+        id = id,
+        fileId = id,
+        title = metadata.optString("title", item.optString("name", id)),
+        author = metadata.optJSONArray("authors")?.optJSONObject(0)?.optString("name"),
+        filename = projection.filename,
+        format = projection.format,
+        mediaKind = projection.mediaKind,
+        availableFormats = projection.availableFormats,
+        coverUrl = "$base/api/v1/books/$id/thumbnail",
+        seriesId = item.optString("seriesId").takeIf { it.isNotBlank() }
+            ?: metadata.optString("seriesId").takeIf { it.isNotBlank() },
+        seriesName = item.optString("seriesTitle").takeIf { it.isNotBlank() }
+            ?: metadata.optString("series").takeIf { it.isNotBlank() }
+            ?: metadata.optJSONObject("series")?.optString("name")?.takeIf { it.isNotBlank() },
+        seriesIndex = item.optDouble("number", Double.NaN).takeIf { !it.isNaN() },
+        progressLabel = readState.page?.let { "Page $it" },
+        progressPercent = readState.progressPercent,
+        progressPageIndex = readState.page,
+        readStatus = readState.status,
+        isRead = readState.isRead,
+        addedAtMillis = komgaParseInstantMillis(item.optString("created")),
+        updatedAtMillis = komgaParseInstantMillis(item.optString("lastModified")),
+        lastReadAtMillis = komgaReadActivityMillis(item.optJSONObject("readProgress")),
+        genres = metadata.optJSONArray("genres").toStringList()
+    )
 }
 
 internal class KomgaCollectionModuleImpl(
-    private val auth: KomgaAuthModuleImpl,
-    private val catalog: KomgaBookCatalogModuleImpl
+    private val auth: KomgaAuthModule,
+    private val catalog: KomgaBookCatalogModule,
+    private val client: OkHttpClient = KomgaHttpClient().client
 ) : CollectionCatalogModule {
-    private val client = KomgaHttpClient().client
     private val cacheMutex = Mutex()
     private val booksByCollectionId = mutableMapOf<String, List<BookSummary>>()
 
@@ -847,7 +850,7 @@ internal class KomgaCollectionModuleImpl(
                             val items = buildList {
                                 for (index in 0 until content.length()) {
                                     content.optJSONObject(index)
-                                        ?.let { catalog.parseBookSummary(it, serverUrl) }
+                                        ?.let { komgaBookSummary(it, serverUrl) }
                                         ?.let(::add)
                                 }
                             }

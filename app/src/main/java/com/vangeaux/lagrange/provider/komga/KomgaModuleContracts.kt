@@ -10,6 +10,9 @@ interface KomgaAuthModule {
     suspend fun login(serverUrl: String, username: String, password: String)
     suspend fun sessionState(serverUrl: String): SessionState
     suspend fun clearSession()
+    fun localizedMessage(messageRes: Int, fallback: String, vararg formatArgs: Any): String
+    fun requestHeaders(serverUrl: String): Map<String, String>
+    fun credentialOrigin(): String?
 }
 
 interface KomgaLibraryModule {

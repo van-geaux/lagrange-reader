@@ -62,6 +62,7 @@ internal fun kavitaSessionHeaders(token: String?, cookie: String? = null): Map<S
 }
 
 internal interface KavitaAuthModule {
+    fun serverUrl(): String?
     suspend fun checkServer(serverUrl: String): ServerCheckResult
     suspend fun authenticate(serverUrl: String, username: String, password: String)
     suspend fun sessionState(serverUrl: String): SessionState
@@ -238,6 +239,8 @@ internal class KavitaAuthModuleImpl(context: Context) : KavitaAuthModule {
 
     internal fun currentServerUrl(): String? =
         serverUrl ?: ServerProfileStore(appContext).active()?.serverUrl
+
+    override fun serverUrl(): String? = currentServerUrl()
 
     override suspend fun clearSession() {
         activeProfileId()?.let { profileId ->
