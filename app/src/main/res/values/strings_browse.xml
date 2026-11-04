@@ -26,6 +26,8 @@
     <string name="browse_library">Library</string>
     <string name="browse_libraries">Libraries</string>
     <string name="browse_collections">Collections</string>
+    <string name="browse_choose_collection">Choose a collection</string>
+    <string name="browse_choose_collection_summary">Select a collection to browse.</string>
     <string name="browse_loading_collections">Loading collections...</string>
     <string name="browse_collections_load_failed">Unable to load collections.</string>
     <string name="browse_no_collections">No collections found.</string>

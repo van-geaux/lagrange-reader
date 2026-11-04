@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.SystemClock
 import android.text.Html
 import android.util.DisplayMetrics
 import android.util.LruCache
@@ -280,6 +281,7 @@ internal fun HomeSection.recentBooksFilter(): BookBrowseFilter = when (this) {
 private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private const val HOME_PREVIEW_LIMIT = 8
+private const val COLLECTION_CATALOG_CACHE_TTL_MILLIS = 5 * 60 * 1000L
 
 private fun HomeSection.toBrowserDestination(): BrowserDestination = when (this) {
     HomeSection.CURRENTLY_READING -> BrowserDestination.CURRENTLY_READING
@@ -1278,8 +1280,12 @@ internal fun NativeLibraryBrowserScreen(
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
     var selectedCollection by remember { mutableStateOf<BookCollection?>(null) }
-    var collectionEntries by remember { mutableStateOf<List<BookCollection>>(emptyList()) }
-    var showCollectionsMenu by remember { mutableStateOf(false) }
+    var collectionEntries by remember(state.serverUrl, state.profileId) {
+        mutableStateOf<List<BookCollection>>(emptyList())
+    }
+    var collectionEntriesFetchedAtMillis by remember(state.serverUrl, state.profileId) {
+        mutableStateOf(0L)
+    }
     var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
         mutableStateOf(BrowserRouteSnapshot())
     }
@@ -1522,7 +1528,6 @@ internal fun NativeLibraryBrowserScreen(
             showLibraryPicker = false
         } else if (collectionDetailBackEnabled) {
             selectedCollection = null
-            showCollectionsMenu = false
         } else if (activeBookGenre != null) {
             activeBookGenre = null
             selectedBook = genreSourceBook
@@ -1570,8 +1575,6 @@ internal fun NativeLibraryBrowserScreen(
                     destination = BrowserDestination.COLLECTIONS
                     showLibraryPicker = false
                     selectedCollection = null
-                    collectionEntries = emptyList()
-                    showCollectionsMenu = false
                     query = ""
                     selectedBook = null
                     selectedSeriesKey = null
@@ -1993,7 +1996,6 @@ internal fun NativeLibraryBrowserScreen(
                         {
                             TextButton(onClick = {
                                 selectedCollection = null
-                                showCollectionsMenu = false
                             }) { Text(stringResource(R.string.browse_back)) }
                         }
                     } else {
@@ -2004,57 +2006,6 @@ internal fun NativeLibraryBrowserScreen(
                             { showLibraryPicker = false }
                         } else {
                             { showLibraryPicker = true }
-                        }
-                    } else null,
-                    titleContent = if (
-                        destination == BrowserDestination.COLLECTIONS &&
-                        selectedCollection != null &&
-                        selectedBook == null &&
-                        selectedSeriesKey == null &&
-                        selectedAuthor == null &&
-                        activeBookGenre == null &&
-                        activeSeriesGenre == null
-                    ) {
-                        {
-                            Box {
-                                Row(
-                                    modifier = Modifier
-                                        .testTag("collections-title-selector")
-                                        .clickable { showCollectionsMenu = true },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(
-                                        selectedCollection!!.name,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                                }
-                                DropdownMenu(
-                                    expanded = showCollectionsMenu,
-                                    onDismissRequest = { showCollectionsMenu = false },
-                                    modifier = Modifier.testTag("collections-title-menu")
-                                ) {
-                                    collectionEntries.forEach { entry ->
-                                        DropdownMenuItem(
-                                            text = { Text(entry.name) },
-                                            leadingIcon = if (entry.key == selectedCollection?.key) {
-                                                { Icon(Icons.Default.CheckCircle, contentDescription = null) }
-                                            } else {
-                                                null
-                                            },
-                                            onClick = {
-                                                selectedCollection = entry
-                                                showCollectionsMenu = false
-                                                selectedBook = null
-                                                selectedSeriesKey = null
-                                            }
-                                        )
-                                    }
-                                }
-                            }
                         }
                     } else null,
                     onSessionAction = {
@@ -2501,8 +2452,14 @@ internal fun NativeLibraryBrowserScreen(
                         smartScopesAvailable = smartScopesAvailable,
                         collectionBooksPageLoader = collectionBooksPageLoader,
                         smartScopeBooksPageLoader = smartScopeBooksPageLoader,
-                        refreshToken = state.catalogRefreshedAtMillis,
-                        onCollectionsLoaded = { collectionEntries = it },
+                        cachedCollections = collectionEntries,
+                        cachedAtMillis = collectionEntriesFetchedAtMillis,
+                        onCollectionsLoaded = { entries, fetchedAtMillis ->
+                            collectionEntries = entries
+                            if (fetchedAtMillis != null) {
+                                collectionEntriesFetchedAtMillis = fetchedAtMillis
+                            }
+                        },
                         onCollectionSelected = { selectedCollection = it },
                         modifier = Modifier.padding(padding)
                     )
@@ -8657,154 +8614,182 @@ private fun CollectionsCatalogScreen(
     smartScopesAvailable: Boolean,
     collectionBooksPageLoader: suspend (String, Int) -> LibraryBooksPage,
     smartScopeBooksPageLoader: suspend (Long, Int) -> LibraryBooksPage,
-    refreshToken: Long?,
-    onCollectionsLoaded: (List<BookCollection>) -> Unit,
+    cachedCollections: List<BookCollection>,
+    cachedAtMillis: Long,
+    onCollectionsLoaded: (List<BookCollection>, Long?) -> Unit,
     onCollectionSelected: (BookCollection) -> Unit,
     modifier: Modifier
 ) {
     val context = LocalContext.current
-    var collections by remember { mutableStateOf<List<BookCollection>?>(null) }
+    val cacheIsFresh = cachedAtMillis > 0L &&
+        SystemClock.elapsedRealtime() - cachedAtMillis < COLLECTION_CATALOG_CACHE_TTL_MILLIS
+    var collections by remember { mutableStateOf(cachedCollections.takeIf { it.isNotEmpty() || cacheIsFresh }) }
     var loadError by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(collectionsAvailable, smartScopesAvailable, refreshToken) {
-        collections = null
-        loadError = null
+    var isLoading by remember { mutableStateOf(!cacheIsFresh) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var refreshRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(collectionsAvailable, smartScopesAvailable, refreshRequest) {
+        if (refreshRequest == 0 && cacheIsFresh) return@LaunchedEffect
+        isLoading = collections == null
         val errors = mutableListOf<String>()
-        val regularCollections = if (collectionsAvailable) {
-            try {
-                collectionsLoader()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Throwable) {
-                errors += error.message ?: context.getString(R.string.browse_collections_load_failed)
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-        val smartScopes = if (smartScopesAvailable) {
-            try {
-                smartScopesLoader().map { scope ->
-                    BookCollection(
-                        id = scope.id.toString(),
-                        name = scope.name,
-                        bookCount = scope.bookCount,
-                        description = scope.description,
-                        kind = BookCollectionKind.SMART_SCOPE
-                    )
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Throwable) {
-                errors += error.message ?: context.getString(R.string.browse_collections_load_failed)
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-        val entries = (regularCollections + smartScopes).distinctBy(BookCollection::key)
-        val enrichedEntries = entries.map { entry ->
-            if (entry.bookCount != null) {
-                entry
-            } else {
+        try {
+            val regularCollections = if (collectionsAvailable) {
                 try {
-                    var page = 0
-                    var count = 0
-                    var reportedTotal: Int? = null
-                    var complete = false
-                    while (!complete && page < 1000) {
-                        val result = when (entry.kind) {
-                            BookCollectionKind.COLLECTION -> collectionBooksPageLoader(entry.id, page)
-                            BookCollectionKind.SMART_SCOPE -> {
-                                val scopeId = entry.id.toLongOrNull()
-                                    ?: throw IllegalStateException("Invalid smart scope identifier.")
-                                smartScopeBooksPageLoader(scopeId, page)
-                            }
-                        }
-                        reportedTotal = result.total
-                        if (reportedTotal == null) count += result.items.size
-                        complete = reportedTotal != null || result.isComplete || result.items.isEmpty()
-                        page++
-                    }
-                    entry.copy(bookCount = reportedTotal ?: count)
+                    collectionsLoader()
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
                     errors += error.message ?: context.getString(R.string.browse_collections_load_failed)
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+
+            val smartScopes = if (smartScopesAvailable) {
+                try {
+                    smartScopesLoader().map { scope ->
+                        BookCollection(
+                            id = scope.id.toString(),
+                            name = scope.name,
+                            bookCount = scope.bookCount,
+                            description = scope.description,
+                            kind = BookCollectionKind.SMART_SCOPE
+                        )
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    errors += error.message ?: context.getString(R.string.browse_collections_load_failed)
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+            val entries = (regularCollections + smartScopes).distinctBy(BookCollection::key)
+            val enrichedEntries = entries.map { entry ->
+                if (entry.bookCount != null) {
                     entry
+                } else {
+                    try {
+                        var page = 0
+                        var count = 0
+                        var reportedTotal: Int? = null
+                        var complete = false
+                        while (!complete && page < 1000) {
+                            val result = when (entry.kind) {
+                                BookCollectionKind.COLLECTION -> collectionBooksPageLoader(entry.id, page)
+                                BookCollectionKind.SMART_SCOPE -> {
+                                    val scopeId = entry.id.toLongOrNull()
+                                        ?: throw IllegalStateException("Invalid smart scope identifier.")
+                                    smartScopeBooksPageLoader(scopeId, page)
+                                }
+                            }
+                            reportedTotal = result.total
+                            if (reportedTotal == null) count += result.items.size
+                            complete = reportedTotal != null || result.isComplete || result.items.isEmpty()
+                            page++
+                        }
+                        entry.copy(bookCount = reportedTotal ?: count)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Throwable) {
+                        errors += error.message ?: context.getString(R.string.browse_collections_load_failed)
+                        entry
+                    }
                 }
             }
+            if (errors.isEmpty() || collections == null) {
+                collections = enrichedEntries
+                val fetchedAtMillis = SystemClock.elapsedRealtime().takeIf { errors.isEmpty() }
+                onCollectionsLoaded(enrichedEntries, fetchedAtMillis)
+            }
+            loadError = errors.distinct().joinToString("\n").takeIf(String::isNotBlank)
+        } finally {
+            isLoading = false
+            isRefreshing = false
         }
-        collections = enrichedEntries
-        onCollectionsLoaded(enrichedEntries)
-        loadError = errors.distinct().joinToString("\n").takeIf(String::isNotBlank)
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize().testTag("collections_catalog_screen"),
-        contentPadding = PaddingValues(vertical = 8.dp)
+    PullToRefreshLayout(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            if (!isRefreshing) {
+                isRefreshing = true
+                refreshRequest++
+            }
+        },
+        modifier = modifier
     ) {
-        when {
-            collections == null -> item {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().testTag("collections_catalog_screen"),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
                 Text(
-                    stringResource(R.string.browse_loading_collections),
-                    modifier = Modifier.padding(16.dp),
+                    stringResource(R.string.browse_choose_collection),
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Text(
+                    stringResource(R.string.browse_choose_collection_summary),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            else -> {
-                loadError?.let { message ->
-                    item {
-                        Text(
-                            message,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+            if (isLoading && collections == null) {
+                item {
+                    Text(
+                        stringResource(R.string.browse_loading_collections),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                if (collections.isNullOrEmpty()) {
-                    item {
-                        Text(
-                            stringResource(R.string.browse_no_collections),
-                            modifier = Modifier.padding(16.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    items(collections.orEmpty(), key = BookCollection::key) { collection ->
-                        ListItem(
-                            headlineContent = { Text(collection.name) },
-                            supportingContent = {
-                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        collection.bookCount?.let {
-                                            pluralStringResource(R.plurals.browse_collection_book_count, it, it)
-                                        } ?: stringResource(R.string.browse_collection_book_count_unavailable),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    collection.description?.takeIf(String::isNotBlank)?.let { description ->
-                                        Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    if (collection.kind == BookCollectionKind.SMART_SCOPE) {
-                                        Text(
-                                            stringResource(R.string.browse_smart_scope_label),
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                            },
-                            leadingContent = {
-                                Icon(
-                                    Icons.Default.CollectionsBookmark,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
+            }
+            loadError?.let { message ->
+                item {
+                    Text(message, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            if (!isLoading && collections.isNullOrEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.browse_no_collections),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            items(collections.orEmpty(), key = BookCollection::key) { collection ->
+                ListItem(
+                    headlineContent = { Text(collection.name) },
+                    supportingContent = {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                collection.bookCount?.let {
+                                    pluralStringResource(R.plurals.browse_collection_book_count, it, it)
+                                } ?: stringResource(R.string.browse_collection_book_count_unavailable),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            collection.description?.takeIf(String::isNotBlank)?.let { description ->
+                                Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (collection.kind == BookCollectionKind.SMART_SCOPE) {
+                                Text(
+                                    stringResource(R.string.browse_smart_scope_label),
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                            },
-                            modifier = Modifier
-                                .clickable { onCollectionSelected(collection) }
-                                .testTag("collection_item_${collection.key}")
+                            }
+                        }
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.CollectionsBookmark,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                    }
-                }
+                    },
+                    modifier = Modifier
+                        .clickable { onCollectionSelected(collection) }
+                        .testTag("collection_item_${collection.key}")
+                )
             }
         }
     }

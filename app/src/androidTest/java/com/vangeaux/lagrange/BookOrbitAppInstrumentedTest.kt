@@ -560,17 +560,31 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithText("More").performClick()
         composeRule.onNodeWithTag("more-menu-collections").performClick()
         composeRule.onNodeWithText("Collections").assertIsDisplayed()
+        composeRule.onNodeWithText("Choose a collection").assertIsDisplayed()
+        composeRule.onNodeWithText("Select a collection to browse.").assertIsDisplayed()
         composeRule.onNodeWithText("Favorites").assertIsDisplayed()
         composeRule.onNodeWithText("Selected reads").assertIsDisplayed()
         composeRule.onAllNodesWithText("1 book").assertCountEquals(2)
         composeRule.onNodeWithText("Unread").assertIsDisplayed()
         composeRule.onNodeWithText("Smart scope").assertIsDisplayed()
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 1 && dataSource.loadSmartScopesCalls == 1
+        }
 
         composeRule.onNodeWithText("Favorites").performClick()
+        composeRule.onNodeWithText("Favorites").assertIsDisplayed()
         composeRule.onNodeWithText("Collection Test Book").assertIsDisplayed()
-        composeRule.onNodeWithTag("collections-title-selector").assertIsDisplayed()
-        composeRule.onNodeWithTag("collections-title-selector").performClick()
-        composeRule.onNodeWithTag("collections-title-menu").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("collections-title-selector").assertCountEquals(0)
+        composeRule.onNodeWithText("Back").performClick()
+        composeRule.runOnIdle {
+            assertEquals(1, dataSource.loadCollectionsCalls)
+            assertEquals(1, dataSource.loadSmartScopesCalls)
+        }
+
+        composeRule.onNodeWithTag("collections_catalog_screen").performTouchInput { swipeDown() }
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 2 && dataSource.loadSmartScopesCalls == 2
+        }
         composeRule.onNodeWithText("Unread").performClick()
         composeRule.onNodeWithText("Scope Test Book").assertIsDisplayed()
     }
@@ -2737,6 +2751,8 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
     var librariesResult: List<LibrarySummary> = emptyList()
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
+    var loadCollectionsCalls = 0
+    var loadSmartScopesCalls = 0
     val savedServerUrls = mutableListOf<String>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
@@ -2787,10 +2803,16 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
         loadLibrariesCalls += 1
         return librariesResult
     }
-    override suspend fun loadCollections(): List<BookCollection> = collectionsResult
+    override suspend fun loadCollections(): List<BookCollection> {
+        loadCollectionsCalls += 1
+        return collectionsResult
+    }
     override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
         collectionBookPages["$collectionId:$page"] ?: LibraryBooksPage(page = page)
-    override suspend fun loadSmartScopes(): List<SmartScope> = smartScopesResult
+    override suspend fun loadSmartScopes(): List<SmartScope> {
+        loadSmartScopesCalls += 1
+        return smartScopesResult
+    }
     override suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
         smartScopeBookPages["$scopeId:$page"] ?: LibraryBooksPage(page = page)
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
