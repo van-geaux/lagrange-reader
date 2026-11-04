@@ -540,18 +540,22 @@ class BookOrbitAppInstrumentedTest {
                 isComplete = true
             )
         }
+        val browserScreen = mutableStateOf<AppScreen>(
+            AppScreen.Browser(
+                BrowserState(
+                    serverUrl = "https://books.example.test",
+                    profileId = "profile-one",
+                    libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                    selectedLibraryId = "lib-1",
+                    books = emptyList()
+                )
+            )
+        )
 
         composeRule.setContent {
             BookOrbitTheme {
                 BookOrbitApp(
-                    screen = AppScreen.Browser(
-                        BrowserState(
-                            serverUrl = "https://books.example.test",
-                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
-                            selectedLibraryId = "lib-1",
-                            books = emptyList()
-                        )
-                    ),
+                    screen = browserScreen.value,
                     coordinator = AppCoordinator(dataSource, Dispatchers.Main)
                 )
             }
@@ -587,6 +591,27 @@ class BookOrbitAppInstrumentedTest {
         }
         composeRule.onNodeWithText("Unread").performClick()
         composeRule.onNodeWithText("Scope Test Book").assertIsDisplayed()
+
+        dataSource.collectionsResult = listOf(BookCollection(id = "new-favorites", name = "New Profile Reads"))
+        dataSource.smartScopesResult = listOf(SmartScope(43, "New Profile Scope", bookCount = 1))
+        composeRule.runOnIdle {
+            val current = browserScreen.value as AppScreen.Browser
+            browserScreen.value = AppScreen.Browser(
+                current.browserState.copy(
+                    serverUrl = "https://other-books.example.test",
+                    profileId = "profile-two"
+                )
+            )
+        }
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 3 && dataSource.loadSmartScopesCalls == 3
+        }
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
+        composeRule.onNodeWithText("New Profile Reads").assertIsDisplayed()
+        composeRule.onNodeWithText("New Profile Scope").assertIsDisplayed()
+        composeRule.onNodeWithText("Favorites").assertDoesNotExist()
+        composeRule.onNodeWithText("Unread").assertDoesNotExist()
+        composeRule.onNodeWithText("Scope Test Book").assertDoesNotExist()
     }
 
     @Test

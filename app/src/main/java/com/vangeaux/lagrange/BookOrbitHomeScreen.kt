@@ -1279,7 +1279,9 @@ internal fun NativeLibraryBrowserScreen(
     var showProfileMenu by rememberSaveable { mutableStateOf(false) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
-    var selectedCollection by remember { mutableStateOf<BookCollection?>(null) }
+    var selectedCollection by remember(state.serverUrl, state.profileId) {
+        mutableStateOf<BookCollection?>(null)
+    }
     var collectionEntries by remember(state.serverUrl, state.profileId) {
         mutableStateOf<List<BookCollection>>(emptyList())
     }
@@ -2446,6 +2448,8 @@ internal fun NativeLibraryBrowserScreen(
                 )
                 destination == BrowserDestination.COLLECTIONS && selectedCollection == null ->
                     CollectionsCatalogScreen(
+                        serverUrl = state.serverUrl,
+                        profileId = state.profileId,
                         collectionsLoader = collectionsLoader,
                         collectionsAvailable = collectionsAvailable,
                         smartScopesLoader = smartScopesLoader,
@@ -8608,6 +8612,8 @@ private fun LibraryContentScreen(
 
 @Composable
 private fun CollectionsCatalogScreen(
+    serverUrl: String,
+    profileId: String?,
     collectionsLoader: suspend () -> List<BookCollection>,
     collectionsAvailable: Boolean,
     smartScopesLoader: suspend () -> List<SmartScope>,
@@ -8623,12 +8629,14 @@ private fun CollectionsCatalogScreen(
     val context = LocalContext.current
     val cacheIsFresh = cachedAtMillis > 0L &&
         SystemClock.elapsedRealtime() - cachedAtMillis < COLLECTION_CATALOG_CACHE_TTL_MILLIS
-    var collections by remember { mutableStateOf(cachedCollections.takeIf { it.isNotEmpty() || cacheIsFresh }) }
-    var loadError by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(!cacheIsFresh) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var refreshRequest by remember { mutableIntStateOf(0) }
-    LaunchedEffect(collectionsAvailable, smartScopesAvailable, refreshRequest) {
+    var collections by remember(serverUrl, profileId) {
+        mutableStateOf(cachedCollections.takeIf { it.isNotEmpty() || cacheIsFresh })
+    }
+    var loadError by remember(serverUrl, profileId) { mutableStateOf<String?>(null) }
+    var isLoading by remember(serverUrl, profileId) { mutableStateOf(!cacheIsFresh) }
+    var isRefreshing by remember(serverUrl, profileId) { mutableStateOf(false) }
+    var refreshRequest by remember(serverUrl, profileId) { mutableIntStateOf(0) }
+    LaunchedEffect(serverUrl, profileId, collectionsAvailable, smartScopesAvailable, refreshRequest) {
         if (refreshRequest == 0 && cacheIsFresh) return@LaunchedEffect
         isLoading = collections == null
         val errors = mutableListOf<String>()
@@ -8816,18 +8824,38 @@ private fun CollectionBooksScreen(
     modifier: Modifier
 ) {
     val context = LocalContext.current
-    var books by remember(collection.key, refreshToken) { mutableStateOf(emptyList<BookSummary>()) }
-    var total by remember(collection.key, refreshToken) { mutableIntStateOf(collection.bookCount ?: 0) }
-    var nextPage by remember(collection.key, refreshToken) { mutableIntStateOf(0) }
-    var requestedPage by remember(collection.key, refreshToken) { mutableIntStateOf(0) }
-    var retryRevision by remember(collection.key, refreshToken) { mutableIntStateOf(0) }
-    var isLoading by remember(collection.key, refreshToken) { mutableStateOf(false) }
-    var isComplete by remember(collection.key, refreshToken) { mutableStateOf(false) }
-    var loadError by remember(collection.key, refreshToken) { mutableStateOf<String?>(null) }
-    var filter by remember(collection.key) { mutableStateOf(BookBrowseFilter()) }
-    var showFilter by remember(collection.key) { mutableStateOf(false) }
+    var books by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableStateOf(emptyList<BookSummary>())
+    }
+    var total by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableIntStateOf(collection.bookCount ?: 0)
+    }
+    var nextPage by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableIntStateOf(0)
+    }
+    var requestedPage by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableIntStateOf(0)
+    }
+    var retryRevision by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableIntStateOf(0)
+    }
+    var isLoading by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableStateOf(false)
+    }
+    var isComplete by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableStateOf(false)
+    }
+    var loadError by remember(state.serverUrl, state.profileId, collection.key, refreshToken) {
+        mutableStateOf<String?>(null)
+    }
+    var filter by remember(state.serverUrl, state.profileId, collection.key) {
+        mutableStateOf(BookBrowseFilter())
+    }
+    var showFilter by remember(state.serverUrl, state.profileId, collection.key) {
+        mutableStateOf(false)
+    }
 
-    LaunchedEffect(collection.key, refreshToken, requestedPage, retryRevision) {
+    LaunchedEffect(state.serverUrl, state.profileId, collection.key, refreshToken, requestedPage, retryRevision) {
         if (isComplete) return@LaunchedEffect
         isLoading = true
         loadError = null
