@@ -231,6 +231,7 @@ import java.math.RoundingMode
 internal enum class BrowserDestination {
     HOME,
     LIBRARY,
+    COLLECTIONS,
     SERIES,
     AUTHORS,
     ANNOTATIONS,
@@ -276,7 +277,7 @@ internal fun HomeSection.recentBooksFilter(): BookBrowseFilter = when (this) {
     )
     else -> BookBrowseFilter()
 }
-private enum class LibraryTab { RECOMMENDED, BROWSE, COLLECTIONS }
+private enum class LibraryTab { RECOMMENDED, BROWSE }
 
 private const val HOME_PREVIEW_LIMIT = 8
 
@@ -314,6 +315,7 @@ internal fun browserRootBackDestination(destination: BrowserDestination): Browse
     BrowserDestination.RECENTLY_UPDATED_SERIES,
     BrowserDestination.RECENTLY_READ -> null
     BrowserDestination.LIBRARY,
+    BrowserDestination.COLLECTIONS,
     BrowserDestination.SERIES,
     BrowserDestination.AUTHORS,
     BrowserDestination.ANNOTATIONS,
@@ -1275,7 +1277,9 @@ internal fun NativeLibraryBrowserScreen(
     var showProfileMenu by rememberSaveable { mutableStateOf(false) }
     var isSearchOpen by rememberSaveable { mutableStateOf(false) }
     var libraryTab by rememberSaveable { mutableStateOf(LibraryTab.RECOMMENDED) }
-    var selectedLibraryCollection by remember { mutableStateOf<BookCollection?>(null) }
+    var selectedCollection by remember { mutableStateOf<BookCollection?>(null) }
+    var collectionEntries by remember { mutableStateOf<List<BookCollection>>(emptyList()) }
+    var showCollectionsMenu by remember { mutableStateOf(false) }
     var browserRoute by rememberSaveable(stateSaver = BrowserRouteSaver) {
         mutableStateOf(BrowserRouteSnapshot())
     }
@@ -1495,16 +1499,14 @@ internal fun NativeLibraryBrowserScreen(
         showProfileMenu = false
         showChangeServerEditor = true
     }
-    val collectionDetailBackEnabled = destination == BrowserDestination.LIBRARY &&
-        libraryTab == LibraryTab.COLLECTIONS &&
-        selectedLibraryCollection != null &&
+    val collectionDetailBackEnabled = destination == BrowserDestination.COLLECTIONS &&
+        selectedCollection != null &&
         selectedBook == null &&
         selectedSeriesKey == null &&
         selectedAuthor == null &&
         activeBookGenre == null &&
         activeSeriesGenre == null &&
-        !isSearchOpen &&
-        !showLibraryPicker
+        !isSearchOpen
 
     BackHandler(enabled = showLibraryPicker || collectionDetailBackEnabled ||
         browserRootBackDestination(destination) != null ||
@@ -1519,7 +1521,8 @@ internal fun NativeLibraryBrowserScreen(
         } else if (showLibraryPicker) {
             showLibraryPicker = false
         } else if (collectionDetailBackEnabled) {
-            selectedLibraryCollection = null
+            selectedCollection = null
+            showCollectionsMenu = false
         } else if (activeBookGenre != null) {
             activeBookGenre = null
             selectedBook = genreSourceBook
@@ -1564,10 +1567,11 @@ internal fun NativeLibraryBrowserScreen(
                 authorsAvailable = authorsAvailable,
                 onCollections = {
                     showMoreMenu = false
-                    destination = BrowserDestination.LIBRARY
-                    showLibraryPicker = state.selectedLibraryId == null
-                    libraryTab = LibraryTab.COLLECTIONS
-                    selectedLibraryCollection = null
+                    destination = BrowserDestination.COLLECTIONS
+                    showLibraryPicker = false
+                    selectedCollection = null
+                    collectionEntries = emptyList()
+                    showCollectionsMenu = false
                     query = ""
                     selectedBook = null
                     selectedSeriesKey = null
@@ -1969,6 +1973,8 @@ internal fun NativeLibraryBrowserScreen(
                             state.libraries.firstOrNull { it.id == state.selectedLibraryId }?.name
                                 ?: stringResource(R.string.browse_library)
                         destination == BrowserDestination.LIBRARY -> stringResource(R.string.browse_libraries)
+                        destination == BrowserDestination.COLLECTIONS ->
+                            selectedCollection?.name ?: stringResource(R.string.browse_collections)
                         destination == BrowserDestination.SERIES -> stringResource(R.string.browse_series)
                         destination == BrowserDestination.AUTHORS -> stringResource(R.string.browse_authors)
                         destination == BrowserDestination.ANNOTATIONS -> stringResource(R.string.browse_annotations)
@@ -1983,11 +1989,72 @@ internal fun NativeLibraryBrowserScreen(
                     profileExpanded = showProfileMenu,
                     onDismissProfile = { showProfileMenu = false },
                     showBrand = destination == BrowserDestination.HOME,
+                    navigationIcon = if (destination == BrowserDestination.COLLECTIONS && selectedCollection != null) {
+                        {
+                            TextButton(onClick = {
+                                selectedCollection = null
+                                showCollectionsMenu = false
+                            }) { Text(stringResource(R.string.browse_back)) }
+                        }
+                    } else {
+                        {}
+                    },
                     onTitleClick = if (destination == BrowserDestination.LIBRARY) {
                         if (showLibraryPicker) {
                             { showLibraryPicker = false }
                         } else {
                             { showLibraryPicker = true }
+                        }
+                    } else null,
+                    titleContent = if (
+                        destination == BrowserDestination.COLLECTIONS &&
+                        selectedCollection != null &&
+                        selectedBook == null &&
+                        selectedSeriesKey == null &&
+                        selectedAuthor == null &&
+                        activeBookGenre == null &&
+                        activeSeriesGenre == null
+                    ) {
+                        {
+                            Box {
+                                Row(
+                                    modifier = Modifier
+                                        .testTag("collections-title-selector")
+                                        .clickable { showCollectionsMenu = true },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        selectedCollection!!.name,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                                DropdownMenu(
+                                    expanded = showCollectionsMenu,
+                                    onDismissRequest = { showCollectionsMenu = false },
+                                    modifier = Modifier.testTag("collections-title-menu")
+                                ) {
+                                    collectionEntries.forEach { entry ->
+                                        DropdownMenuItem(
+                                            text = { Text(entry.name) },
+                                            leadingIcon = if (entry.key == selectedCollection?.key) {
+                                                { Icon(Icons.Default.CheckCircle, contentDescription = null) }
+                                            } else {
+                                                null
+                                            },
+                                            onClick = {
+                                                selectedCollection = entry
+                                                showCollectionsMenu = false
+                                                selectedBook = null
+                                                selectedSeriesKey = null
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     } else null,
                     onSessionAction = {
@@ -2021,7 +2088,7 @@ internal fun NativeLibraryBrowserScreen(
                         onHome = {
                             destination = BrowserDestination.HOME
                             query = ""
-                            selectedLibraryCollection = null
+                            selectedCollection = null
                             selectedBook = null
                             selectedAuthor = null
                             selectedSeriesKey = null
@@ -2030,7 +2097,7 @@ internal fun NativeLibraryBrowserScreen(
                             destination = BrowserDestination.LIBRARY
                             showLibraryPicker = state.selectedLibraryId == null
                             libraryTab = LibraryTab.RECOMMENDED
-                            selectedLibraryCollection = null
+                            selectedCollection = null
                             query = ""
                             selectedBook = null
                             selectedAuthor = null
@@ -2426,6 +2493,45 @@ internal fun NativeLibraryBrowserScreen(
                         onLibrarySelected(libraryId)
                     }
                 )
+                destination == BrowserDestination.COLLECTIONS && selectedCollection == null ->
+                    CollectionsCatalogScreen(
+                        collectionsLoader = collectionsLoader,
+                        collectionsAvailable = collectionsAvailable,
+                        smartScopesLoader = smartScopesLoader,
+                        smartScopesAvailable = smartScopesAvailable,
+                        collectionBooksPageLoader = collectionBooksPageLoader,
+                        smartScopeBooksPageLoader = smartScopeBooksPageLoader,
+                        refreshToken = state.catalogRefreshedAtMillis,
+                        onCollectionsLoaded = { collectionEntries = it },
+                        onCollectionSelected = { selectedCollection = it },
+                        modifier = Modifier.padding(padding)
+                    )
+                destination == BrowserDestination.COLLECTIONS && selectedCollection != null ->
+                    CollectionBooksScreen(
+                        collection = selectedCollection!!,
+                        state = state,
+                        collectionBooksPageLoader = collectionBooksPageLoader,
+                        smartScopeBooksPageLoader = smartScopeBooksPageLoader,
+                        coverLoader = coverLoader,
+                        onBookSelected = { book ->
+                            detailReturnDestination = BrowserDestination.COLLECTIONS
+                            selectedBook = book
+                        },
+                        onSeriesNameSelected = { selectedSeriesName = it },
+                        onSeriesSelected = { seriesKey ->
+                            detailReturnDestination = BrowserDestination.COLLECTIONS
+                            selectedSeriesKey = seriesKey
+                        },
+                        onDownload = requestDownload,
+                        onCancelDownload = onCancelDownload,
+                        onClearFailedDownload = onClearFailedDownload,
+                        onDeleteLocalCopy = requestLocalDelete,
+                        onMarkAsRead = onMarkAsRead,
+                        onMarkAsUnread = onMarkAsUnread,
+                        onMarkAsStatus = onMarkAsStatus,
+                        refreshToken = state.catalogRefreshedAtMillis,
+                        modifier = Modifier.padding(padding)
+                    )
                 destination == BrowserDestination.LIBRARY -> LibraryContentScreen(
                     state = state,
                     tab = libraryTab,
@@ -2435,14 +2541,6 @@ internal fun NativeLibraryBrowserScreen(
                     onRefresh = onRefresh,
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
                     libraryBookCatalogAvailable = libraryBookCatalogAvailable,
-                    selectedCollection = selectedLibraryCollection,
-                    onCollectionSelected = { selectedLibraryCollection = it },
-                    collectionsLoader = collectionsLoader,
-                    collectionsAvailable = collectionsAvailable,
-                    collectionBooksPageLoader = collectionBooksPageLoader,
-                    smartScopesLoader = smartScopesLoader,
-                    smartScopesAvailable = smartScopesAvailable,
-                    smartScopeBooksPageLoader = smartScopeBooksPageLoader,
                     seriesCatalogLoader = seriesCatalogLoader,
                     catalogImageLoader = catalogImageLoader,
                     localBooksLoader = localBooksLoader,
@@ -2536,12 +2634,14 @@ private fun BrowserTopBar(
     onChangeServer: () -> Unit = {},
     showSearchAction: Boolean = true,
     showBrand: Boolean = false,
-    onTitleClick: (() -> Unit)? = null
+    onTitleClick: (() -> Unit)? = null,
+    titleContent: (@Composable () -> Unit)? = null
 ) {
     BookOrbitTopBar(
         title = title,
         showBrand = showBrand,
         onTitleClick = onTitleClick,
+        titleContent = titleContent,
         navigationIcon = navigationIcon,
         actions = {
             if (showSearchAction) {
@@ -2665,7 +2765,8 @@ private fun BrowserBottomNavigation(
             colors = itemColors
         )
         NavigationBarItem(
-            selected = destination == BrowserDestination.SERIES ||
+            selected = destination == BrowserDestination.COLLECTIONS ||
+                destination == BrowserDestination.SERIES ||
                 destination == BrowserDestination.AUTHORS ||
                 destination == BrowserDestination.LOCAL_BOOKS ||
                 destination == BrowserDestination.ANNOTATIONS ||
@@ -8254,14 +8355,6 @@ private fun LibraryContentScreen(
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit,
     libraryBookCatalogAvailable: Boolean,
-    selectedCollection: BookCollection?,
-    onCollectionSelected: (BookCollection?) -> Unit,
-    collectionsLoader: suspend () -> List<BookCollection>,
-    collectionsAvailable: Boolean,
-    collectionBooksPageLoader: suspend (String, Int) -> LibraryBooksPage,
-    smartScopesLoader: suspend () -> List<SmartScope>,
-    smartScopesAvailable: Boolean,
-    smartScopeBooksPageLoader: suspend (Long, Int) -> LibraryBooksPage,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     catalogImageLoader: suspend (String) -> ByteArray?,
     localBooksLoader: suspend () -> List<BookSummary>,
@@ -8434,11 +8527,6 @@ private fun LibraryContentScreen(
                     onClick = { onTabChange(LibraryTab.BROWSE) },
                     text = { Text(stringResource(R.string.browse_browse)) }
                 )
-                Tab(
-                    selected = tab == LibraryTab.COLLECTIONS,
-                    onClick = { onTabChange(LibraryTab.COLLECTIONS) },
-                    text = { Text(stringResource(R.string.browse_collections)) }
-                )
             }
             when (tab) {
                 LibraryTab.RECOMMENDED -> HomeFeed(
@@ -8556,40 +8644,6 @@ private fun LibraryContentScreen(
                         }
                     }
                 )
-                LibraryTab.COLLECTIONS -> if (selectedCollection == null) {
-                    CollectionsCatalogScreen(
-                        collectionsLoader = collectionsLoader,
-                        collectionsAvailable = collectionsAvailable,
-                        smartScopesLoader = smartScopesLoader,
-                        smartScopesAvailable = smartScopesAvailable,
-                        collectionBooksPageLoader = collectionBooksPageLoader,
-                        smartScopeBooksPageLoader = smartScopeBooksPageLoader,
-                        refreshToken = state.catalogRefreshedAtMillis,
-                        onCollectionSelected = { onCollectionSelected(it) },
-                        modifier = Modifier.weight(1f)
-                    )
-                } else {
-                    CollectionBooksScreen(
-                        collection = selectedCollection,
-                        state = state,
-                        collectionBooksPageLoader = collectionBooksPageLoader,
-                        smartScopeBooksPageLoader = smartScopeBooksPageLoader,
-                        coverLoader = coverLoader,
-                        onBookSelected = onBookSelected,
-                        onSeriesNameSelected = onSeriesNameSelected,
-                        onSeriesSelected = onSeriesSelected,
-                        onDownload = onDownload,
-                        onCancelDownload = onCancelDownload,
-                        onClearFailedDownload = onClearFailedDownload,
-                        onDeleteLocalCopy = onDeleteLocalCopy,
-                        onMarkAsRead = onMarkAsRead,
-                        onMarkAsUnread = onMarkAsUnread,
-                        onMarkAsStatus = onMarkAsStatus,
-                        onBack = { onCollectionSelected(null) },
-                        refreshToken = state.catalogRefreshedAtMillis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
             }
         }
     }
@@ -8604,6 +8658,7 @@ private fun CollectionsCatalogScreen(
     collectionBooksPageLoader: suspend (String, Int) -> LibraryBooksPage,
     smartScopeBooksPageLoader: suspend (Long, Int) -> LibraryBooksPage,
     refreshToken: Long?,
+    onCollectionsLoaded: (List<BookCollection>) -> Unit,
     onCollectionSelected: (BookCollection) -> Unit,
     modifier: Modifier
 ) {
@@ -8647,7 +8702,7 @@ private fun CollectionsCatalogScreen(
             emptyList()
         }
         val entries = (regularCollections + smartScopes).distinctBy(BookCollection::key)
-        collections = entries.map { entry ->
+        val enrichedEntries = entries.map { entry ->
             if (entry.bookCount != null) {
                 entry
             } else {
@@ -8679,6 +8734,8 @@ private fun CollectionsCatalogScreen(
                 }
             }
         }
+        collections = enrichedEntries
+        onCollectionsLoaded(enrichedEntries)
         loadError = errors.distinct().joinToString("\n").takeIf(String::isNotBlank)
     }
 
@@ -8770,7 +8827,6 @@ private fun CollectionBooksScreen(
     onMarkAsRead: (BookSummary) -> Unit,
     onMarkAsUnread: (BookSummary) -> Unit,
     onMarkAsStatus: ((BookSummary, BookReadStatus) -> Unit)?,
-    onBack: () -> Unit,
     refreshToken: Long?,
     modifier: Modifier
 ) {
@@ -8816,19 +8872,6 @@ private fun CollectionBooksScreen(
     val visibleBooks = remember(books, filter) { filterAndSortLocalBooks(books, filter) }
     val visibleTotal = if (filter.isActive) visibleBooks.size else total
     Column(modifier = modifier.fillMaxSize().testTag("collection_books_screen")) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onBack) { Text(stringResource(R.string.browse_back)) }
-            Text(
-                collection.name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
         collection.description?.takeIf(String::isNotBlank)?.let { description ->
             Text(
                 description,

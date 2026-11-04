@@ -506,7 +506,7 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
-    fun librariesCollectionsShowCollectionsAndSmartScopesAndOpenTheirBooks() {
+    fun collectionsPageShowsCollectionsAndSmartScopesAndOpensTheirBooks() {
         val collectionBook = BookSummary(
             libraryId = "lib-1",
             id = "collection-book",
@@ -557,17 +557,20 @@ class BookOrbitAppInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Libraries").performClick()
-        composeRule.onNodeWithText("Collections").performClick()
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithTag("more-menu-collections").performClick()
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
         composeRule.onNodeWithText("Favorites").assertIsDisplayed()
         composeRule.onNodeWithText("Selected reads").assertIsDisplayed()
-        composeRule.onNodeWithText("1 book").assertIsDisplayed()
+        composeRule.onAllNodesWithText("1 book").assertCountEquals(2)
         composeRule.onNodeWithText("Unread").assertIsDisplayed()
         composeRule.onNodeWithText("Smart scope").assertIsDisplayed()
 
         composeRule.onNodeWithText("Favorites").performClick()
         composeRule.onNodeWithText("Collection Test Book").assertIsDisplayed()
-        composeRule.onNodeWithText("Back").performClick()
+        composeRule.onNodeWithTag("collections-title-selector").assertIsDisplayed()
+        composeRule.onNodeWithTag("collections-title-selector").performClick()
+        composeRule.onNodeWithTag("collections-title-menu").assertIsDisplayed()
         composeRule.onNodeWithText("Unread").performClick()
         composeRule.onNodeWithText("Scope Test Book").assertIsDisplayed()
     }
@@ -1680,7 +1683,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithContentDescription("Local books icon").assertIsDisplayed()
         composeRule.onAllNodesWithText("Options").assertCountEquals(0)
         composeRule.onNodeWithTag("more-menu-collections").performClick()
-        composeRule.onNodeWithText("Collections").assertIsSelected()
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
     }
 
     @Test
