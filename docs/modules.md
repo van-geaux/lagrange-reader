@@ -30,6 +30,7 @@ When a provider does not support a capability, its module must expose an explici
 - `SeriesCatalogModule`: Series catalog and Series detail.
 - `HomeShelfModule`: cached Home content.
 - `SmartScopeModule`: Smart Scope discovery, catalogs, and details.
+- `CollectionCatalogModule`: collection discovery and paged books for a selected collection or collection-like list.
 - `AuthorModule`: author catalog and author books.
 - `BookDetailModule`: detail hydration, cached detail, and user rating.
 - `BookCoverModule`: book covers and catalog images.
@@ -50,6 +51,8 @@ When a provider does not support a capability, its module must expose an explici
 - `EpubTtsModule`: provider-neutral EPUB text-to-speech session, request, and playback-service boundary. This is a reader feature module, not a server-provider module.
 
 `ProviderModules` groups these contracts into one provider capability set.
+
+The standalone Collections destination consumes `CollectionCatalogModule` for discovery and book pages. BookOrbit merges its Smart Scope entries into the collection picker; Kavita maps its collections and `Want To Read` series list into collection entries; Komga maps both Collections and Read Lists. The UI owns the five-minute per-server/profile catalog cache and pull-to-refresh behavior, while providers own endpoint and response mapping.
 
 Provider implementations are grouped under `provider/`: BookOrbit composition lives in `provider/bookorbit/`, Komga composition and provider contracts live in `provider/komga/`, Kavita composition and provider contracts live in `provider/kavita/`, and cross-provider selection/resolution lives in `provider/`. The broad `BookOrbitRepository` compatibility seam remains at the application package boundary until its callers are fully migrated.
 

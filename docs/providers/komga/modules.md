@@ -15,6 +15,10 @@ The Komga adapter is implemented as provider-specific feature modules in `komga/
   - loads paginated books for a library;
   - maps Komga metadata into Lagrange book summaries;
   - preserves series identity, title, number, format, size, and authenticated thumbnail URL.
+- `CollectionCatalogModule`
+  - lists Komga Collections and Read Lists as collection entries;
+  - expands collection series into books and loads Read List books directly;
+  - distinguishes Read List IDs with the `readlist:` prefix for book-page routing.
 - `KomgaSeriesModule`
   - aggregates books across all Komga libraries;
   - groups books by series identity;
@@ -98,7 +102,9 @@ BookOrbit-specific cover warming and offline-cache workers do not run while Komg
 
 ## Unsupported capabilities
 
-Komga reading-status mutations support only Read and Unread. Smart Scopes, authors, annotations, achievements, statistics, and server reading-session synchronization are not implemented in this adapter checkpoint. The adapter supports EPUB Readium progression when the reader supplies a real locator, and page-based reader progress for other applicable formats. Unsupported actions must not be presented as working Komga features. Home shelf reads are supported through the server-provided endpoints listed above; Home shelf mutations remain unsupported.
+Komga reading-status mutations support only Read and Unread. Smart Scopes, authors, annotations, achievements, statistics, and server reading-session synchronization are not implemented in this adapter checkpoint. Collections and Read Lists are supported through `CollectionCatalogModule`. The adapter supports EPUB Readium progression when the reader supplies a real locator, and page-based reader progress for other applicable formats. Unsupported actions must not be presented as working Komga features. Home shelf reads are supported through the server-provided endpoints listed above; Home shelf mutations remain unsupported.
+
+Collection contract tests exercise `GET /api/v1/collections`, `GET /api/v1/readlists`, collection series paging, and Read List book paging using MockWebServer fixtures; they do not replace validation against a live Komga server.
 
 ## Compatibility boundary
 

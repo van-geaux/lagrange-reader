@@ -18,6 +18,14 @@ Run the narrowest relevant checks first, then the complete gate for the approved
 ./gradlew testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
+Provider collection contract tests use MockWebServer fixtures rather than live provider accounts. They verify Komga collection/Read List discovery and book routes, and Kavita collection/Want To Read resolution into series books. Run them with:
+
+```text
+./gradlew :app:testDebugUnitTest --tests com.vangeaux.lagrange.ProviderCollectionModuleTest
+```
+
+These tests verify the client-side endpoint and projection contract; they do not establish that a live provider server currently returns the fixture shapes.
+
 For release work, also verify the approved release assembly/workflow and the release asset naming policy. For PDFium packaging, verify the built APK is `arm64-v8a`-only, run `zipalign -P 16 -c`, and inspect packaged native libraries for `p_align=0x4000`. These checks do not replace connected UI tests.
 
 ## Debug APK handoff
