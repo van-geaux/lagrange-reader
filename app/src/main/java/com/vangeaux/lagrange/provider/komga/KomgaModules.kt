@@ -18,6 +18,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -688,6 +690,133 @@ class KomgaBookCatalogModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaB
             genres = metadata.optJSONArray("genres").toStringList()
         )
     }
+}
+
+internal class KomgaCollectionModuleImpl(
+    private val auth: KomgaAuthModuleImpl,
+    private val catalog: KomgaBookCatalogModuleImpl
+) : CollectionCatalogModule {
+    private val client = KomgaHttpClient().client
+    private val cacheMutex = Mutex()
+    private val booksByCollectionId = mutableMapOf<String, List<BookSummary>>()
+
+    override suspend fun loadCollections(): List<BookCollection> = withContext(Dispatchers.IO) {
+        val base = normalizeServerUrl(auth.credentialOrigin().orEmpty())
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
+        val collections = buildList {
+            var page = 0
+            var complete = false
+            while (!complete && page < 1000) {
+                val request = Request.Builder()
+                    .url("$base/api/v1/collections?page=$page&size=$PAGE_SIZE&sort=name,asc")
+                    .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
+                    .get()
+                    .build()
+                val result = client.newCall(request).execute().use { response ->
+                    val payload = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        throw UserFacingException(
+                            auth.localizedMessage(
+                                R.string.perror_komga_books_http,
+                                "Unable to load Komga collections (HTTP ${response.code}).",
+                                response.code
+                            )
+                        )
+                    }
+                    val root = JSONObject(payload)
+                    val content = root.optJSONArray("content")
+                        ?: root.optJSONArray("collections")
+                        ?: JSONArray()
+                    val items = buildList {
+                        for (index in 0 until content.length()) {
+                            val item = content.optJSONObject(index) ?: continue
+                            val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
+                            add(
+                                BookCollection(
+                                    id = id,
+                                    name = item.optString("name", id),
+                                    bookCount = sequenceOf("booksCount", "bookCount", "totalBooks")
+                                        .mapNotNull { item.optInt(it, -1).takeIf { count -> count >= 0 } }
+                                        .firstOrNull(),
+                                    description = item.optString("description").takeIf { it.isNotBlank() }
+                                )
+                            )
+                        }
+                    }
+                    items to root.optBoolean("last", content.length() < PAGE_SIZE)
+                }
+                addAll(result.first)
+                complete = result.second || result.first.isEmpty()
+                page++
+            }
+        }
+        cacheMutex.withLock { booksByCollectionId.clear() }
+        collections
+    }
+
+    override suspend fun loadBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        withContext(Dispatchers.IO) {
+            val base = normalizeServerUrl(auth.credentialOrigin().orEmpty())
+                ?: throw UserFacingException(auth.localizedMessage(R.string.perror_komga_server_url, "Enter a valid Komga server URL."))
+            val allBooks = loadCollectionBooks(base, collectionId)
+            val start = (page * PAGE_SIZE).coerceAtMost(allBooks.size)
+            val end = (start + PAGE_SIZE).coerceAtMost(allBooks.size)
+            LibraryBooksPage(
+                items = allBooks.subList(start, end),
+                total = allBooks.size,
+                page = page,
+                size = PAGE_SIZE,
+                isComplete = end >= allBooks.size
+            )
+        }
+
+    private suspend fun loadCollectionBooks(serverUrl: String, collectionId: String): List<BookSummary> =
+        cacheMutex.withLock {
+            booksByCollectionId[collectionId]?.let { return@withLock it }
+            val series = buildList {
+                var page = 0
+                var complete = false
+                while (!complete && page < 1000) {
+                    val request = Request.Builder()
+                        .url("$serverUrl/api/v1/collections/$collectionId/series?page=$page&size=$PAGE_SIZE&sort=metadata.title,asc")
+                        .apply { auth.requestHeaders(serverUrl).forEach { (name, value) -> header(name, value) } }
+                        .get()
+                        .build()
+                    val result = client.newCall(request).execute().use { response ->
+                        val payload = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            throw UserFacingException(
+                                auth.localizedMessage(
+                                    R.string.perror_komga_books_http,
+                                    "Unable to load Komga collection series (HTTP ${response.code}).",
+                                    response.code
+                                )
+                            )
+                        }
+                        val root = JSONObject(payload)
+                        val content = root.optJSONArray("content") ?: JSONArray()
+                        val ids = buildList {
+                            for (index in 0 until content.length()) {
+                                content.optJSONObject(index)?.optString("id")
+                                    ?.takeIf { it.isNotBlank() }
+                                    ?.let(::add)
+                            }
+                        }
+                        ids to root.optBoolean("last", content.length() < PAGE_SIZE)
+                    }
+                    addAll(result.first)
+                    complete = result.second || result.first.isEmpty()
+                    page++
+                }
+            }
+            val books = buildList {
+                series.forEach { seriesId ->
+                    addAll(catalog.loadSeriesBooks(serverUrl, seriesId))
+                }
+            }.distinctBy { it.id }
+            booksByCollectionId[collectionId] = books
+            books
+        }
 }
 
 class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {

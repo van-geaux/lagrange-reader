@@ -4,6 +4,12 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.*
 
 internal class KavitaModuleSet(private val repository: KavitaRepository) {
+    val collections: CollectionCatalogModule = object : CollectionCatalogModule {
+        override suspend fun loadCollections() = repository.loadCollections()
+        override suspend fun loadBooksPage(collectionId: String, page: Int) =
+            repository.loadCollectionBooksPage(collectionId, page)
+    }
+
     private fun unavailable(): Nothing =
         throw UserFacingException(repository.localizedMessage(R.string.perror_kavita_not_implemented, "Kavita catalog and reading support are not implemented yet."))
 
@@ -52,8 +58,6 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes(): List<SmartScope> = unavailable()
-            override suspend fun loadSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage = unavailable()
-            override suspend fun loadSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? = unavailable()
         },
         authors = object : AuthorModule {
             override suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = unavailable()
@@ -150,6 +154,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         achievements = false,
         statistics = false,
         smartScopes = false,
+        collections = true,
         authors = false,
         userRating = false,
         extendedReadingStatuses = false,

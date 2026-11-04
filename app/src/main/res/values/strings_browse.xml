@@ -25,7 +25,18 @@
     <string name="browse_author">Author</string>
     <string name="browse_library">Library</string>
     <string name="browse_libraries">Libraries</string>
-    <string name="browse_smart_scopes">Smart scopes</string>
+    <string name="browse_collections">Collections</string>
+    <string name="browse_loading_collections">Loading collections...</string>
+    <string name="browse_collections_load_failed">Unable to load collections.</string>
+    <string name="browse_no_collections">No collections found.</string>
+    <string name="browse_collection_book_count_unavailable">Book count unavailable</string>
+    <string name="browse_smart_scope_label">Smart scope</string>
+    <string name="browse_collection_load_failed">Unable to load collection books.</string>
+    <string name="browse_collection_no_books">No books found in this collection.</string>
+    <plurals name="browse_collection_book_count">
+        <item quantity="one">%d book</item>
+        <item quantity="other">%d books</item>
+    </plurals>
     <string name="browse_authors">Authors</string>
     <string name="browse_annotations">Annotations</string>
     <string name="browse_local_books">Local books</string>
@@ -40,7 +51,6 @@
     <string name="browse_cd_libraries">Libraries icon</string>
     <string name="browse_more">More</string>
     <string name="browse_cd_series">Series icon</string>
-    <string name="browse_cd_smart_scopes">Smart scopes icon</string>
     <string name="browse_cd_authors">Authors icon</string>
     <string name="browse_cd_annotations">Annotations icon</string>
     <string name="browse_cd_local_books">Local books icon</string>
@@ -50,9 +60,6 @@
     <string name="browse_choose_library_summary">Select which library to browse.</string>
     <string name="browse_loading_libraries">Loading libraries...</string>
     <string name="browse_no_libraries_found">No libraries found.</string>
-    <string name="browse_loading_smart_scopes">Loading smart scopes...</string>
-    <string name="browse_smart_scopes_load_failed">Unable to load smart scopes.</string>
-    <string name="browse_no_smart_scopes">No smart scopes found.</string>
     <string name="browse_filter_active">Filter · active</string>
     <string name="browse_filter">Filter</string>
     <string name="browse_loading_series">Loading series...</string>
@@ -197,7 +204,6 @@
     <string name="browse_books_count">%1$d books</string>
     <string name="browse_books_and_series_count">%1$d books · %2$d series</string>
     <string name="browse_series_count">%1$d series</string>
-    <string name="browse_scope_series_count">%1$s · %2$d series</string>
     <string name="browse_browse_every_series">Browse every accessible series</string>
     <string name="browse_authors_count">%1$d authors</string>
     <string name="browse_browse_every_author">Browse every accessible author</string>

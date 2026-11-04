@@ -600,8 +600,25 @@ data class SeriesCatalogPage(
 
 data class SmartScope(
     val id: Long,
-    val name: String
+    val name: String,
+    val bookCount: Int? = null,
+    val description: String? = null
 )
+
+enum class BookCollectionKind {
+    COLLECTION,
+    SMART_SCOPE
+}
+
+data class BookCollection(
+    val id: String,
+    val name: String,
+    val bookCount: Int? = null,
+    val description: String? = null,
+    val kind: BookCollectionKind = BookCollectionKind.COLLECTION
+) {
+    val key: String get() = "${kind.name}:$id"
+}
 
 data class AuthorCatalogPage(
     val items: List<AuthorSummary> = emptyList(),

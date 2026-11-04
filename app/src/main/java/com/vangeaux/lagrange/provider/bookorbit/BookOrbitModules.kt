@@ -43,8 +43,8 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
         },
         smartScopes = object : SmartScopeModule {
             override suspend fun loadSmartScopes() = source.loadSmartScopes()
-            override suspend fun loadSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int) = source.loadSmartScopeSeriesCatalog(scopeId, filter, page)
-            override suspend fun loadSeriesDetail(scopeId: Long, seriesId: String) = source.loadSmartScopeSeriesDetail(scopeId, seriesId)
+            override suspend fun loadBooksPage(scopeId: Long, page: Int) =
+                source.loadSmartScopeBooksPage(scopeId, page)
         },
         authors = object : AuthorModule {
             override suspend fun loadAuthorsCatalog(query: String?, page: Int) = source.loadAuthorsCatalog(query, page)
@@ -119,4 +119,10 @@ class BookOrbitModuleSet(private val source: BookOrbitDataSource) {
             override suspend fun reconfigureBackgroundRefresh() = source.reconfigureBackgroundRefresh()
         }
     )
+
+    val collections: CollectionCatalogModule = object : CollectionCatalogModule {
+        override suspend fun loadCollections() = source.loadCollections()
+        override suspend fun loadBooksPage(collectionId: String, page: Int) =
+            source.loadCollectionBooksPage(collectionId, page)
+    }
 }

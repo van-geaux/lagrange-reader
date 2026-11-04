@@ -2,7 +2,10 @@ package com.vangeaux.lagrange.provider.kavita
 
 import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.BookCatalogModule
+import com.vangeaux.lagrange.core.CollectionCatalogModule
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -14,6 +17,7 @@ import java.time.Instant
 import java.util.Locale
 
 private const val KAVITA_PAGE_SIZE = 20
+internal const val KAVITA_WANT_TO_READ_COLLECTION_ID = "want-to-read"
 
 internal fun mergeKavitaCatalogPages(
     existing: List<BookSummary>,
@@ -639,10 +643,208 @@ internal fun kavitaSeriesPageItems(payload: String): JSONArray =
         }.getOrDefault(JSONArray())
     }
 
+internal fun kavitaWantToReadSeriesIds(payload: String): List<String> {
+    val items = runCatching {
+        when (val value = org.json.JSONTokener(payload).nextValue()) {
+            is JSONArray -> value
+            is JSONObject -> value.optJSONArray("items")
+                ?: value.optJSONArray("results")
+                ?: value.optJSONArray("data")
+                ?: throw UserFacingException("The server returned malformed Want To Read data.")
+            else -> throw UserFacingException("The server returned malformed Want To Read data.")
+        }
+    }.getOrElse { error ->
+        if (error is UserFacingException) throw error
+        throw UserFacingException("The server returned malformed Want To Read data.")
+    }
+    return buildList {
+        for (index in 0 until items.length()) {
+            items.optJSONObject(index)
+                ?.optInt("id", -1)
+                ?.takeIf { it >= 0 }
+                ?.toString()
+                ?.let(::add)
+        }
+    }
+}
+
 internal fun JSONArray?.jsonTitles(): List<String> = buildList {
     val array = this@jsonTitles ?: return@buildList
     for (index in 0 until array.length()) {
         val item = array.optJSONObject(index) ?: continue
         item.optString("title").takeIf { it.isNotBlank() }?.let(::add)
+    }
+}
+
+internal class KavitaCollectionCatalogModuleImpl(
+    private val auth: KavitaAuthModule,
+    private val catalog: KavitaBookCatalogModuleImpl
+) : CollectionCatalogModule {
+    private val client = OkHttpClient()
+    private val cacheMutex = Mutex()
+    private val booksByCollectionId = mutableMapOf<String, List<BookSummary>>()
+
+    override suspend fun loadCollections(): List<BookCollection> = withContext(Dispatchers.IO) {
+        val base = normalizeServerUrl(auth.serverUrl().orEmpty())
+            ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
+        val request = Request.Builder()
+            .url("$base/api/Collection")
+            .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        val collections = client.newCall(request).execute().use { response ->
+            val payload = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw UserFacingException(
+                    auth.localizedMessage(
+                        R.string.perror_kavita_series_http,
+                        "Unable to load Kavita collections (HTTP ${response.code}).",
+                        response.code
+                    )
+                )
+            }
+            val array = parseKavitaArray(payload, "load collections")
+            buildList {
+                add(
+                    BookCollection(
+                        id = KAVITA_WANT_TO_READ_COLLECTION_ID,
+                        name = "Want To Read"
+                    )
+                )
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val id = item.optInt("id", -1).takeIf { it >= 0 } ?: continue
+                    add(
+                        BookCollection(
+                            id = id.toString(),
+                            name = item.optString("title").takeIf { it.isNotBlank() } ?: "Collection $id",
+                            description = item.optString("summary").takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+        }
+        cacheMutex.withLock { booksByCollectionId.clear() }
+        collections
+    }
+
+    override suspend fun loadBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        withContext(Dispatchers.IO) {
+            val collectionIdNumber = collectionId.toIntOrNull()
+            val isWantToRead = collectionId == KAVITA_WANT_TO_READ_COLLECTION_ID
+            if (!isWantToRead && collectionIdNumber == null) {
+                throw UserFacingException("The selected Kavita collection has an invalid identifier.")
+            }
+            val base = normalizeServerUrl(auth.serverUrl().orEmpty())
+                ?: throw UserFacingException(auth.localizedMessage(R.string.perror_kavita_server_url, "Enter a valid Kavita server URL."))
+            val allBooks = cacheMutex.withLock {
+                booksByCollectionId[collectionId]?.let { return@withLock it }
+                val seriesIds = if (isWantToRead) {
+                    loadWantToReadSeriesIds(base)
+                } else {
+                    val numericCollectionId = collectionIdNumber
+                        ?: throw UserFacingException("The selected Kavita collection has an invalid identifier.")
+                    buildList {
+                        var pageNumber = 1
+                        while (pageNumber <= 1000) {
+                            val request = Request.Builder()
+                                .url("$base/api/Series/series-by-collection?collectionId=$numericCollectionId&pageNumber=$pageNumber&pageSize=$COLLECTION_SERIES_PAGE_SIZE")
+                                .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+                                .get()
+                                .build()
+                            val result = client.newCall(request).execute().use { response ->
+                                val payload = response.body?.string().orEmpty()
+                                if (!response.isSuccessful) {
+                                    throw UserFacingException(
+                                        auth.localizedMessage(
+                                            R.string.perror_kavita_series_http,
+                                            "Unable to load books in this collection (HTTP ${response.code}).",
+                                            response.code
+                                        )
+                                    )
+                                }
+                                val items = parseKavitaArray(payload, "load collection series")
+                                val ids = buildList {
+                                    for (index in 0 until items.length()) {
+                                        items.optJSONObject(index)
+                                            ?.optInt("id", -1)
+                                            ?.takeIf { it >= 0 }
+                                            ?.let(::add)
+                                    }
+                                }
+                                ids.map(Int::toString) to (items.length() < COLLECTION_SERIES_PAGE_SIZE)
+                            }
+                            addAll(result.first)
+                            if (result.second || result.first.isEmpty()) break
+                            pageNumber++
+                        }
+                    }
+                }
+                val books = buildList<BookSummary> {
+                    seriesIds.distinct().forEach { seriesId ->
+                        addAll(catalog.loadSelectedSeriesBooks(seriesId.toString()))
+                    }
+                }.distinctBy { it.id }
+                booksByCollectionId[collectionId] = books
+                books
+            }
+            val start = (page * COLLECTION_BOOKS_PAGE_SIZE).coerceAtMost(allBooks.size)
+            val end = (start + COLLECTION_BOOKS_PAGE_SIZE).coerceAtMost(allBooks.size)
+            LibraryBooksPage(
+                items = allBooks.subList(start, end),
+                total = allBooks.size,
+                page = page,
+                size = COLLECTION_BOOKS_PAGE_SIZE,
+                isComplete = end >= allBooks.size
+            )
+        }
+
+    private fun loadWantToReadSeriesIds(base: String): List<String> = buildList {
+        var pageNumber = 1
+        while (pageNumber <= 1000) {
+            val request = Request.Builder()
+                .url("$base/api/want-to-read/v2?pageNumber=$pageNumber&pageSize=$COLLECTION_SERIES_PAGE_SIZE")
+                .header("Content-Type", "application/json")
+                .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
+                .post("{}".toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val result = client.newCall(request).execute().use { response ->
+                val payload = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw UserFacingException(
+                        auth.localizedMessage(
+                            R.string.perror_kavita_series_http,
+                            "Unable to load the Kavita Want To Read list (HTTP ${response.code}).",
+                            response.code
+                        )
+                    )
+                }
+                val ids = kavitaWantToReadSeriesIds(payload)
+                ids to (ids.size < COLLECTION_SERIES_PAGE_SIZE)
+            }
+            addAll(result.first)
+            if (result.second || result.first.isEmpty()) break
+            pageNumber++
+        }
+    }
+
+    private fun parseKavitaArray(payload: String, action: String): JSONArray =
+        runCatching {
+            when (val value = org.json.JSONTokener(payload).nextValue()) {
+                is JSONArray -> value
+                is JSONObject -> value.optJSONArray("items")
+                    ?: value.optJSONArray("results")
+                    ?: value.optJSONArray("data")
+                    ?: throw UserFacingException("The server returned malformed data while trying to $action.")
+                else -> throw UserFacingException("The server returned malformed data while trying to $action.")
+            }
+        }.getOrElse { error ->
+            if (error is UserFacingException) throw error
+            throw UserFacingException("The server returned malformed data while trying to $action.")
+        }
+
+    private companion object {
+        const val COLLECTION_SERIES_PAGE_SIZE = 50
+        const val COLLECTION_BOOKS_PAGE_SIZE = 50
     }
 }

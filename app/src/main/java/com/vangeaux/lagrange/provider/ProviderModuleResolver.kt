@@ -17,6 +17,7 @@ import com.vangeaux.lagrange.core.ReadingSessionModule
 import com.vangeaux.lagrange.core.ReadingStatusModule
 import com.vangeaux.lagrange.core.StatisticsModule
 import com.vangeaux.lagrange.core.SmartScopeModule
+import com.vangeaux.lagrange.core.CollectionCatalogModule
 import com.vangeaux.lagrange.core.AuthorModule
 import com.vangeaux.lagrange.core.BookDetailModule
 import com.vangeaux.lagrange.core.BookCoverModule
@@ -118,6 +119,13 @@ internal fun resolveProviderSmartScopeModule(repository: BookOrbitDataSource): S
         is KomgaRepository -> KomgaModuleSet(repository).smartScopes
         is KavitaRepository -> KavitaModuleSet(repository).modules.smartScopes
         else -> BookOrbitModuleSet(repository).modules.smartScopes
+    }
+
+internal fun resolveProviderCollectionCatalogModule(repository: BookOrbitDataSource): CollectionCatalogModule =
+    when (repository) {
+        is KomgaRepository -> KomgaModuleSet(repository).collections
+        is KavitaRepository -> KavitaModuleSet(repository).collections
+        else -> BookOrbitModuleSet(repository).collections
     }
 
 internal fun resolveProviderAuthorModule(repository: BookOrbitDataSource): AuthorModule =

@@ -6,6 +6,8 @@ import com.vangeaux.lagrange.provider.kavita.kavitaFileId
 import com.vangeaux.lagrange.provider.kavita.kavitaFormat
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesName
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
+import com.vangeaux.lagrange.provider.kavita.kavitaWantToReadSeriesIds
+import com.vangeaux.lagrange.provider.kavita.KAVITA_WANT_TO_READ_COLLECTION_ID
 import com.vangeaux.lagrange.provider.kavita.mergeKavitaCatalogPages
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -14,6 +16,21 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class KavitaCatalogContractTest {
+    @Test
+    fun wantToReadCollectionUsesStableSyntheticId() {
+        assertEquals("want-to-read", KAVITA_WANT_TO_READ_COLLECTION_ID)
+    }
+
+    @Test
+    fun wantToReadSeriesParserReadsPagedKavitaResults() {
+        assertEquals(
+            listOf("12", "34"),
+            kavitaWantToReadSeriesIds(
+                """{"items":[{"id":12,"name":"First"},{"id":34,"name":"Second"}],"totalCount":2}"""
+            )
+        )
+    }
+
     @Test
     fun seriesNameReadsKavitaSeriesNameVariantsBeforeFallingBackToId() {
         assertEquals(

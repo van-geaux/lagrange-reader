@@ -96,6 +96,7 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
     private val authModule = KomgaAuthModuleImpl(appContext)
     private val libraryModule = KomgaLibraryModuleImpl(authModule)
     private val catalogModule = KomgaBookCatalogModuleImpl(authModule)
+    private val collectionModule = KomgaCollectionModuleImpl(authModule, catalogModule)
     private val seriesModule = KomgaSeriesModuleImpl(authModule, catalogModule)
     private val homeModule = KomgaHomeShelfModuleImpl(authModule)
     private val readingStatusModule = KomgaReadingStatusModuleImpl(authModule) { getServerUrl().orEmpty() }
@@ -218,6 +219,15 @@ class KomgaRepository(context: Context) : BookOrbitDataSource, ProfileSessionAwa
             .getOrElse { error ->
                 browserSnapshotStore.read(serverUrl)?.libraries?.takeIf { it.isNotEmpty() } ?: throw error
             }
+    }
+
+    override suspend fun loadCollections(): List<BookCollection> =
+        collectionModule.loadCollections()
+
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage {
+        val serverUrl = getServerUrl().orEmpty()
+        val result = collectionModule.loadBooksPage(collectionId, page)
+        return result.copy(items = withDownloadPaths(serverUrl, result.items))
     }
 
     override suspend fun loadHomeShelves(): HomeShelfData {

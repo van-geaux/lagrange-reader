@@ -63,6 +63,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val homeSnapshotStore = KavitaHomeSnapshotStore(appContext)
     private val seriesSnapshotStore = KavitaSeriesCatalogSnapshotStore(appContext)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
+    private val collectionModule = KavitaCollectionCatalogModuleImpl(authModule, catalogModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val seriesModule = KavitaSeriesCatalogModuleImpl(
         catalogModule,
@@ -210,6 +211,15 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         val libraries = libraryModule.loadLibraries()
         browserSnapshotStore.saveLibraries(getServerUrl().orEmpty(), getSelectedLibraryId(), libraries)
         return libraries
+    }
+
+    override suspend fun loadCollections(): List<BookCollection> =
+        collectionModule.loadCollections()
+
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage {
+        val serverUrl = getServerUrl().orEmpty()
+        val result = collectionModule.loadBooksPage(collectionId, page)
+        return result.copy(items = withDownloadPaths(serverUrl, result.items))
     }
 
     override suspend fun loadBooks(libraryId: String): List<BookSummary> {

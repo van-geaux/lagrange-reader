@@ -25,7 +25,6 @@
     <string name="browse_author">作者</string>
     <string name="browse_library">书库</string>
     <string name="browse_libraries">书库</string>
-    <string name="browse_smart_scopes">智能范围</string>
     <string name="browse_authors">作者</string>
     <string name="browse_annotations">批注</string>
     <string name="browse_local_books">本地图书</string>
@@ -40,7 +39,6 @@
     <string name="browse_cd_libraries">书库图标</string>
     <string name="browse_more">更多</string>
     <string name="browse_cd_series">系列图标</string>
-    <string name="browse_cd_smart_scopes">智能范围图标</string>
     <string name="browse_cd_authors">作者图标</string>
     <string name="browse_cd_annotations">批注图标</string>
     <string name="browse_cd_local_books">本地图书图标</string>
@@ -50,9 +48,6 @@
     <string name="browse_choose_library_summary">选择要浏览的书库。</string>
     <string name="browse_loading_libraries">正在加载书库…</string>
     <string name="browse_no_libraries_found">未找到书库。</string>
-    <string name="browse_loading_smart_scopes">正在加载智能范围…</string>
-    <string name="browse_smart_scopes_load_failed">无法加载智能范围。</string>
-    <string name="browse_no_smart_scopes">未找到智能范围。</string>
     <string name="browse_filter_active">筛选 · 已启用</string>
     <string name="browse_filter">筛选</string>
     <string name="browse_loading_series">正在加载系列…</string>
@@ -197,7 +192,6 @@
     <string name="browse_books_count">%1$d 本图书</string>
     <string name="browse_books_and_series_count">%1$d 本图书 · %2$d 个系列</string>
     <string name="browse_series_count">%1$d 个系列</string>
-    <string name="browse_scope_series_count">%1$s · %2$d 个系列</string>
     <string name="browse_browse_every_series">浏览所有可访问的系列</string>
     <string name="browse_authors_count">%1$d 位作者</string>
     <string name="browse_browse_every_author">浏览所有可访问的作者</string>

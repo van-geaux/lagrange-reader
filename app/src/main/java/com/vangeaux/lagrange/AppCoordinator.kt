@@ -28,6 +28,7 @@ import com.vangeaux.lagrange.core.ReadingStatusModule
 import com.vangeaux.lagrange.core.ReadingProgressModule
 import com.vangeaux.lagrange.core.ReadingSessionModule
 import com.vangeaux.lagrange.core.AnnotationModule
+import com.vangeaux.lagrange.core.CollectionCatalogModule
 import com.vangeaux.lagrange.core.AchievementModule
 import com.vangeaux.lagrange.core.StatisticsModule
 import com.vangeaux.lagrange.core.SmartScopeModule
@@ -120,6 +121,7 @@ class AppCoordinator internal constructor(
     , private val achievementModuleResolver: ((BookOrbitDataSource) -> AchievementModule)? = null
     , private val statisticsModuleResolver: ((BookOrbitDataSource) -> StatisticsModule)? = null
     , private val smartScopeModuleResolver: ((BookOrbitDataSource) -> SmartScopeModule)? = null
+    , private val collectionCatalogModuleResolver: ((BookOrbitDataSource) -> CollectionCatalogModule)? = null
     , private val authorModuleResolver: ((BookOrbitDataSource) -> AuthorModule)? = null
     , private val bookDetailModuleResolver: ((BookOrbitDataSource) -> BookDetailModule)? = null
     , private val bookCoverModuleResolver: ((BookOrbitDataSource) -> BookCoverModule)? = null
@@ -155,6 +157,7 @@ class AppCoordinator internal constructor(
     private fun achievementModule(): AchievementModule? = achievementModuleResolver?.invoke(repository)
     private fun statisticsModule(): StatisticsModule? = statisticsModuleResolver?.invoke(repository)
     private fun smartScopeModule(): SmartScopeModule? = smartScopeModuleResolver?.invoke(repository)
+    private fun collectionCatalogModule(): CollectionCatalogModule? = collectionCatalogModuleResolver?.invoke(repository)
     private fun authorModule(): AuthorModule? = authorModuleResolver?.invoke(repository)
     private fun bookDetailModule(): BookDetailModule? = bookDetailModuleResolver?.invoke(repository)
     private fun bookCoverModule(): BookCoverModule? = bookCoverModuleResolver?.invoke(repository)
@@ -176,6 +179,7 @@ class AppCoordinator internal constructor(
     fun achievementsAvailable(): Boolean = featureAvailability().achievements
     fun statisticsAvailable(): Boolean = featureAvailability().statistics
     fun smartScopesAvailable(): Boolean = featureAvailability().smartScopes
+    fun collectionsAvailable(): Boolean = featureAvailability().collections
     fun authorsAvailable(): Boolean = featureAvailability().authors
     fun userRatingAvailable(): Boolean = featureAvailability().userRating
     fun extendedReadingStatusesAvailable(): Boolean = featureAvailability().extendedReadingStatuses
@@ -365,20 +369,24 @@ class AppCoordinator internal constructor(
                 ?: repository.loadSeriesCatalog(filter, page)
         }
 
-    suspend fun loadSmartScopes(): List<SmartScope> = loadWithSessionRecovery(emptyList()) {
+    suspend fun loadSmartScopes(): List<SmartScope> = loadWithSessionRecoveryOrThrow(emptyList()) {
         smartScopeModule()?.loadSmartScopes() ?: repository.loadSmartScopes()
     }
 
-    suspend fun loadSmartScopeSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage =
-        loadWithSessionRecovery(SeriesCatalogPage()) {
-            smartScopeModule()?.loadSeriesCatalog(scopeId, filter, page)
-                ?: repository.loadSmartScopeSeriesCatalog(scopeId, filter, page)
+    suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
+        loadWithSessionRecoveryOrThrow(LibraryBooksPage(page = page)) {
+            smartScopeModule()?.loadBooksPage(scopeId, page)
+                ?: repository.loadSmartScopeBooksPage(scopeId, page)
         }
 
-    suspend fun loadSmartScopeSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? =
-        loadWithSessionRecovery(null) {
-            smartScopeModule()?.loadSeriesDetail(scopeId, seriesId)
-                ?: repository.loadSmartScopeSeriesDetail(scopeId, seriesId)
+    suspend fun loadCollections(): List<BookCollection> = loadWithSessionRecoveryOrThrow(emptyList()) {
+        collectionCatalogModule()?.loadCollections() ?: repository.loadCollections()
+    }
+
+    suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        loadWithSessionRecoveryOrThrow(LibraryBooksPage(page = page)) {
+            collectionCatalogModule()?.loadBooksPage(collectionId, page)
+                ?: repository.loadCollectionBooksPage(collectionId, page)
         }
 
     suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage =
@@ -2667,6 +2675,20 @@ class AppCoordinator internal constructor(
             recoverExpiredSession()
             fallback
         } catch (_: Throwable) {
+            fallback
+        }
+    }
+
+    private suspend fun <T> loadWithSessionRecoveryOrThrow(
+        fallback: T,
+        block: suspend () -> T
+    ): T {
+        return try {
+            block()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: AuthenticationRequiredException) {
+            recoverExpiredSession()
             fallback
         }
     }

@@ -506,6 +506,73 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun librariesCollectionsShowCollectionsAndSmartScopesAndOpenTheirBooks() {
+        val collectionBook = BookSummary(
+            libraryId = "lib-1",
+            id = "collection-book",
+            fileId = "collection-file",
+            title = "Collection Test Book",
+            mediaKind = MediaKind.EPUB
+        )
+        val scopeBook = collectionBook.copy(id = "scope-book", fileId = "scope-file", title = "Scope Test Book")
+        val dataSource = InstrumentedFakeDataSource().apply {
+            collectionsResult = listOf(
+                BookCollection(
+                    id = "favorites",
+                    name = "Favorites",
+                    bookCount = 1,
+                    description = "Selected reads"
+                )
+            )
+            smartScopesResult = listOf(SmartScope(42, "Unread", bookCount = 1))
+            collectionBookPages["favorites:0"] = LibraryBooksPage(
+                items = listOf(collectionBook),
+                total = 1,
+                page = 0,
+                size = 1,
+                isComplete = true
+            )
+            smartScopeBookPages["42:0"] = LibraryBooksPage(
+                items = listOf(scopeBook),
+                total = 1,
+                page = 0,
+                size = 1,
+                isComplete = true
+            )
+        }
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = AppScreen.Browser(
+                        BrowserState(
+                            serverUrl = "https://books.example.test",
+                            libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                            selectedLibraryId = "lib-1",
+                            books = emptyList()
+                        )
+                    ),
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Libraries").performClick()
+        composeRule.onNodeWithText("Collections").performClick()
+        composeRule.onNodeWithText("Favorites").assertIsDisplayed()
+        composeRule.onNodeWithText("Selected reads").assertIsDisplayed()
+        composeRule.onNodeWithText("1 book").assertIsDisplayed()
+        composeRule.onNodeWithText("Unread").assertIsDisplayed()
+        composeRule.onNodeWithText("Smart scope").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Favorites").performClick()
+        composeRule.onNodeWithText("Collection Test Book").assertIsDisplayed()
+        composeRule.onNodeWithText("Back").performClick()
+        composeRule.onNodeWithText("Unread").performClick()
+        composeRule.onNodeWithText("Scope Test Book").assertIsDisplayed()
+    }
+
+    @Test
     fun bookDetailsRemainOpenAfterSavedInstanceStateRestore() {
         val book = BookSummary(
             libraryId = "lib-1",
@@ -1601,15 +1668,19 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("Libraries icon").assertIsDisplayed()
         composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithTag("more-menu-collections").assertIsDisplayed()
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Smart scopes").assertCountEquals(0)
         composeRule.onNodeWithTag("more-menu-sheet").assertIsDisplayed()
         composeRule.onNodeWithTag("more-menu-last-item").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Series icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Authors icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Local books icon").assertIsDisplayed()
         composeRule.onAllNodesWithText("Options").assertCountEquals(0)
+        composeRule.onNodeWithTag("more-menu-collections").performClick()
+        composeRule.onNodeWithText("Collections").assertIsSelected()
     }
 
     @Test
@@ -2671,6 +2742,10 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
     val downloadedBooks = mutableListOf<BookSummary>()
     val userRatingUpdates = mutableListOf<Int?>()
     var loadBooksResult: List<BookSummary> = emptyList()
+    var collectionsResult: List<BookCollection> = emptyList()
+    var smartScopesResult: List<SmartScope> = emptyList()
+    val collectionBookPages = mutableMapOf<String, LibraryBooksPage>()
+    val smartScopeBookPages = mutableMapOf<String, LibraryBooksPage>()
     var localBooksResult: List<BookSummary> = emptyList()
     var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
     var searchBooksResult: List<BookSummary> = emptyList()
@@ -2709,6 +2784,12 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
         loadLibrariesCalls += 1
         return librariesResult
     }
+    override suspend fun loadCollections(): List<BookCollection> = collectionsResult
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        collectionBookPages["$collectionId:$page"] ?: LibraryBooksPage(page = page)
+    override suspend fun loadSmartScopes(): List<SmartScope> = smartScopesResult
+    override suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
+        smartScopeBookPages["$scopeId:$page"] ?: LibraryBooksPage(page = page)
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
     override suspend fun searchBooks(query: String): List<BookSummary> {
         searchQueries += query

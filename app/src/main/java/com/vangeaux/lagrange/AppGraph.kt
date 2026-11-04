@@ -97,6 +97,7 @@ class AppGraph private constructor(
                 achievementModuleResolver = ::resolveProviderAchievementModule,
                 statisticsModuleResolver = ::resolveProviderStatisticsModule
                 , smartScopeModuleResolver = ::resolveProviderSmartScopeModule
+                , collectionCatalogModuleResolver = ::resolveProviderCollectionCatalogModule
                 , authorModuleResolver = ::resolveProviderAuthorModule
                 , bookDetailModuleResolver = ::resolveProviderBookDetailModule
                 , bookCoverModuleResolver = ::resolveProviderBookCoverModule
