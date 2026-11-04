@@ -25,6 +25,19 @@
     <string name="browse_author">作者</string>
     <string name="browse_library">书库</string>
     <string name="browse_libraries">书库</string>
+    <string name="browse_collections">收藏集</string>
+    <string name="browse_choose_collection">选择收藏集</string>
+    <string name="browse_choose_collection_summary">选择要浏览的收藏集。</string>
+    <string name="browse_loading_collections">正在加载收藏集…</string>
+    <string name="browse_collections_load_failed">无法加载收藏集。</string>
+    <string name="browse_no_collections">未找到收藏集。</string>
+    <string name="browse_collection_book_count_unavailable">图书数量未知</string>
+    <string name="browse_smart_scope_label">智能范围</string>
+    <string name="browse_collection_load_failed">无法加载收藏集中的图书。</string>
+    <string name="browse_collection_no_books">此收藏集中未找到图书。</string>
+    <plurals name="browse_collection_book_count">
+        <item quantity="other">%d 本图书</item>
+    </plurals>
     <string name="browse_authors">作者</string>
     <string name="browse_annotations">批注</string>
     <string name="browse_local_books">本地图书</string>
