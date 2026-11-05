@@ -61,6 +61,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
@@ -1946,6 +1947,11 @@ private fun ReaderPositionListDialog(
 ) {
     val chapterKind = stringResource(R.string.chrome_chapter_kind)
     val currentStateDescription = stringResource(R.string.chrome_current)
+    val selectedPosition = currentPosition.coerceIn(0, (entries.size - 1).coerceAtLeast(0))
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedPosition)
+    LaunchedEffect(selectedPosition) {
+        listState.animateScrollToItem(selectedPosition)
+    }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1973,7 +1979,10 @@ private fun ReaderPositionListDialog(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
                     style = MaterialTheme.typography.titleLarge
                 )
-                LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 8.dp)
+                ) {
                     items(entries.indices.toList(), key = { it }) { index ->
                         val selected = index == currentPosition
                         val itemDescription = stringResource(
