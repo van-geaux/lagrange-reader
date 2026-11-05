@@ -37,6 +37,3 @@ internal class KavitaLibraryModuleImpl(private val auth: KavitaAuthModule) : Lib
         }
     }
 }
-
-internal fun KavitaAuthModule.serverUrl(): String? =
-    (this as? KavitaAuthModuleImpl)?.currentServerUrl()

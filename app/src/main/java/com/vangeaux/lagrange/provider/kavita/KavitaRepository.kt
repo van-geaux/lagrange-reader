@@ -63,6 +63,7 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
     private val homeSnapshotStore = KavitaHomeSnapshotStore(appContext)
     private val seriesSnapshotStore = KavitaSeriesCatalogSnapshotStore(appContext)
     private val catalogModule = KavitaBookCatalogModuleImpl(authModule)
+    private val collectionModule = KavitaCollectionCatalogModuleImpl(authModule, catalogModule)
     private val detailModule = KavitaBookDetailModuleImpl(authModule)
     private val seriesModule = KavitaSeriesCatalogModuleImpl(
         catalogModule,
@@ -210,6 +211,44 @@ internal class KavitaRepository(context: Context) : BookOrbitDataSource, Profile
         val libraries = libraryModule.loadLibraries()
         browserSnapshotStore.saveLibraries(getServerUrl().orEmpty(), getSelectedLibraryId(), libraries)
         return libraries
+    }
+
+    override suspend fun loadCollections(): List<BookCollection> {
+        val serverUrl = getServerUrl().orEmpty()
+        val collections = try {
+            collectionModule.loadCollections()
+        } catch (error: Exception) {
+            if (error is CancellationException || error is AuthenticationRequiredException) throw error
+            try {
+                browserSnapshotStore.readCollections(serverUrl)?.let { return it }
+            } catch (cacheError: Exception) {
+                if (cacheError is CancellationException) throw cacheError
+                error.addSuppressed(cacheError)
+            }
+            throw error
+        }
+        browserSnapshotStore.saveCollections(serverUrl, collections)
+        return collections
+    }
+
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage {
+        val serverUrl = getServerUrl().orEmpty()
+        val result = try {
+            val loaded = collectionModule.loadBooksPage(collectionId, page)
+            loaded.copy(items = withDownloadPaths(serverUrl, loaded.items))
+        } catch (error: Exception) {
+            if (error is CancellationException || error is AuthenticationRequiredException) throw error
+            try {
+                browserSnapshotStore.readCollectionBooksPage(serverUrl, collectionId, page)
+                    ?.let { return it.copy(items = withDownloadPaths(serverUrl, it.items)) }
+            } catch (cacheError: Exception) {
+                if (cacheError is CancellationException) throw cacheError
+                error.addSuppressed(cacheError)
+            }
+            throw error
+        }
+        browserSnapshotStore.saveCollectionBooksPage(serverUrl, collectionId, page, result)
+        return result
     }
 
     override suspend fun loadBooks(libraryId: String): List<BookSummary> {

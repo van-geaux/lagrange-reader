@@ -506,6 +506,115 @@ class BookOrbitAppInstrumentedTest {
     }
 
     @Test
+    fun collectionsPageShowsCollectionsAndSmartScopesAndOpensTheirBooks() {
+        val collectionBook = BookSummary(
+            libraryId = "lib-1",
+            id = "collection-book",
+            fileId = "collection-file",
+            title = "Collection Test Book",
+            mediaKind = MediaKind.EPUB
+        )
+        val scopeBook = collectionBook.copy(id = "scope-book", fileId = "scope-file", title = "Scope Test Book")
+        val dataSource = InstrumentedFakeDataSource().apply {
+            collectionsResult = listOf(
+                BookCollection(
+                    id = "favorites",
+                    name = "Favorites",
+                    bookCount = 1,
+                    description = "Selected reads"
+                )
+            )
+            smartScopesResult = listOf(SmartScope(42, "Unread", bookCount = 1))
+            collectionBookPages["favorites:0"] = LibraryBooksPage(
+                items = listOf(collectionBook),
+                total = 1,
+                page = 0,
+                size = 1,
+                isComplete = true
+            )
+            smartScopeBookPages["42:0"] = LibraryBooksPage(
+                items = listOf(scopeBook),
+                total = 1,
+                page = 0,
+                size = 1,
+                isComplete = true
+            )
+        }
+        val browserScreen = mutableStateOf<AppScreen>(
+            AppScreen.Browser(
+                BrowserState(
+                    serverUrl = "https://books.example.test",
+                    profileId = "profile-one",
+                    libraries = listOf(LibrarySummary(id = "lib-1", name = "Main")),
+                    selectedLibraryId = "lib-1",
+                    books = emptyList()
+                )
+            )
+        )
+
+        composeRule.setContent {
+            BookOrbitTheme {
+                BookOrbitApp(
+                    screen = browserScreen.value,
+                    coordinator = AppCoordinator(dataSource, Dispatchers.Main)
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithTag("more-menu-collections").performClick()
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
+        composeRule.onNodeWithText("Choose a collection").assertIsDisplayed()
+        composeRule.onNodeWithText("Select a collection to browse.").assertIsDisplayed()
+        composeRule.onNodeWithText("Favorites").assertIsDisplayed()
+        composeRule.onNodeWithText("Selected reads").assertIsDisplayed()
+        composeRule.onAllNodesWithText("1 book").assertCountEquals(2)
+        composeRule.onNodeWithText("Unread").assertIsDisplayed()
+        composeRule.onNodeWithText("Smart scope").assertIsDisplayed()
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 1 && dataSource.loadSmartScopesCalls == 1
+        }
+
+        composeRule.onNodeWithText("Favorites").performClick()
+        composeRule.onNodeWithText("Favorites").assertIsDisplayed()
+        composeRule.onNodeWithText("Collection Test Book").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("collections-title-selector").assertCountEquals(0)
+        composeRule.onNodeWithText("Back").performClick()
+        composeRule.runOnIdle {
+            assertEquals(1, dataSource.loadCollectionsCalls)
+            assertEquals(1, dataSource.loadSmartScopesCalls)
+        }
+
+        composeRule.onNodeWithTag("collections_catalog_screen").performTouchInput { swipeDown() }
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 2 && dataSource.loadSmartScopesCalls == 2
+        }
+        composeRule.onNodeWithText("Unread").performClick()
+        composeRule.onNodeWithText("Scope Test Book").assertIsDisplayed()
+
+        dataSource.collectionsResult = listOf(BookCollection(id = "new-favorites", name = "New Profile Reads"))
+        dataSource.smartScopesResult = listOf(SmartScope(43, "New Profile Scope", bookCount = 1))
+        composeRule.runOnIdle {
+            val current = browserScreen.value as AppScreen.Browser
+            browserScreen.value = AppScreen.Browser(
+                current.browserState.copy(
+                    serverUrl = "https://other-books.example.test",
+                    profileId = "profile-two"
+                )
+            )
+        }
+        composeRule.waitUntil {
+            dataSource.loadCollectionsCalls == 3 && dataSource.loadSmartScopesCalls == 3
+        }
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
+        composeRule.onNodeWithText("New Profile Reads").assertIsDisplayed()
+        composeRule.onNodeWithText("New Profile Scope").assertIsDisplayed()
+        composeRule.onNodeWithText("Favorites").assertDoesNotExist()
+        composeRule.onNodeWithText("Unread").assertDoesNotExist()
+        composeRule.onNodeWithText("Scope Test Book").assertDoesNotExist()
+    }
+
+    @Test
     fun bookDetailsRemainOpenAfterSavedInstanceStateRestore() {
         val book = BookSummary(
             libraryId = "lib-1",
@@ -1601,15 +1710,19 @@ class BookOrbitAppInstrumentedTest {
 
         composeRule.onNodeWithContentDescription("Libraries icon").assertIsDisplayed()
         composeRule.onNodeWithText("More").performClick()
+        composeRule.onNodeWithTag("more-menu-collections").assertIsDisplayed()
         composeRule.onNodeWithText("Series").assertIsDisplayed()
         composeRule.onNodeWithText("Authors").assertIsDisplayed()
         composeRule.onNodeWithText("Local books").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Smart scopes").assertCountEquals(0)
         composeRule.onNodeWithTag("more-menu-sheet").assertIsDisplayed()
         composeRule.onNodeWithTag("more-menu-last-item").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Series icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Authors icon").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Local books icon").assertIsDisplayed()
         composeRule.onAllNodesWithText("Options").assertCountEquals(0)
+        composeRule.onNodeWithTag("more-menu-collections").performClick()
+        composeRule.onNodeWithText("Collections").assertIsDisplayed()
     }
 
     @Test
@@ -2663,6 +2776,8 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
     var librariesResult: List<LibrarySummary> = emptyList()
     var clearServerCalls = 0
     var loadLibrariesCalls = 0
+    var loadCollectionsCalls = 0
+    var loadSmartScopesCalls = 0
     val savedServerUrls = mutableListOf<String>()
     val markedReadBooks = mutableListOf<BookSummary>()
     val readingStatusUpdates = mutableListOf<Pair<BookSummary, BookReadStatus>>()
@@ -2671,6 +2786,10 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
     val downloadedBooks = mutableListOf<BookSummary>()
     val userRatingUpdates = mutableListOf<Int?>()
     var loadBooksResult: List<BookSummary> = emptyList()
+    var collectionsResult: List<BookCollection> = emptyList()
+    var smartScopesResult: List<SmartScope> = emptyList()
+    val collectionBookPages = mutableMapOf<String, LibraryBooksPage>()
+    val smartScopeBookPages = mutableMapOf<String, LibraryBooksPage>()
     var localBooksResult: List<BookSummary> = emptyList()
     var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap()
     var searchBooksResult: List<BookSummary> = emptyList()
@@ -2709,6 +2828,18 @@ internal class InstrumentedFakeDataSource : BookOrbitDataSource {
         loadLibrariesCalls += 1
         return librariesResult
     }
+    override suspend fun loadCollections(): List<BookCollection> {
+        loadCollectionsCalls += 1
+        return collectionsResult
+    }
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        collectionBookPages["$collectionId:$page"] ?: LibraryBooksPage(page = page)
+    override suspend fun loadSmartScopes(): List<SmartScope> {
+        loadSmartScopesCalls += 1
+        return smartScopesResult
+    }
+    override suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
+        smartScopeBookPages["$scopeId:$page"] ?: LibraryBooksPage(page = page)
     override suspend fun loadBooks(libraryId: String): List<BookSummary> = loadBooksResult
     override suspend fun searchBooks(query: String): List<BookSummary> {
         searchQueries += query

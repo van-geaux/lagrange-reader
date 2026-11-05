@@ -52,18 +52,6 @@ class SmartScopeTest {
         assertEquals(false, page.books.single().isLocalOnly)
     }
 
-    @Test fun scopedCacheKeysDoNotCollide() {
-        assertNotEquals(catalogScopePageKey(12, "all", 0), catalogScopePageKey(13, "all", 0))
-        assertNotEquals(catalogScopePageKey(12, "all", 0), catalogScopePageKey(12, "query", 0))
-    }
-
-    @Test fun defaultsToFirstScopeOnlyWhenNothingIsSelected() {
-        val scopes = listOf(SmartScope(12, "First"), SmartScope(13, "Second"))
-        assertEquals(scopes.first(), selectDefaultSmartScope(scopes, null))
-        assertEquals(scopes.last(), selectDefaultSmartScope(scopes, scopes.last()))
-        assertEquals(null, selectDefaultSmartScope(emptyList(), null))
-    }
-
     @Test fun scopedBookCacheKeysSeparateScopesAndPages() {
         assertNotEquals(smartScopeBooksPageKey(12, 0), smartScopeBooksPageKey(13, 0))
         assertNotEquals(smartScopeBooksPageKey(12, 0), smartScopeBooksPageKey(12, 1))
@@ -77,19 +65,36 @@ class SmartScopeTest {
         assertEquals(listOf("One refreshed", "Two"), books.map { it.title })
     }
 
-    @Test fun smartScopeEntryReopensSelectedCatalogInsteadOfPicker() {
-        assertEquals(BrowserDestination.SERIES, smartScopeEntryDestination(SmartScope(12, "Selected")))
-        assertEquals(BrowserDestination.SMART_SCOPES, smartScopeEntryDestination(null))
-        assertEquals(BrowserDestination.SERIES, smartScopePickerBackDestination())
-        assertEquals(null, smartScopeSelectionAfterOpeningUnscopedSeries())
+    @Test fun cachedSmartScopeBooksPageReturnsTheRequestedSavedPage() {
+        val cachedPage = cachedSmartScopeBooksPage(
+            scopeId = 12,
+            requestedPage = 1,
+            cachedPayloads = listOf(
+                """{"items":[{"id":"book-1","title":"One"}],"total":2,"page":0,"size":1}""",
+                """{"items":[{"id":"book-2","title":"Two"}],"total":2,"page":1,"size":1}"""
+            ),
+            downloads = emptyMap(),
+            serverBase = "https://books.example"
+        )
+
+        assertEquals(listOf("book-2"), cachedPage?.items?.map { it.id })
+        assertEquals(1, cachedPage?.page)
+        assertEquals(2, cachedPage?.total)
+        assertEquals(true, cachedPage?.isComplete)
     }
 
-    @Test fun smartScopeCatalogStateChangesWhenScopeChanges() {
-        assertEquals(null, smartScopeCatalogStateKey(null))
-        assertEquals(12L, smartScopeCatalogStateKey(SmartScope(12, "First")))
-        assertNotEquals(
-            smartScopeCatalogStateKey(SmartScope(12, "First")),
-            smartScopeCatalogStateKey(SmartScope(13, "Second"))
+    @Test fun cachedSmartScopeBooksPageDoesNotPretendAnUncachedPageIsAvailable() {
+        assertEquals(
+            null,
+            cachedSmartScopeBooksPage(
+                scopeId = 12,
+                requestedPage = 1,
+                cachedPayloads = listOf(
+                    """{"items":[{"id":"book-1","title":"One"}],"total":2,"page":0,"size":1}"""
+                ),
+                downloads = emptyMap(),
+                serverBase = "https://books.example"
+            )
         )
     }
 

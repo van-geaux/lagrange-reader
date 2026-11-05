@@ -7,6 +7,39 @@ import org.junit.Test
 
 class BookOrbitPayloadParserTest {
     @Test
+    fun `parseCollections keeps book counts and optional descriptions`() {
+        val collections = BookOrbitPayloadParser.parseCollections(
+            """{"data":{"collections":[
+              {"id":"favorites","name":"Favorites","booksCount":7,"description":"Picked books"},
+              {"collectionId":"recent","title":"Recent","totalBooks":2}
+            ]}}"""
+        )
+
+        assertEquals(2, collections.size)
+        assertEquals("Favorites", collections[0].name)
+        assertEquals(7, collections[0].bookCount)
+        assertEquals("Picked books", collections[0].description)
+        assertEquals(2, collections[1].bookCount)
+        assertNull(collections[1].description)
+    }
+
+    @Test
+    fun `parseSmartScopes keeps book counts and descriptions`() {
+        val scopes = BookOrbitPayloadParser.parseSmartScopes(
+            """{"items":[
+              {"id":42,"name":"Unread","totalBooks":11,"description":"Not finished"},
+              {"id":43,"name":"Recent"}
+            ]}"""
+        )
+
+        assertEquals(2, scopes.size)
+        assertEquals(11, scopes[0].bookCount)
+        assertEquals("Not finished", scopes[0].description)
+        assertNull(scopes[1].bookCount)
+        assertNull(scopes[1].description)
+    }
+
+    @Test
     fun `synced BookOrbit up next setting is authoritative`() {
         val preferences = BookOrbitPayloadParser.parseHomeShelfPreferences(
             """

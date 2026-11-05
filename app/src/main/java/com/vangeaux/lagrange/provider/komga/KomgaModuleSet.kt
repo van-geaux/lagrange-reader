@@ -4,6 +4,12 @@ import com.vangeaux.lagrange.*
 import com.vangeaux.lagrange.core.*
 
 internal class KomgaModuleSet(private val repository: KomgaRepository) {
+    val collections: CollectionCatalogModule = object : CollectionCatalogModule {
+        override suspend fun loadCollections() = repository.loadCollections()
+        override suspend fun loadBooksPage(collectionId: String, page: Int) =
+            repository.loadCollectionBooksPage(collectionId, page)
+    }
+
     val downloads: DownloadModule = object : DownloadModule {
         override val handlesDownloadsDirectly: Boolean = false
         override suspend fun downloadBook(
@@ -122,8 +128,6 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
 
     val smartScopes: SmartScopeModule = object : SmartScopeModule {
         override suspend fun loadSmartScopes(): List<SmartScope> = unavailableSmartScopes()
-        override suspend fun loadSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage = unavailableSmartScopes()
-        override suspend fun loadSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? = unavailableSmartScopes()
     }
 
     val authors: AuthorModule = object : AuthorModule {
@@ -169,6 +173,7 @@ internal class KomgaModuleSet(private val repository: KomgaRepository) {
         achievements = false,
         statistics = false,
         smartScopes = false,
+        collections = true,
         authors = false,
         userRating = false,
         extendedReadingStatuses = false,

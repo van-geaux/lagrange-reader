@@ -62,8 +62,12 @@ interface HomeShelfModule {
 
 interface SmartScopeModule {
     suspend fun loadSmartScopes(): List<SmartScope>
-    suspend fun loadSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage
-    suspend fun loadSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo?
+    suspend fun loadBooksPage(scopeId: Long, page: Int): LibraryBooksPage = LibraryBooksPage(page = page)
+}
+
+interface CollectionCatalogModule {
+    suspend fun loadCollections(): List<BookCollection>
+    suspend fun loadBooksPage(collectionId: String, page: Int): LibraryBooksPage
 }
 
 interface AuthorModule {
@@ -184,6 +188,7 @@ data class ProviderFeatureAvailability(
     val achievements: Boolean = true,
     val statistics: Boolean = true,
     val smartScopes: Boolean = true,
+    val collections: Boolean = true,
     val authors: Boolean = true,
     val userRating: Boolean = true,
     val extendedReadingStatuses: Boolean = true,

@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import android.net.Uri
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.util.Log
@@ -421,8 +422,11 @@ interface BookOrbitDataSource {
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
         loadSeriesCatalog(filter.query, page)
     suspend fun loadSmartScopes(): List<SmartScope> = emptyList()
-    suspend fun loadSmartScopeSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
-    suspend fun loadSmartScopeSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? = null
+    suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
+        LibraryBooksPage(page = page)
+    suspend fun loadCollections(): List<BookCollection> = emptyList()
+    suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        LibraryBooksPage(page = page)
     suspend fun loadAuthorsCatalog(query: String? = null, page: Int = 0): AuthorCatalogPage = AuthorCatalogPage()
     suspend fun loadAuthorBooks(authorId: String, page: Int = 0): AuthorBooksPage? = null
     suspend fun loadAnnotations(
@@ -1561,69 +1565,91 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
     }
 
-    override suspend fun loadSmartScopeSeriesCatalog(scopeId: Long, filter: SeriesCatalogFilter, page: Int): SeriesCatalogPage = withContext(Dispatchers.IO) {
+    override suspend fun loadCollections(): List<BookCollection> = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
-        val serverBase = serverBase()
-        try {
-            val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-            val books = loadCompleteSeriesPages { currentPage ->
-                val payload = request("/api/v1/smart-scopes/$scopeId/books?page=$currentPage&size=100", "GET", null)
-                catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, currentPage, payload)
-                BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
-            }.flatMap { it.books }
-            val resultItems = filterAndSortSeriesCatalog(aggregateBooksToSeriesCatalog(books).items, filter)
-            val result = SeriesCatalogPage(items = resultItems, total = resultItems.size, page = 0, size = resultItems.size)
-            val payload = JSONObject().put("items", JSONArray(result.items.map { JSONObject().put("id", it.id).put("name", it.name).put("bookCount", it.bookCount).put("readCount", it.readCount) })).toString()
-            catalogSnapshotStore.saveScopedSeries(serverUrl, scopeId, filter.toString(), page, payload)
-            result
-        } catch (error: Throwable) {
-            if (error is AuthenticationRequiredException) throw error
-            loadCachedSmartScopeBooks(serverUrl, scopeId, serverBase)?.let { books ->
-                val resultItems = filterAndSortSeriesCatalog(aggregateBooksToSeriesCatalog(books).items, filter)
-                return@withContext SeriesCatalogPage(items = resultItems, total = resultItems.size, page = 0, size = resultItems.size)
+        val collections = try {
+            BookOrbitPayloadParser.parseCollections(
+                request("/api/v1/collections", "GET", null)
+            )
+        } catch (error: Exception) {
+            if (error is CancellationException || error is AuthenticationRequiredException) throw error
+            try {
+                browserSnapshotStore.readCollections(serverUrl)?.let { return@withContext it }
+            } catch (cacheError: Exception) {
+                if (cacheError is CancellationException) throw cacheError
+                error.addSuppressed(cacheError)
             }
-            catalogSnapshotStore.readScopedSeries(serverUrl, scopeId, filter.toString(), page)?.let { cached -> return@withContext BookOrbitPayloadParser.parseSeriesCatalogPage(cached, serverBase) }
             throw error
         }
+        browserSnapshotStore.saveCollections(serverUrl, collections)
+        collections
     }
 
-    override suspend fun loadSmartScopeSeriesDetail(scopeId: Long, seriesId: String): SeriesDetailInfo? = withContext(Dispatchers.IO) {
-        val serverUrl = getServerUrl().orEmpty()
-        val serverBase = serverBase()
-        val books = try {
+    override suspend fun loadCollectionBooksPage(collectionId: String, page: Int): LibraryBooksPage =
+        withContext(Dispatchers.IO) {
+            val serverUrl = getServerUrl().orEmpty()
             val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-            loadCompleteSeriesPages { currentPage ->
-                val payload = request("/api/v1/smart-scopes/$scopeId/books?page=$currentPage&size=100", "GET", null)
-                catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, currentPage, payload)
-                BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
-            }.flatMap { it.books }
-        } catch (error: Throwable) {
-            if (error is AuthenticationRequiredException) throw error
-            loadCachedSmartScopeBooks(serverUrl, scopeId, serverBase) ?: throw error
-        }
-        val selected = books.filter { (it.seriesId ?: it.seriesName) == seriesId }
-            .sortedWith(compareBy<BookSummary> { it.seriesIndex ?: Double.MAX_VALUE }.thenBy { it.title })
-        if (selected.isEmpty()) return@withContext null
-        SeriesDetailInfo(
-            id = seriesId,
-            name = selected.firstOrNull()?.seriesName ?: "Series",
-            bookCount = selected.size,
-            readCount = selected.count { it.isRead || (it.progressPercent ?: 0f) >= COMPLETED_PROGRESS_PERCENT },
-            authors = selected.mapNotNull { it.author }.distinct(),
-            books = selected
-        )
-    }
-
-    private suspend fun loadCachedSmartScopeBooks(serverUrl: String, scopeId: Long, serverBase: String): List<BookSummary>? {
-        val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
-        val pages = catalogSnapshotStore.readScopedBookPages(serverUrl, scopeId)
-        if (pages.isEmpty()) return null
-        return mergeSmartScopeBookPages(
-            pages.map { payload ->
-                BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase).books
+            val result = try {
+                val payload = request(
+                    "/api/v1/collections/${Uri.encode(collectionId)}/books?page=$page&size=100",
+                    "GET",
+                    null
+                )
+                val parsed = BookOrbitPayloadParser.parseLibraryBooksPage("", payload, downloads, serverUrl)
+                parsed.copy(
+                    isComplete = parsed.total?.let {
+                        (page + 1) * (parsed.size ?: parsed.items.size) >= it
+                    } ?: (parsed.items.size < (parsed.size ?: 100))
+                )
+            } catch (error: Exception) {
+                if (error is CancellationException || error is AuthenticationRequiredException) throw error
+                try {
+                    browserSnapshotStore.readCollectionBooksPage(serverUrl, collectionId, page)
+                        ?.let { return@withContext it.copy(items = it.items.withCurrentDownloads(downloads)) }
+                } catch (cacheError: Exception) {
+                    if (cacheError is CancellationException) throw cacheError
+                    error.addSuppressed(cacheError)
+                }
+                throw error
             }
-        ).takeIf { it.isNotEmpty() }
-    }
+            browserSnapshotStore.saveCollectionBooksPage(serverUrl, collectionId, page, result)
+            result
+        }
+
+    override suspend fun loadSmartScopeBooksPage(scopeId: Long, page: Int): LibraryBooksPage =
+        withContext(Dispatchers.IO) {
+            val serverUrl = getServerUrl().orEmpty()
+            val serverBase = serverBase()
+            val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
+            try {
+                val payload = request(
+                    "/api/v1/smart-scopes/$scopeId/books?page=$page&size=100",
+                    "GET",
+                    null
+                )
+                val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
+                catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, page, payload)
+                LibraryBooksPage(
+                    items = parsed.books,
+                    total = parsed.total,
+                    page = parsed.page ?: page,
+                    size = parsed.size,
+                    isComplete = parsed.total?.let { (page + 1) * (parsed.size ?: parsed.books.size) >= it }
+                        ?: (parsed.books.size < (parsed.size ?: 100))
+                )
+            } catch (error: Exception) {
+                if (error is CancellationException || error is AuthenticationRequiredException) throw error
+                try {
+                    val cached = catalogSnapshotStore.readScopedBookPages(serverUrl, scopeId)
+                    cachedSmartScopeBooksPage(scopeId, page, cached, downloads, serverBase)
+                        ?.let { return@withContext it }
+                } catch (cacheError: Exception) {
+                    if (cacheError is CancellationException) throw cacheError
+                    error.addSuppressed(cacheError)
+                }
+                throw error
+            }
+        }
 
     override suspend fun loadAuthorsCatalog(query: String?, page: Int): AuthorCatalogPage = withContext(Dispatchers.IO) {
         val serverUrl = getServerUrl().orEmpty()
@@ -4289,7 +4315,52 @@ internal object BookOrbitPayloadParser {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
                 val id = item.numberValue("id", "scopeId", "_id")?.toLong() ?: continue
-                add(SmartScope(id, item.stringValue("name", "title", "label") ?: "Smart scope $id"))
+                add(
+                    SmartScope(
+                        id = id,
+                        name = item.stringValue("name", "title", "label") ?: "Smart scope $id",
+                        bookCount = item.numberValue("bookCount", "booksCount", "totalBooks", "total")
+                            ?.toInt()?.takeIf { it >= 0 },
+                        description = item.stringValue("description", "summary")
+                    )
+                )
+            }
+        }
+    }
+
+    fun parseCollections(payload: String): List<BookCollection> {
+        val array = runCatching {
+            when (val root = JSONTokener(payload).nextValue()) {
+                is JSONArray -> root
+                is JSONObject -> {
+                    val data = root.optJSONObject("data")
+                    root.optJSONArray("data")
+                        ?: root.optJSONArray("collections")
+                        ?: root.optJSONArray("items")
+                        ?: root.optJSONArray("results")
+                        ?: data?.optJSONArray("collections")
+                        ?: data?.optJSONArray("items")
+                        ?: data?.optJSONArray("results")
+                        ?: JSONArray()
+                }
+                else -> JSONArray()
+            }
+        }.getOrElse {
+            throw UserFacingException("The server returned malformed data while trying to load collections.")
+        }
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.stringValue("id", "collectionId", "_id") ?: continue
+                add(
+                    BookCollection(
+                        id = id,
+                        name = item.stringValue("name", "title", "label") ?: "Collection $id",
+                        bookCount = item.numberValue("bookCount", "booksCount", "totalBooks", "total")
+                            ?.toInt()?.takeIf { it >= 0 },
+                        description = item.stringValue("description", "summary")
+                    )
+                )
             }
         }
     }
@@ -4628,7 +4699,7 @@ internal object BookOrbitPayloadParser {
     ): LibraryBooksPage {
         val root = extractObject(payload, "load books")
         return LibraryBooksPage(
-            items = parseBooks(libraryId, payload, downloads, serverBase),
+            items = parseBooks(libraryId, root.toString(), downloads, serverBase),
             total = root.numberValue("total")?.toInt()?.takeIf { it >= 0 },
             seriesTotal = root.numberValue("seriesTotal", "totalSeries", "seriesCount")?.toInt()?.takeIf { it >= 0 },
             page = root.numberValue("page")?.toInt(),

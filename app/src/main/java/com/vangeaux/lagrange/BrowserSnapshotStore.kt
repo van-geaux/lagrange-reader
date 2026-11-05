@@ -7,18 +7,27 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-class BrowserSnapshotStore(context: Context) {
+class BrowserSnapshotStore private constructor(
+    private val filesDir: File,
+    private val profileId: () -> String?
+) {
     private val mutex = Mutex()
-    private val appContext = context.applicationContext
+
+    constructor(context: Context) : this(
+        context.applicationContext.filesDir,
+        { ServerProfileStore(context.applicationContext).activeId() }
+    )
+
+    internal constructor(filesDir: File, profileId: String? = null) : this(filesDir, { profileId })
 
     private fun snapshotFile(): File {
-        val profileId = ServerProfileStore(appContext).activeId()
-        return if (profileId == null || !profileId.startsWith("profile-")) {
-            File(appContext.filesDir, "browser_snapshot.json")
+        val activeProfileId = profileId()
+        return if (activeProfileId == null || !activeProfileId.startsWith("profile-")) {
+            File(filesDir, "browser_snapshot.json")
         } else {
             val safeId = java.util.Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(profileId.toByteArray(Charsets.UTF_8))
-            File(appContext.filesDir, "browser_snapshot_$safeId.json")
+                .encodeToString(activeProfileId.toByteArray(Charsets.UTF_8))
+            File(filesDir, "browser_snapshot_$safeId.json")
         }
     }
 
@@ -33,7 +42,10 @@ class BrowserSnapshotStore(context: Context) {
                 serverUrl = serverUrl,
                 selectedLibraryId = selectedLibraryId,
                 libraries = libraries,
-                booksByLibraryId = current?.booksByLibraryId.orEmpty()
+                booksByLibraryId = current?.booksByLibraryId.orEmpty(),
+                collections = current?.collections.orEmpty(),
+                collectionBooksPages = current?.collectionBooksPages.orEmpty(),
+                hasCollectionSnapshot = current?.hasCollectionSnapshot ?: false
             )
         )
     }
@@ -52,7 +64,10 @@ class BrowserSnapshotStore(context: Context) {
                 serverUrl = serverUrl,
                 selectedLibraryId = selectedLibraryId,
                 libraries = current?.libraries.orEmpty(),
-                booksByLibraryId = nextBooks
+                booksByLibraryId = nextBooks,
+                collections = current?.collections.orEmpty(),
+                collectionBooksPages = current?.collectionBooksPages.orEmpty(),
+                hasCollectionSnapshot = current?.hasCollectionSnapshot ?: false
             )
         )
     }
@@ -71,9 +86,67 @@ class BrowserSnapshotStore(context: Context) {
                 serverUrl = serverUrl,
                 selectedLibraryId = selectedLibraryId,
                 libraries = current?.libraries.orEmpty(),
-                booksByLibraryId = nextBooks
+                booksByLibraryId = nextBooks,
+                collections = current?.collections.orEmpty(),
+                collectionBooksPages = current?.collectionBooksPages.orEmpty(),
+                hasCollectionSnapshot = current?.hasCollectionSnapshot ?: false
             )
         )
+    }
+
+    suspend fun saveCollections(serverUrl: String, collections: List<BookCollection>) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl }
+        writeUnlocked(
+            BrowserSnapshot(
+                serverUrl = serverUrl,
+                selectedLibraryId = current?.selectedLibraryId,
+                libraries = current?.libraries.orEmpty(),
+                booksByLibraryId = current?.booksByLibraryId.orEmpty(),
+                collections = collections,
+                collectionBooksPages = current?.collectionBooksPages.orEmpty(),
+                hasCollectionSnapshot = true
+            )
+        )
+    }
+
+    suspend fun readCollections(serverUrl: String): List<BookCollection>? = mutex.withLock {
+        readUnlocked()?.takeIf { it.serverUrl == serverUrl && it.hasCollectionSnapshot }?.collections
+    }
+
+    suspend fun saveCollectionBooksPage(
+        serverUrl: String,
+        collectionId: String,
+        page: Int,
+        booksPage: LibraryBooksPage
+    ) = mutex.withLock {
+        val current = readUnlocked()?.takeIf { it.serverUrl == serverUrl }
+        val pagesByCollection = current?.collectionBooksPages.orEmpty().toMutableMap()
+        val pages = pagesByCollection[collectionId].orEmpty().toMutableMap()
+        pages[page.coerceAtLeast(0)] = booksPage
+        pagesByCollection[collectionId] = pages
+        writeUnlocked(
+            BrowserSnapshot(
+                serverUrl = serverUrl,
+                selectedLibraryId = current?.selectedLibraryId,
+                libraries = current?.libraries.orEmpty(),
+                booksByLibraryId = current?.booksByLibraryId.orEmpty(),
+                collections = current?.collections.orEmpty(),
+                collectionBooksPages = pagesByCollection,
+                hasCollectionSnapshot = current?.hasCollectionSnapshot ?: false
+            )
+        )
+    }
+
+    suspend fun readCollectionBooksPage(
+        serverUrl: String,
+        collectionId: String,
+        page: Int
+    ): LibraryBooksPage? = mutex.withLock {
+        readUnlocked()
+            ?.takeIf { it.serverUrl == serverUrl }
+            ?.collectionBooksPages
+            ?.get(collectionId)
+            ?.get(page.coerceAtLeast(0))
     }
 
     suspend fun read(serverUrl: String): BrowserSnapshot? = mutex.withLock {
@@ -177,7 +250,10 @@ class BrowserSnapshotStore(context: Context) {
             serverUrl = root.optString("serverUrl"),
             selectedLibraryId = root.optString("selectedLibraryId").takeIf { it.isNotBlank() },
             libraries = libraries,
-            booksByLibraryId = booksByLibraryId
+            booksByLibraryId = booksByLibraryId,
+            collections = root.optJSONArray("collections").toCollections(),
+            collectionBooksPages = root.optJSONObject("collectionBooksPages").toCollectionBooksPages(),
+            hasCollectionSnapshot = root.has("collections")
         )
     }
 
@@ -202,35 +278,52 @@ class BrowserSnapshotStore(context: Context) {
                 snapshot.booksByLibraryId.forEach { (libraryId, books) ->
                     put(libraryId, JSONArray().apply {
                         books.forEach { book ->
+                            put(book.toBookCacheJson())
+                        }
+                    })
+                }
+            })
+            if (snapshot.hasCollectionSnapshot || snapshot.collections.isNotEmpty()) {
+                put("collections", JSONArray().apply {
+                    snapshot.collections.forEach { collection ->
+                        put(
+                            JSONObject().apply {
+                                put("id", collection.id)
+                                put("name", collection.name)
+                                put("bookCount", collection.bookCount)
+                                put("description", collection.description)
+                                put("kind", collection.kind.name)
+                            }
+                        )
+                    }
+                })
+            }
+            put("collectionBooksPages", JSONObject().apply {
+                snapshot.collectionBooksPages.forEach { (collectionId, pages) ->
+                    put(collectionId, JSONObject().apply {
+                        pages.forEach { (pageNumber, booksPage) ->
                             put(
+                                pageNumber.toString(),
                                 JSONObject().apply {
-                                    put("libraryId", book.libraryId)
-                                    put("id", book.id)
-                                    put("fileId", book.fileId)
-                                    put("title", book.title)
-                                    put("author", book.author)
-                                    put("format", book.format)
-                                    put("availableFormats", JSONArray(book.availableFormats))
-                                    put("genres", JSONArray(book.genres))
-                                    put("mediaKind", book.mediaKind.name)
-                                    put("streamUrl", book.streamUrl)
-                                    put("downloadUrl", book.downloadUrl)
-                                    put("coverUrl", book.coverUrl)
-                                    put("coverAspectRatio", book.coverAspectRatio.wireValue)
-                                    put("localPath", book.localPath)
-                                    put("progressLabel", book.progressLabel)
-                                    put("progressPercent", normalizeStoredProgressPercent(book.progressPercent))
-                                    put("progressPositionMs", book.progressPositionMs)
-                                    put("progressPageIndex", book.progressPageIndex)
-                                    put("seriesId", book.seriesId)
-                                    put("seriesName", book.seriesName)
-                                    put("seriesIndex", book.seriesIndex)
-                                    put("readStatus", book.readStatus?.wireValue)
-                                    put("isRead", book.isRead)
-                                    put("addedAtMillis", book.addedAtMillis)
-                                    put("updatedAtMillis", book.updatedAtMillis)
-                                    put("lastReadAtMillis", book.lastReadAtMillis)
-                                    put("isServerMissing", book.isServerMissing)
+                                    put("total", booksPage.total)
+                                    put("seriesTotal", booksPage.seriesTotal)
+                                    put("page", booksPage.page)
+                                    put("size", booksPage.size)
+                                    put("isComplete", booksPage.isComplete)
+                                    put("refreshedAtMillis", booksPage.refreshedAtMillis)
+                                    put("items", JSONArray().apply {
+                                        booksPage.items.forEach { put(it.toBookCacheJson()) }
+                                    })
+                                    put("jumpBuckets", JSONArray().apply {
+                                        booksPage.jumpBuckets.forEach { bucket ->
+                                            put(
+                                                JSONObject()
+                                                    .put("key", bucket.key)
+                                                    .put("label", bucket.label)
+                                                    .put("index", bucket.index)
+                                            )
+                                        }
+                                    })
                                 }
                             )
                         }
@@ -264,37 +357,71 @@ class BrowserSnapshotStore(context: Context) {
         return buildList {
             for (index in 0 until length()) {
                 val item = optJSONObject(index) ?: continue
+                val book = item.toBookCacheSummary()
+                add(if (book.libraryId.isBlank()) book.copy(libraryId = defaultLibraryId) else book)
+            }
+        }
+    }
+
+    private fun JSONArray?.toCollections(): List<BookCollection> {
+        this ?: return emptyList()
+        return buildList {
+            for (index in 0 until length()) {
+                val item = optJSONObject(index) ?: continue
+                val id = item.optString("id").takeIf { it.isNotBlank() } ?: continue
                 add(
-                    BookSummary(
-                        libraryId = item.optString("libraryId").ifBlank { defaultLibraryId },
-                        id = item.optString("id"),
-                        fileId = item.optString("fileId").takeIf { it.isNotBlank() },
-                        title = item.optString("title"),
-                        author = item.optString("author").takeIf { it.isNotBlank() },
-                        format = item.optString("format").takeIf { it.isNotBlank() },
-                        availableFormats = item.optJSONArray("availableFormats").toStringList(),
-                        genres = item.optJSONArray("genres").toStringList(),
-                        mediaKind = runCatching {
-                            MediaKind.valueOf(item.optString("mediaKind"))
-                        }.getOrDefault(MediaKind.UNKNOWN),
-                        streamUrl = item.optString("streamUrl").takeIf { it.isNotBlank() },
-                        downloadUrl = item.optString("downloadUrl").takeIf { it.isNotBlank() },
-                        coverUrl = item.optString("coverUrl").takeIf { it.isNotBlank() },
-                        coverAspectRatio = CoverAspectRatio.fromWireValue(item.optString("coverAspectRatio")),
-                        localPath = item.optString("localPath").takeIf { it.isNotBlank() },
-                        progressLabel = item.optString("progressLabel").takeIf { it.isNotBlank() },
-                        progressPercent = normalizeStoredProgressPercent(item.optFloat("progressPercent")),
-                        progressPositionMs = item.optLongOrNull("progressPositionMs"),
-                        progressPageIndex = item.optIntOrNull("progressPageIndex"),
-                        seriesId = item.optString("seriesId").takeIf { it.isNotBlank() },
-                        seriesName = item.optString("seriesName").takeIf { it.isNotBlank() },
-                        seriesIndex = item.optDoubleOrNull("seriesIndex"),
-                        readStatus = BookReadStatus.fromWireValue(item.optString("readStatus")),
-                        isRead = item.optBoolean("isRead"),
-                        addedAtMillis = item.optLongOrNull("addedAtMillis"),
-                        updatedAtMillis = item.optLongOrNull("updatedAtMillis"),
-                        lastReadAtMillis = item.optLongOrNull("lastReadAtMillis"),
-                        isServerMissing = item.optBoolean("isServerMissing")
+                    BookCollection(
+                        id = id,
+                        name = item.optString("name"),
+                        bookCount = item.optIntOrNull("bookCount"),
+                        description = item.optString("description").takeIf { it.isNotBlank() },
+                        kind = runCatching { BookCollectionKind.valueOf(item.optString("kind")) }
+                            .getOrDefault(BookCollectionKind.COLLECTION)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun JSONObject?.toCollectionBooksPages(): Map<String, Map<Int, LibraryBooksPage>> {
+        this ?: return emptyMap()
+        return buildMap {
+            keys().forEach collectionLoop@{ collectionId ->
+                val pageObject = optJSONObject(collectionId) ?: return@collectionLoop
+                val pages = buildMap {
+                    pageObject.keys().forEach pageLoop@{ pageKey ->
+                        val pageNumber = pageKey.toIntOrNull() ?: return@pageLoop
+                        val value = pageObject.optJSONObject(pageKey) ?: return@pageLoop
+                        put(
+                            pageNumber,
+                            LibraryBooksPage(
+                                items = value.optJSONArray("items").toBooks(""),
+                                total = value.optIntOrNull("total"),
+                                seriesTotal = value.optIntOrNull("seriesTotal"),
+                                page = value.optIntOrNull("page"),
+                                size = value.optIntOrNull("size"),
+                                isComplete = value.optBoolean("isComplete"),
+                                refreshedAtMillis = value.optLongOrNull("refreshedAtMillis"),
+                                jumpBuckets = value.optJSONArray("jumpBuckets").toJumpBuckets()
+                            )
+                        )
+                    }
+                }
+                put(collectionId, pages)
+            }
+        }
+    }
+
+    private fun JSONArray?.toJumpBuckets(): List<LibraryJumpBucket> {
+        this ?: return emptyList()
+        return buildList {
+            for (index in 0 until length()) {
+                val item = optJSONObject(index) ?: continue
+                add(
+                    LibraryJumpBucket(
+                        key = item.optString("key"),
+                        label = item.optString("label"),
+                        index = item.optInt("index")
                     )
                 )
             }
@@ -333,7 +460,10 @@ class BrowserSnapshotStore(context: Context) {
         val serverUrl: String,
         val selectedLibraryId: String?,
         val libraries: List<LibrarySummary>,
-        val booksByLibraryId: Map<String, List<BookSummary>>
+        val booksByLibraryId: Map<String, List<BookSummary>>,
+        val collections: List<BookCollection> = emptyList(),
+        val collectionBooksPages: Map<String, Map<Int, LibraryBooksPage>> = emptyMap(),
+        val hasCollectionSnapshot: Boolean = false
     )
 }
 

@@ -2,6 +2,8 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.provider.komga.komgaDownloadProgress
 import com.vangeaux.lagrange.provider.komga.komgaBookProjection
+import com.vangeaux.lagrange.provider.komga.komgaReadListIdFromCollectionId
+import com.vangeaux.lagrange.provider.komga.readListCollectionId
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -9,6 +11,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KomgaDownloadContractTest {
+    @Test
+    fun `read list identifiers route separately from collection identifiers`() {
+        assertEquals("readlist:abc", readListCollectionId("abc"))
+        assertEquals("abc", komgaReadListIdFromCollectionId("readlist:abc"))
+        assertNull(komgaReadListIdFromCollectionId("abc"))
+    }
+
     @Test
     fun `known response length reports bounded progress`() {
         assertEquals(0.25f, komgaDownloadProgress(25L, 100L))

@@ -20,14 +20,6 @@ class CatalogSnapshotStore(context: Context) {
             ?: filterKey.takeIf { it.isBlank() }?.let { readPage(serverUrl, "series", pageKey(query, page)) }
     }
 
-    suspend fun saveScopedSeries(serverUrl: String, scopeId: Long, filterKey: String, page: Int, payload: String) = mutex.withLock {
-        savePage(serverUrl, "series", catalogScopePageKey(scopeId, filterKey, page), payload)
-    }
-
-    suspend fun readScopedSeries(serverUrl: String, scopeId: Long, filterKey: String, page: Int): String? = mutex.withLock {
-        readPage(serverUrl, "series", catalogScopePageKey(scopeId, filterKey, page))
-    }
-
     suspend fun saveSmartScopes(serverUrl: String, payload: String) = mutex.withLock {
         savePage(serverUrl, "smartScopes", "all", payload)
     }
@@ -104,9 +96,6 @@ class CatalogSnapshotStore(context: Context) {
         const val SNAPSHOT_VERSION = 1
     }
 }
-
-internal fun catalogScopePageKey(scopeId: Long, filterKey: String, page: Int): String =
-    "smart-scope:$scopeId|$filterKey|${page.coerceAtLeast(0)}"
 
 internal fun smartScopeBooksPageKey(scopeId: Long, page: Int): String =
     "smart-scope-books:$scopeId|${page.coerceAtLeast(0)}"

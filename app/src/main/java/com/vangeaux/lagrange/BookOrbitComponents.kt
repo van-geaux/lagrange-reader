@@ -41,7 +41,8 @@ internal fun BookOrbitTopBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     showBrand: Boolean = true,
-    onTitleClick: (() -> Unit)? = null
+    onTitleClick: (() -> Unit)? = null,
+    titleContent: (@Composable () -> Unit)? = null
 ) {
     TopAppBar(
         title = {
@@ -70,6 +71,8 @@ internal fun BookOrbitTopBar(
                         Text(text = title, style = MaterialTheme.typography.titleLarge)
                     }
                 }
+            } else if (titleContent != null) {
+                titleContent()
             } else {
                 if (onTitleClick != null) {
                     Row(

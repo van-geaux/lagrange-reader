@@ -47,7 +47,6 @@ class BrowserOrientationStateTest {
             .filter { destination ->
                 destination !in setOf(
                     BrowserDestination.HOME,
-                    BrowserDestination.SMART_SCOPES,
                     BrowserDestination.CURRENTLY_READING,
                     BrowserDestination.ON_DECK,
                     BrowserDestination.WANT_TO_READ,
@@ -63,7 +62,6 @@ class BrowserOrientationStateTest {
             }
 
         assertNull(browserRootBackDestination(BrowserDestination.HOME))
-        assertNull(browserRootBackDestination(BrowserDestination.SMART_SCOPES))
         assertNull(browserRootBackDestination(BrowserDestination.RECENTLY_ADDED_BOOKS))
     }
 

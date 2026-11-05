@@ -16,6 +16,9 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
   - loads series chapters from `GET /api/Series/series-detail`;
   - projects chapters into the shared book catalog model;
   - preserves series identity, chapter identity, volume identity during provider requests, file metadata, formats, and page progress.
+- `CollectionCatalogModule`
+  - lists Kavita collections and a synthetic `Want To Read` entry;
+  - resolves collection series and Want To Read series into shared book pages.
 - `KavitaSeriesCatalogModule`
   - groups projected chapter books by Kavita series ID;
   - applies library, query, author, genre, completion, and sort filters through the shared series projection helpers;
@@ -49,7 +52,7 @@ The Kavita adapter uses provider-specific modules under `provider/kavita/`. `Kav
 
 ## Unsupported capabilities
 
-Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints. Chapter downloads, Local books, browser snapshots, storage reporting, offline-cache operations, background cache warming, and EPUB PToC text bookmarks are implemented. The user confirmed an on-device Kavita bookmark list/add/open/delete flow, including page and structural mapping, on 2026-11-03; the build, server, device, and evidence location were not supplied. Unmappable-location rejection and Preview/Komga UI gating still require device confirmation. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, and server reading-session history remain unavailable or unsupported as described by their modules.
+Kavita EPUB reader routing now downloads the EPUB through the authenticated chapter download endpoint into app-private storage before opening it with the shared local EPUB reader. Comic and PDF chapters continue to use Kavita reader endpoints.  Collections and the synthetic `Want To Read` entry are exposed through `CollectionCatalogModule`. Chapter downloads, Local books, browser snapshots, storage reporting, offline-cache operations, background cache warming, and EPUB PToC text bookmarks are implemented. The user confirmed an on-device Kavita bookmark list/add/open/delete flow, including page and structural mapping, on 2026-11-03; the build, server, device, and evidence location were not supplied. Unmappable-location rejection and Preview/Komga UI gating still require device confirmation. Audiobook downloads, authors, annotations, statistics, achievements, Smart Scopes, and server reading-session history remain unavailable or unsupported as described by their modules.
 
 ## Composition
 
