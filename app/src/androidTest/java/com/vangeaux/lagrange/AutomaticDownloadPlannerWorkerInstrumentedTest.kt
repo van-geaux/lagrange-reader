@@ -37,6 +37,12 @@ class AutomaticDownloadPlannerWorkerInstrumentedTest {
         val server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (
+                        request.path == "/api/v1/auth/me" &&
+                        request.getHeader("Authorization") != "Bearer planner-test-token"
+                    ) {
+                        return MockResponse().setResponseCode(401)
+                    }
                     val body = when {
                         request.path == "/api/v1/auth/me" -> """{"id":"planner-user"}"""
                         request.path == "/api/v1/libraries" ->
@@ -112,8 +118,9 @@ class AutomaticDownloadPlannerWorkerInstrumentedTest {
                 )
             )
             repository.setServerUrl(serverUrl)
-            ProfileSessionStore(context).write(profileId, "planner-test-token")
+            ProfileSessionStore(context).write(profileId, "stale-planner-test-token")
             assertTrue(repository.restoreCurrentProfileSession())
+            ProfileSessionStore(context).write(profileId, "planner-test-token")
             AuthenticatedAccountScopeStore(context).writeAuthoritative(
                 profileId = profileId,
                 providerId = PROVIDER_BOOKORBIT,

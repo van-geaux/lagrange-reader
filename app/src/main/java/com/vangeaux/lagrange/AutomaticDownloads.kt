@@ -26,6 +26,7 @@ import com.vangeaux.lagrange.provider.resolveProviderBookDetailModule
 import com.vangeaux.lagrange.provider.resolveProviderLibraryModule
 import com.vangeaux.lagrange.provider.resolveProviderLoginModule
 import com.vangeaux.lagrange.provider.resolveProviderRepository
+import com.vangeaux.lagrange.provider.resolveProviderSessionModule
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,33 @@ internal const val AUTOMATIC_DOWNLOAD_DEFAULT_RESERVE_BYTES = 2L * 1024L * 1024L
 internal const val AUTOMATIC_DOWNLOAD_DEFAULT_MAXIMUM_BYTES = 10L * 1024L * 1024L * 1024L
 internal const val AUTOMATIC_DOWNLOAD_MAX_LIMIT_BYTES = 2L * 1024L * 1024L * 1024L * 1024L
 internal const val UNKNOWN_DOWNLOAD_RESERVATION_WINDOW_BYTES = 32L * 1024L * 1024L
+
+internal enum class AutomaticDownloadSessionDisposition {
+    CONTINUE,
+    SIGN_IN_REQUIRED,
+    RETRY
+}
+
+internal fun automaticDownloadSessionDisposition(
+    state: SessionState
+): AutomaticDownloadSessionDisposition = when (state) {
+    SessionState.Authenticated -> AutomaticDownloadSessionDisposition.CONTINUE
+    SessionState.Unauthenticated -> AutomaticDownloadSessionDisposition.SIGN_IN_REQUIRED
+    SessionState.Unavailable -> AutomaticDownloadSessionDisposition.RETRY
+}
+
+private suspend fun resolveAutomaticDownloadSession(
+    repository: BookOrbitDataSource
+): SessionState {
+    val loginModule = resolveProviderLoginModule(repository)
+    val current = loginModule.getSessionState()
+    if (current == SessionState.Authenticated) return current
+
+    val restored = runCatching {
+        resolveProviderSessionModule(repository).restoreCurrentProfileSession()
+    }.getOrDefault(false)
+    return if (restored) loginModule.getSessionState() else current
+}
 
 /**
  * Device-wide limits for managed local book files.  These deliberately live outside the
@@ -397,6 +425,22 @@ internal data class AutomaticDownloadStatus(
     val messageQuantity: Int? = null
 )
 
+internal const val AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE =
+    "An automatic download failed. Continuing with the remaining books."
+
+internal fun automaticDownloadTransferFailedStatus(
+    previous: AutomaticDownloadStatus,
+    nowMillis: Long
+): AutomaticDownloadStatus = previous.copy(
+    state = AutomaticDownloadRunState.RUNNING,
+    failed = previous.failed + 1,
+    lastRunAtMillis = nowMillis,
+    message = AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE,
+    messageRes = R.string.error_auto_download_transfer_failed,
+    messageArgs = emptyList(),
+    messageQuantity = null
+)
+
 /**
  * UI-side localized variant of [message].
  *
@@ -442,6 +486,8 @@ private fun AutomaticDownloadStatus.messageResFromStoredMessage(): Int? = when (
         R.string.error_auto_download_no_storage
     "The automatic-download policy changed before removal completed." ->
         R.string.error_auto_download_policy_changed_removal
+    AUTOMATIC_DOWNLOAD_TRANSFER_FAILED_MESSAGE ->
+        R.string.error_auto_download_transfer_failed
     else -> null
 }
 
@@ -1927,16 +1973,35 @@ class AutomaticDownloadPlannerWorker(
             return Result.success()
         }
         val repository = resolveProviderRepository(applicationContext, serverUrl)
-        if (resolveProviderLoginModule(repository).getSessionState() != SessionState.Authenticated) {
-            statusStore.write(
-                profileId, storageScopeId,
-                AutomaticDownloadStatus(
-                    state = AutomaticDownloadRunState.PAUSED,
-                    message = "Automatic downloads are paused until you sign in again.",
-                    messageRes = R.string.error_auto_download_paused_sign_in
-                )
+        when (
+            automaticDownloadSessionDisposition(
+                resolveAutomaticDownloadSession(repository)
             )
-            return Result.success()
+        ) {
+            AutomaticDownloadSessionDisposition.CONTINUE -> Unit
+            AutomaticDownloadSessionDisposition.SIGN_IN_REQUIRED -> {
+                statusStore.write(
+                    profileId, storageScopeId,
+                    AutomaticDownloadStatus(
+                        state = AutomaticDownloadRunState.PAUSED,
+                        message = "Automatic downloads are paused until you sign in again.", // i18n-ignore: persisted fallback paired with messageRes
+                        messageRes = R.string.error_auto_download_paused_sign_in
+                    )
+                )
+                return Result.success()
+            }
+            AutomaticDownloadSessionDisposition.RETRY -> {
+                statusStore.write(
+                    profileId, storageScopeId,
+                    AutomaticDownloadStatus(
+                        state = AutomaticDownloadRunState.FAILED,
+                        lastRunAtMillis = System.currentTimeMillis(),
+                        message = "The server could not verify the automatic-download session. The app will try again.", // i18n-ignore: persisted fallback paired with messageRes
+                        messageRes = R.string.error_auto_download_session_check_failed
+                    )
+                )
+                return if (runAttemptCount < 4) Result.retry() else Result.failure()
+            }
         }
         // Remove older-generation queue entries before recovery. Pumping first could revive an
         // obsolete charging or network constraint and block all current work for this server.

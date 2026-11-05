@@ -216,6 +216,12 @@ internal const val OUTCOME_FAILED = "failed"
 internal fun isRetryableDownloadHttpCode(code: Int): Boolean =
     code >= 500 || code == 408 || code == 429
 
+internal fun downloadRequiresForegroundService(origin: DownloadOrigin): Boolean =
+    origin == DownloadOrigin.MANUAL
+
+internal fun terminalDownloadContinuesAutomaticScan(origin: DownloadOrigin): Boolean =
+    origin == DownloadOrigin.AUTOMATIC
+
 /**
  * Builds the input [androidx.work.Data] and [OneTimeWorkRequest] for downloading a single book.
  * Kept separate from enqueueing so it can be unit tested without touching a real WorkManager.
@@ -393,7 +399,10 @@ class BookDownloadWorker(
         }
 
         return try {
-            setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
+            val requiresForegroundService = downloadRequiresForegroundService(origin)
+            if (requiresForegroundService) {
+                setForeground(foregroundInfo(applicationContext, title, progressPercent = null))
+            }
 
             val repository = resolveProviderRepository(applicationContext, serverUrl)
             val downloadModule = resolveProviderDownloadModule(repository)
@@ -401,8 +410,13 @@ class BookDownloadWorker(
 
         // The session may have changed servers between enqueue and execution.
         if (!serverUrlsMatch(repository.getServerUrl().orEmpty(), serverUrl)) {
-            finishQueueEntry(serverUrl, fileId, requestId)
-            return Result.failure()
+            return terminalDownloadFailure(
+                origin = origin,
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                outcome = OUTCOME_FAILED
+            )
         }
 
         // Re-check the cellular policy against the *current* network at execution time. A
@@ -416,15 +430,16 @@ class BookDownloadWorker(
                 cellularConsentGranted = inputData.getBoolean(KEY_CELLULAR_CONSENT_GRANTED, false)
             )
         ) {
-            finishQueueEntry(serverUrl, fileId, requestId)
-            return Result.failure(
-                workDataOf(
-                    KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                    KEY_ERROR_MESSAGE to localizedUiMessage(
-                        applicationContext,
-                        R.string.error_download_cellular_policy,
-                        "Cellular download policy requires confirmation on the current network."
-                    )
+            return terminalDownloadFailure(
+                origin = origin,
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                outcome = OUTCOME_POLICY_BLOCKED,
+                message = localizedUiMessage(
+                    applicationContext,
+                    R.string.error_download_cellular_policy,
+                    "Cellular download policy requires confirmation on the current network."
                 )
             )
         }
@@ -437,15 +452,16 @@ class BookDownloadWorker(
                 suppressStorageBlocked(
                     origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
                 )
-                finishQueueEntry(serverUrl, fileId, requestId)
-                return Result.failure(
-                    workDataOf(
-                        KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                        KEY_ERROR_MESSAGE to localizedUiMessage(
-                            applicationContext,
-                            R.string.error_download_file_too_large,
-                            "This file is larger than the maximum local-book storage limit."
-                        )
+                return terminalDownloadFailure(
+                    origin = origin,
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = requestId,
+                    outcome = OUTCOME_POLICY_BLOCKED,
+                    message = localizedUiMessage(
+                        applicationContext,
+                        R.string.error_download_file_too_large,
+                        "This file is larger than the maximum local-book storage limit."
                     )
                 )
             }
@@ -472,16 +488,17 @@ class BookDownloadWorker(
                 suppressStorageBlocked(
                     origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
                 )
-                finishQueueEntry(serverUrl, fileId, requestId)
-                return Result.failure(
-                    workDataOf(
-                        KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                        KEY_ERROR_MESSAGE to (
-                            capacity.message ?: localizedUiMessage(
-                                applicationContext,
-                                R.string.error_storage_limit_generic,
-                                "The storage limit would be exceeded."
-                            )
+                return terminalDownloadFailure(
+                    origin = origin,
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = requestId,
+                    outcome = OUTCOME_POLICY_BLOCKED,
+                    message = (
+                        capacity.message ?: localizedUiMessage(
+                            applicationContext,
+                            R.string.error_storage_limit_generic,
+                            "The storage limit would be exceeded."
                         )
                     )
                 )
@@ -505,7 +522,11 @@ class BookDownloadWorker(
                         launch {
                             val percent = progress?.let { (it * 100f).toInt().coerceIn(0, 100) }
                             setProgress(workDataOf(KEY_PROGRESS to (progress ?: -1f)))
-                            runCatching { setForeground(foregroundInfo(applicationContext, title, percent)) }
+                            if (requiresForegroundService) {
+                                runCatching {
+                                    setForeground(foregroundInfo(applicationContext, title, percent))
+                                }
+                            }
                         }
                     }
                 }
@@ -538,17 +559,18 @@ class BookDownloadWorker(
                             requestId,
                             storageScopeId
                         )
-                        finishQueueEntry(serverUrl, fileId, requestId)
-                        return@coroutineScope Result.failure(
-                            workDataOf(
-                                KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                                KEY_ERROR_MESSAGE to (
-                                    postDownloadCapacity.message
-                                        ?: localizedUiMessage(
-                                            applicationContext,
-                                            R.string.error_download_completed_too_large,
-                                            "The completed file could not fit within the storage limits."
-                                        )
+                        return@coroutineScope terminalDownloadFailure(
+                            origin = origin,
+                            serverUrl = serverUrl,
+                            fileId = fileId,
+                            requestId = requestId,
+                            outcome = OUTCOME_POLICY_BLOCKED,
+                            message = (
+                                postDownloadCapacity.message
+                                    ?: localizedUiMessage(
+                                        applicationContext,
+                                        R.string.error_download_completed_too_large,
+                                        "The completed file could not fit within the storage limits."
                                     )
                             )
                         )
@@ -601,16 +623,13 @@ class BookDownloadWorker(
                 )
                 Result.retry()
             } else {
-                withContext(NonCancellable) {
-                    finishQueueEntry(serverUrl, fileId, requestId)
-                }
-                Result.failure(
-                    workDataOf(
-                        KEY_OUTCOME to OUTCOME_FAILED,
-                        KEY_ERROR_MESSAGE to (
-                            storage.message ?: "The selected folder is unavailable."
-                        )
-                    )
+                terminalDownloadFailure(
+                    origin = origin,
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = requestId,
+                    outcome = OUTCOME_FAILED,
+                    message = storage.message ?: "The selected folder is unavailable."
                 )
             }
         } catch (io: UnknownHostException) {
@@ -621,22 +640,28 @@ class BookDownloadWorker(
             retryOrStopAutomatic(origin, serverUrl, fileId, io.message)
         } catch (http: HttpRequestException) {
             if (http.code == 403) {
-                finishQueueEntry(serverUrl, fileId, requestId)
-                Result.failure(workDataOf(KEY_OUTCOME to OUTCOME_PERMISSION_DENIED))
+                terminalDownloadFailure(
+                    origin = origin,
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = requestId,
+                    outcome = OUTCOME_PERMISSION_DENIED
+                )
             } else if (isRetryableDownloadHttpCode(http.code)) {
                 retryOrStopAutomatic(origin, serverUrl, fileId, http.message)
             } else {
-                finishQueueEntry(serverUrl, fileId, requestId)
-                Result.failure(
-                    workDataOf(
-                        KEY_OUTCOME to OUTCOME_FAILED,
-                        KEY_ERROR_MESSAGE to (
-                            http.message ?: localizedUiMessage(
-                                applicationContext,
-                                R.string.error_download_failed,
-                                "Download failed for $title.",
-                                title
-                            )
+                terminalDownloadFailure(
+                    origin = origin,
+                    serverUrl = serverUrl,
+                    fileId = fileId,
+                    requestId = requestId,
+                    outcome = OUTCOME_FAILED,
+                    message = (
+                        http.message ?: localizedUiMessage(
+                            applicationContext,
+                            R.string.error_download_failed,
+                            "Download failed for $title.",
+                            title
                         )
                     )
                 )
@@ -649,31 +674,78 @@ class BookDownloadWorker(
             suppressStorageBlocked(
                 origin, serverUrl, profileId, storageScopeId, fileId, book.updatedAtMillis
             )
-            finishQueueEntry(serverUrl, fileId, requestId)
-            Result.failure(
-                workDataOf(
-                    KEY_OUTCOME to OUTCOME_POLICY_BLOCKED,
-                    KEY_ERROR_MESSAGE to storage.message
-                )
+            terminalDownloadFailure(
+                origin = origin,
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                outcome = OUTCOME_POLICY_BLOCKED,
+                message = storage.message
             )
         } catch (error: Throwable) {
-            finishQueueEntry(serverUrl, fileId, requestId)
-            Result.failure(
-                workDataOf(
-                    KEY_OUTCOME to OUTCOME_FAILED,
-                    KEY_ERROR_MESSAGE to (
-                        error.message ?: localizedUiMessage(
-                            applicationContext,
-                            R.string.error_download_failed,
-                            "Download failed for $title.",
-                            title
-                        )
+            terminalDownloadFailure(
+                origin = origin,
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                outcome = OUTCOME_FAILED,
+                message = (
+                    error.message ?: localizedUiMessage(
+                        applicationContext,
+                        R.string.error_download_failed,
+                        "Download failed for $title.",
+                        title
                     )
                 )
             )
         } finally {
             clearDownloadNotification(applicationContext, fileId, id.toString())
         }
+    }
+
+    private suspend fun terminalDownloadFailure(
+        origin: DownloadOrigin,
+        serverUrl: String,
+        fileId: String,
+        requestId: String,
+        outcome: String,
+        message: String? = null
+    ): Result {
+        withContext(NonCancellable + Dispatchers.IO) {
+            if (origin == DownloadOrigin.AUTOMATIC) {
+                runCatching { recordAutomaticDownloadFailure(serverUrl) }
+            }
+            finishQueueEntry(
+                serverUrl = serverUrl,
+                fileId = fileId,
+                requestId = requestId,
+                continueAutomatic = terminalDownloadContinuesAutomaticScan(origin)
+            )
+        }
+        return Result.failure(
+            if (message == null) {
+                workDataOf(KEY_OUTCOME to outcome)
+            } else {
+                workDataOf(KEY_OUTCOME to outcome, KEY_ERROR_MESSAGE to message)
+            }
+        )
+    }
+
+    private fun recordAutomaticDownloadFailure(serverUrl: String) {
+        val profileId = inputData.getString(KEY_PROFILE_ID).orEmpty()
+        val storageScopeId = inputData.getString(KEY_STORAGE_SCOPE_ID).orEmpty()
+        val generation = inputData.getLong(KEY_POLICY_GENERATION, -1L)
+        if (profileId.isBlank() || storageScopeId.isBlank() || generation < 0L) return
+        val policy = AutomaticDownloadPolicyStore(applicationContext)
+            .read(profileId, serverUrl, storageScopeId)
+        if (!policy.enabled || policy.generation != generation) return
+        val statusStore = AutomaticDownloadStatusStore(applicationContext)
+        val previous = statusStore.read(profileId, storageScopeId)
+        statusStore.write(
+            profileId,
+            storageScopeId,
+            automaticDownloadTransferFailedStatus(previous, System.currentTimeMillis())
+        )
     }
 
     private suspend fun finishQueueEntry(
@@ -777,22 +849,17 @@ class BookDownloadWorker(
                 storageScopeId = storageScopeId
             )
         }
-        withContext(NonCancellable) {
-            finishQueueEntry(
-                serverUrl,
-                fileId,
-                inputData.getString(KEY_REQUEST_ID).orEmpty()
-            )
-        }
-        return Result.failure(
-            workDataOf(
-                KEY_OUTCOME to OUTCOME_FAILED,
-                KEY_ERROR_MESSAGE to (
-                    message ?: localizedUiMessage(
-                        applicationContext,
-                        R.string.notif_download_attempts_exhausted,
-                        "Download stopped after five attempts."
-                    )
+        return terminalDownloadFailure(
+            origin = origin,
+            serverUrl = serverUrl,
+            fileId = fileId,
+            requestId = inputData.getString(KEY_REQUEST_ID).orEmpty(),
+            outcome = OUTCOME_FAILED,
+            message = (
+                message ?: localizedUiMessage(
+                    applicationContext,
+                    R.string.notif_download_attempts_exhausted,
+                    "Download stopped after five attempts."
                 )
             )
         )
