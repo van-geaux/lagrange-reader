@@ -2885,6 +2885,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             }
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 updateReaderHeaderTopMargin(view, insets)
+                applyReaderPadding()
                 insets
             }
         }
@@ -2967,7 +2968,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                             contentDescription = stringResource(
                                 R.string.epub_dismiss_reader_options_cd
                             ),
-                            onDismiss = ::hideOptions
+                            onDismiss = { hideOptions() }
                         )
                         EpubReaderOptionsBottomSheet(
                             title = if (isPreview) {
@@ -5633,7 +5634,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun showChrome() {
-        hideOptions()
+        hideOptions(recreateForRelayout = false)
         chromeView.visibility = View.VISIBLE
         syncProgressFooter()
     }
@@ -5648,9 +5649,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         optionsView.bringToFront()
     }
 
-    private fun hideOptions() {
+    private fun hideOptions(recreateForRelayout: Boolean = true) {
         optionsView.visibility = View.GONE
-        if (pendingEpubRelayoutAfterOptions && !isFinishing && !isDestroyed) {
+        if (recreateForRelayout && pendingEpubRelayoutAfterOptions && !isFinishing && !isDestroyed) {
             pendingEpubRelayoutAfterOptions = false
             // Readium keeps an index-based offset while its CSS reflows live. Reopen once the
             // sheet is closed so the final typography/layout pagination is applied in one pass.

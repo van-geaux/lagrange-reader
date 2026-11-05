@@ -155,8 +155,7 @@ internal fun epubLayoutChangeRequiresRelayout(
     previous: LibraryReaderPreferences,
     next: LibraryReaderPreferences
 ): Boolean =
-    previous.readingDirection != next.readingDirection ||
-        previous.fontFamily != next.fontFamily ||
+    previous.fontFamily != next.fontFamily ||
         previous.customFont != next.customFont ||
         previous.fontScale != next.fontScale ||
         previous.lineSpacing != next.lineSpacing ||
@@ -164,7 +163,11 @@ internal fun epubLayoutChangeRequiresRelayout(
         previous.paragraphSpacing != next.paragraphSpacing ||
         previous.textAlignment != next.textAlignment ||
         previous.hyphenation != next.hyphenation ||
-        previous.padding != next.padding ||
+        previous.showHeader != next.showHeader ||
+        previous.showPageProgress != next.showPageProgress ||
+        (previous.epubLayoutMode == ReaderLayoutMode.PAGINATED &&
+            next.epubLayoutMode == ReaderLayoutMode.PAGINATED &&
+            previous.padding != next.padding) ||
         previous.epubLayoutMode != next.epubLayoutMode
 
 internal data class ReaderSystemBarsPolicy(

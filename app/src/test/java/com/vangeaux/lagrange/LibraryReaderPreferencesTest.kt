@@ -463,6 +463,17 @@ class LibraryReaderPreferencesTest {
         assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(fontScale = base.fontScale + 0.1f)))
         assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(lineSpacing = 1.5f)))
         assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(padding = base.padding.copy(left = 30f))))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(showHeader = true)))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(showPageProgress = false)))
         assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(epubLayoutMode = ReaderLayoutMode.CONTINUOUS)))
+        assertFalse(
+            epubLayoutChangeRequiresRelayout(
+                base.copy(epubLayoutMode = ReaderLayoutMode.CONTINUOUS),
+                base.copy(
+                    epubLayoutMode = ReaderLayoutMode.CONTINUOUS,
+                    padding = base.padding.copy(left = 30f)
+                )
+            )
+        )
     }
 }
