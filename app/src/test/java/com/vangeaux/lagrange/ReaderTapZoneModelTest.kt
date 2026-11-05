@@ -117,6 +117,36 @@ class ReaderTapZoneModelTest {
     }
 
     @Test
+    fun `horizontal margin exclusion progressively enables inner padding bands`() {
+        fun side(x: Float, exclusionPercent: Int) = readerHorizontalMarginSide(
+            x = x,
+            width = 100f,
+            leftPadding = 20f,
+            rightPadding = 10f,
+            exclusionPercent = exclusionPercent
+        )
+
+        assertEquals(ReaderHorizontalMarginSide.LEFT, side(0f, 0))
+        assertEquals(ReaderHorizontalMarginSide.LEFT, side(19f, 0))
+        assertEquals(ReaderHorizontalMarginSide.LEFT, side(10f, 50))
+        assertEquals(null, side(9f, 50))
+        assertEquals(null, side(0f, 100))
+        assertEquals(null, side(99f, 100))
+        assertEquals(ReaderHorizontalMarginSide.RIGHT, side(92f, 50))
+        assertEquals(null, side(89f, 50))
+        assertEquals(null, side(95f, 50))
+    }
+
+    @Test
+    fun `horizontal margin exclusion values clamp and snap to five percent`() {
+        assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(-1))
+        assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(2))
+        assertEquals(5, normalizedReaderMarginTapZoneExclusionPercent(3))
+        assertEquals(100, normalizedReaderMarginTapZoneExclusionPercent(100))
+        assertEquals(100, normalizedReaderMarginTapZoneExclusionPercent(101))
+    }
+
+    @Test
     fun `vertical thirds layout uses equal top, middle, and bottom regions`() {
         val regions = readerTapZoneRegions(
             layout = ReaderTapZoneLayout.VERTICAL_THIRDS,

@@ -29,6 +29,48 @@ enum class ReaderTapZoneAction(val displayName: String, @StringRes val displayNa
     MENU("Menu", R.string.label_tap_action_menu)
 }
 
+internal enum class ReaderHorizontalMarginSide {
+    LEFT,
+    RIGHT
+}
+
+internal const val DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT = 100
+private const val READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT = 5
+
+internal fun normalizedReaderMarginTapZoneExclusionPercent(value: Int): Int =
+    ((value.coerceIn(0, 100) + READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT / 2) /
+        READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT) *
+        READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT
+
+internal fun readerHorizontalMarginSide(
+    x: Float,
+    width: Float,
+    leftPadding: Float,
+    rightPadding: Float,
+    exclusionPercent: Int
+): ReaderHorizontalMarginSide? {
+    if (!x.isFinite() || !width.isFinite() || width <= 0f) return null
+
+    val left = leftPadding.coerceIn(0f, width)
+    val right = rightPadding.coerceIn(0f, width)
+    val exclusionFraction = exclusionPercent.coerceIn(0, 100) / 100f
+    val leftInteractiveStart = left * exclusionFraction
+    if (left > 0f && x >= leftInteractiveStart && x < left) {
+        return ReaderHorizontalMarginSide.LEFT
+    }
+
+    val rightInteractiveEnd = width - right * exclusionFraction
+    val rightEdge = width - right
+    if (
+        right > 0f &&
+        x >= rightEdge &&
+        (x < rightInteractiveEnd || (x == width && rightInteractiveEnd >= width))
+    ) {
+        return ReaderHorizontalMarginSide.RIGHT
+    }
+    return null
+}
+
 data class ReaderTapZoneRect(
     val x: Float,
     val y: Float,
