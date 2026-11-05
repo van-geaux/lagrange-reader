@@ -1658,9 +1658,12 @@ internal fun readiumEpubImageLayoutScript(): String = """
       if (window.readium && window.readium.isFixedLayout) return 'fixed-layout';
       window[flag] = true;
       const normalize = () => {
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
         const columns = parseInt(window.getComputedStyle(document.documentElement).columnCount, 10) || 1;
-        const pageWidth = Math.max(1, window.innerWidth / columns);
+        // Leave a small edge gap: a 1px overflow shows up as a stray vertical line at the page edge.
+        const pageWidth = Math.floor(viewportWidth / columns) - 8;
         const pageHeight = Math.max(1, window.innerHeight * 0.95);
+        if (!Number.isFinite(pageWidth) || pageWidth < 32 || !Number.isFinite(pageHeight)) return;
         document.querySelectorAll('img, svg').forEach((media) => {
           if ((media.naturalWidth || 0) < 512 && (media.naturalHeight || 0) < 512) return;
           media.style.setProperty('display', 'block', 'important');
@@ -1676,6 +1679,8 @@ internal fun readiumEpubImageLayoutScript(): String = """
       window.addEventListener('load', normalize);
       window.addEventListener('resize', normalize);
       document.addEventListener('load', normalize, true);
+      requestAnimationFrame(normalize);
+      window.setTimeout(normalize, 100);
       normalize();
       return 'installed';
     })();
