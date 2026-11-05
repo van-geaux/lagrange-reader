@@ -1643,6 +1643,44 @@ internal fun readiumEpubImageColorOverrideScript(): String = """
     })();
 """.trimIndent()
 
+/**
+ * Constrains large inline illustrations to one rendered page/column.
+ *
+ * Reflowable EPUB images are capped by Readium CSS, but on narrow windows an inline image can
+ * still be laid out at its intrinsic pixel width and spill into the next column/page. The user
+ * supplied an EPUB where a 1026px-wide image was split across two phone pages; this normalizes
+ * only large media (icons/small inline images are left alone) after load/resize.
+ */
+internal fun readiumEpubImageLayoutScript(): String = """
+    (function() {
+      const flag = '__bookorbitImageLayoutInstalled';
+      if (window[flag]) return 'already-installed';
+      if (window.readium && window.readium.isFixedLayout) return 'fixed-layout';
+      window[flag] = true;
+      const normalize = () => {
+        const columns = parseInt(window.getComputedStyle(document.documentElement).columnCount, 10) || 1;
+        const pageWidth = Math.max(1, window.innerWidth / columns);
+        const pageHeight = Math.max(1, window.innerHeight * 0.95);
+        document.querySelectorAll('img, svg').forEach((media) => {
+          if ((media.naturalWidth || 0) < 512 && (media.naturalHeight || 0) < 512) return;
+          media.style.setProperty('display', 'block', 'important');
+          media.style.setProperty('width', 'auto', 'important');
+          media.style.setProperty('height', 'auto', 'important');
+          media.style.setProperty('max-width', pageWidth + 'px', 'important');
+          media.style.setProperty('max-height', pageHeight + 'px', 'important');
+          media.style.setProperty('object-fit', 'contain', 'important');
+          media.style.setProperty('margin-left', 'auto', 'important');
+          media.style.setProperty('margin-right', 'auto', 'important');
+        });
+      };
+      window.addEventListener('load', normalize);
+      window.addEventListener('resize', normalize);
+      document.addEventListener('load', normalize, true);
+      normalize();
+      return 'installed';
+    })();
+""".trimIndent()
+
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
@@ -1804,6 +1842,8 @@ internal fun epubCurrentDocumentInstallScript(
     continuousScroll: Boolean? = null
 ): String = buildString {
     append(readiumEpubImageColorOverrideScript())
+    append("\n")
+    append(readiumEpubImageLayoutScript())
     if (oledText) {
         append("\n")
         append(readiumEpubOledTextStyleScript())

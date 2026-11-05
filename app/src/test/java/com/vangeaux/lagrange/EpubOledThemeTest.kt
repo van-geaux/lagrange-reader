@@ -160,7 +160,8 @@ class EpubOledThemeTest {
         assertTrue(normal.endsWith("gesture-installer"))
         assertEquals(normal, default)
         assertEquals(
-            readiumEpubImageColorOverrideScript() + "\n" + "gesture-installer",
+            readiumEpubImageColorOverrideScript() + "\n" +
+                readiumEpubImageLayoutScript() + "\n" + "gesture-installer",
             normal
         )
     }
