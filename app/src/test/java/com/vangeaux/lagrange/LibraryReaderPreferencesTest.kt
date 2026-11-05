@@ -454,4 +454,15 @@ class LibraryReaderPreferencesTest {
         assertEquals(emptyMap<String, Boolean>(), libraryBrowseOptionsExpandedFromStorage("not-json"))
         assertEquals(false, libraryBrowseOptionsExpandedFromStorage("{\"library\":\"yes\"}")["library"])
     }
+
+    @Test
+    fun `layout-affecting reader changes require a fresh pagination pass`() {
+        val base = LibraryReaderPreferences()
+
+        assertFalse(epubLayoutChangeRequiresRelayout(base, base.copy(theme = EpubReaderTheme.Dark)))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(fontScale = base.fontScale + 0.1f)))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(lineSpacing = 1.5f)))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(padding = base.padding.copy(left = 30f))))
+        assertTrue(epubLayoutChangeRequiresRelayout(base, base.copy(epubLayoutMode = ReaderLayoutMode.CONTINUOUS)))
+    }
 }

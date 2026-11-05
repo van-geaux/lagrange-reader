@@ -2301,6 +2301,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private val windowTracker by lazy { ReaderWindowTracker(this) }
     // Fixed for the navigator's lifetime: Readium CSS properties are set at fragment creation.
     private var twoPageSpreadActive = false
+    private var pendingEpubRelayoutAfterOptions = false
     private var fixedLayoutPublication = false
     private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
     private var highContrastTapZoneTutorial = false
@@ -5385,6 +5386,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         val normalized = next.normalized()
         val previousTheme = readerPreferences.theme
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
+        if (epubLayoutChangeRequiresRelayout(readerPreferences, normalized)) {
+            pendingEpubRelayoutAfterOptions = true
+        }
         renderedPageChapterIndex = null
         renderedPageLocator = null
         currentRenderedOverallPosition = null
@@ -5534,6 +5538,22 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             val topMargin = (viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
             occupiedPreviewBannerBottom(topMargin, viewOnlyBannerView.height)
         } else 0
+        val headerTopMargin = if (::headerView.isInitialized) {
+            (headerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+        } else {
+            0
+        }
+        val reservedTopPadding = if (::headerView.isInitialized) {
+            readerHeaderReservedTopSpace(
+                headerTopMargin = headerTopMargin,
+                headerHeight = dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+                previewBannerBottom = occupiedBannerBottom,
+                showHeader = readerPreferences.showHeader
+            )
+        } else {
+            0
+        }
+        val baseTopPadding = maxOf(normalTopPadding, reservedTopPadding)
         val (leftPercent, rightPercent) = epubHorizontalPaddingPercents(
             padding.left,
             padding.right,
@@ -5542,7 +5562,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         readerContainer.setPadding(
             horizontal(leftPercent),
-            effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
+            effectiveReaderTopSpace(baseTopPadding, occupiedBannerBottom, isPreview),
             horizontal(rightPercent),
             vertical(padding.bottom) + if (readerPreferences.showPageProgress) {
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
@@ -5605,6 +5625,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         ViewCompat.getRootWindowInsets(window.decorView)?.let { insets ->
             updateReaderHeaderTopMargin(headerView, insets)
         }
+        applyReaderPadding()
     }
 
     private fun toggleChrome() {
@@ -5629,6 +5650,12 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun hideOptions() {
         optionsView.visibility = View.GONE
+        if (pendingEpubRelayoutAfterOptions && !isFinishing && !isDestroyed) {
+            pendingEpubRelayoutAfterOptions = false
+            // Readium keeps an index-based offset while its CSS reflows live. Reopen once the
+            // sheet is closed so the final typography/layout pagination is applied in one pass.
+            recreate()
+        }
     }
 
     private fun continueReading() {
