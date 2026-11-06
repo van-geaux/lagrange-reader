@@ -750,6 +750,66 @@ internal fun unscaleAudioTimeMs(
     return (scaledMs.toDouble() * validSpeed.toDouble()).toLong().coerceAtLeast(0L)
 }
 
+internal fun formatAndroidAutoPlaybackSpeedLabel(speed: Float): String {
+    val validSpeed = speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+    val hundredths = kotlin.math.round(validSpeed * 100f).toInt()
+    return if (hundredths % 10 == 0) {
+        String.format(Locale.US, "%.1fx", hundredths / 100.0)
+    } else {
+        String.format(Locale.US, "%.2fx", hundredths / 100.0)
+    }
+}
+
+internal fun formatAndroidAutoWallClockEta(
+    etaEpochMillis: Long,
+    context: Context? = null,
+    locale: Locale = Locale.getDefault(),
+    timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()
+): String {
+    val date = java.util.Date(etaEpochMillis)
+    val formatter = if (context != null) {
+        android.text.format.DateFormat.getTimeFormat(context)
+    } else {
+        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, locale)
+    }
+    formatter.timeZone = timeZone
+    return formatter.format(date)
+}
+
+internal fun formatAndroidAutoChapterEtaSubtitle(
+    author: String?,
+    rawRemainingMs: Long,
+    speed: Float,
+    nowEpochMillis: Long = System.currentTimeMillis(),
+    context: Context? = null,
+    locale: Locale = Locale.getDefault(),
+    timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()
+): String {
+    val cleanAuthor = author?.trim()?.takeIf { it.isNotEmpty() }
+    if (rawRemainingMs <= 0L) {
+        return cleanAuthor.orEmpty()
+    }
+    val scaledRemainingMs = scaleAudioTimeMs(
+        rawMs = rawRemainingMs,
+        speed = speed,
+        scaleBySpeed = true
+    )
+    val etaEpochMillis = nowEpochMillis + scaledRemainingMs
+    val timeLabel = formatAndroidAutoWallClockEta(
+        etaEpochMillis = etaEpochMillis,
+        context = context,
+        locale = locale,
+        timeZone = timeZone
+    )
+    val speedLabel = formatAndroidAutoPlaybackSpeedLabel(speed)
+    val etaSuffix = "Ends at $timeLabel ($speedLabel)"
+    return if (cleanAuthor != null) {
+        "$cleanAuthor - $etaSuffix"
+    } else {
+        etaSuffix
+    }
+}
+
 internal fun buildAndroidAutoChapterSpecs(
     book: BookSummary,
     currentPositionMs: Long = book.progressPositionMs ?: 0L,
@@ -1759,7 +1819,7 @@ internal object AndroidAutoSpeedController {
         return PRESETS[nextIndex]
     }
 
-    @androidx.annotation.OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
     fun buildCycleSpeedCommandButton(currentSpeed: Float): CommandButton {
         val activePreset = findCurrentPreset(currentSpeed)
         return CommandButton.Builder()
@@ -1782,7 +1842,21 @@ internal fun audiobookAutoMediaButtonPreferences(
     hasChapters: Boolean = true,
     currentSpeed: Float = 1.0f
 ): List<CommandButton> = buildList {
-    // Steering wheel and primary transport controls jump -30s / +30s.
+    // Primary transport slots flanking Play/Pause: Circular -30s and +30s icons.
+    add(
+        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
+            .setSessionCommand(audiobookSeekBackSessionCommand)
+            .setDisplayName("Replay 30 seconds") // i18n-ignore: Android Auto accessibility label
+            .setEnabled(true)
+            .build()
+    )
+    add(
+        CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+            .setSessionCommand(audiobookSeekForwardSessionCommand)
+            .setDisplayName("Forward 30 seconds") // i18n-ignore: Android Auto accessibility label
+            .setEnabled(true)
+            .build()
+    )
     // Secondary custom buttons expose Previous Chapter, Next Chapter, and Cycle Playback Speed.
     if (hasChapters) {
         add(
@@ -1806,15 +1880,91 @@ internal fun audiobookAutoMediaButtonPreferences(
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+internal fun audiobookAutoPlayerCommands(
+    commands: Player.Commands
+): Player.Commands = audiobookExternalPlayerCommands(commands).buildUpon()
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    .remove(Player.COMMAND_SEEK_TO_NEXT)
+    .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+    .build()
+
+internal fun androidAutoSessionExtras(): Bundle = Bundle().apply {
+    putBoolean("android.media.browse.SLOT_RESERVATION_SKIP_TO_PREV", false)
+    putBoolean("android.media.browse.SLOT_RESERVATION_SKIP_TO_NEXT", false)
+    putBoolean("androidx.media.MediaSessionCompat.Extras.KEY_SLOT_RESERVATION_SKIP_TO_PREV", false)
+    putBoolean("androidx.media.MediaSessionCompat.Extras.KEY_SLOT_RESERVATION_SKIP_TO_NEXT", false)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun handleAndroidAutoMediaButtonEvent(
+    session: MediaSession,
+    controllerInfo: MediaSession.ControllerInfo,
+    intent: android.content.Intent
+): Boolean {
+    val isAuto = session.isAutoCompanionController(controllerInfo) ||
+        session.isAutomotiveController(controllerInfo)
+    if (!isAuto) return false
+    val keyEvent = if (android.os.Build.VERSION.SDK_INT >= 33) {
+        intent.getParcelableExtra(android.content.Intent.EXTRA_KEY_EVENT, android.view.KeyEvent::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        intent.getParcelableExtra(android.content.Intent.EXTRA_KEY_EVENT)
+    } ?: return false
+    if (keyEvent.action != android.view.KeyEvent.ACTION_DOWN) return false
+    return when (keyEvent.keyCode) {
+        android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+        android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
+            session.player.seekBack()
+            true
+        }
+        android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+        android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+            session.player.seekForward()
+            true
+        }
+        else -> false
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal class LagrangeLibrarySessionPlayer(
     delegate: Player,
     private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null,
     private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
-    private val scaleBySpeedProvider: (() -> Boolean)? = null
+    private val scaleBySpeedProvider: (() -> Boolean)? = null,
+    private val isAutoConnectedProvider: (() -> Boolean)? = null,
+    private val contextProvider: (() -> Context?)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
+    @Volatile
+    private var isNotifyingMetadataChange = false
     private val sessionListeners = java.util.concurrent.CopyOnWriteArraySet<Player.Listener>()
+
+    private val delegateStateListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            notifyTimelineAndMetadataChanged()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            notifyTimelineAndMetadataChanged()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (!isNotifyingMetadataChange && reason != Player.DISCONTINUITY_REASON_INTERNAL) {
+                notifyTimelineAndMetadataChanged()
+            }
+        }
+    }
+
+    init {
+        delegate.addListener(delegateStateListener)
+    }
 
     override fun addListener(listener: Player.Listener) {
         sessionListeners.add(listener)
@@ -1857,32 +2007,80 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     fun notifyTimelineAndMetadataChanged() {
-        val timeline = currentTimeline
-        val metadata = mediaMetadata
-        val pos = currentPosition
-        val idx = currentMediaItemIndex
-        val posInfo = Player.PositionInfo(
-            null,
-            idx,
-            currentMediaItem,
-            null,
-            idx,
-            pos,
-            pos,
-            C.INDEX_UNSET,
-            C.INDEX_UNSET
-        )
-        for (listener in sessionListeners) {
-            runCatching {
-                listener.onTimelineChanged(timeline, Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE)
-                listener.onMediaMetadataChanged(metadata)
-                listener.onPositionDiscontinuity(
-                    posInfo,
-                    posInfo,
-                    Player.DISCONTINUITY_REASON_INTERNAL
-                )
+        if (isNotifyingMetadataChange) return
+        isNotifyingMetadataChange = true
+        try {
+            val timeline = currentTimeline
+            val metadata = mediaMetadata
+            val pos = currentPosition
+            val idx = currentMediaItemIndex
+            val posInfo = Player.PositionInfo(
+                null,
+                idx,
+                currentMediaItem,
+                null,
+                idx,
+                pos,
+                pos,
+                C.INDEX_UNSET,
+                C.INDEX_UNSET
+            )
+            for (listener in sessionListeners) {
+                runCatching {
+                    listener.onTimelineChanged(timeline, Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE)
+                    listener.onMediaMetadataChanged(metadata)
+                    listener.onPositionDiscontinuity(
+                        posInfo,
+                        posInfo,
+                        Player.DISCONTINUITY_REASON_INTERNAL
+                    )
+                }
+            }
+        } finally {
+            isNotifyingMetadataChange = false
+        }
+    }
+
+    private fun rawActiveChapterRemainingMs(): Long? {
+        val active = sessionProvider?.invoke()
+        if (active != null) {
+            val chapters = active.book.audioChapters
+            val absPos = active.absolutePositionMs().coerceAtLeast(0L)
+            val totalMs = active.totalDurationMs().takeIf { it > 0L }
+            if (chapters.isNotEmpty()) {
+                val ordered = chapters.sortedBy { it.startMs }
+                val chapterEndMs = audiobookChapterEndMs(ordered, absPos)
+                    ?: totalMs
+                if (chapterEndMs != null && chapterEndMs > absPos) {
+                    return (chapterEndMs - absPos).coerceAtLeast(0L)
+                }
             }
         }
+        val bounds = rawActiveBookOrTrackBounds()
+        if (bounds != null && bounds.second > bounds.first) {
+            return (bounds.second - bounds.first).coerceAtLeast(0L)
+        }
+        val rawDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
+        val rawPos = super.getCurrentPosition().coerceAtLeast(0L)
+        if (rawDur != null && rawDur > rawPos) {
+            return (rawDur - rawPos).coerceAtLeast(0L)
+        }
+        return null
+    }
+
+    private fun shouldFormatAndroidAutoEtaSubtitle(): Boolean =
+        isScaled() && (isAutoConnectedProvider?.invoke() ?: true)
+
+    private fun resolveSubtitleOrArtist(baseAuthor: String?): String? {
+        if (!shouldFormatAndroidAutoEtaSubtitle()) return baseAuthor
+        val rawRemainingMs = rawActiveChapterRemainingMs() ?: return baseAuthor
+        if (rawRemainingMs <= 0L) return baseAuthor
+        return formatAndroidAutoChapterEtaSubtitle(
+            author = baseAuthor,
+            rawRemainingMs = rawRemainingMs,
+            speed = actualSpeed(),
+            context = contextProvider?.invoke()
+        ).takeIf { it.isNotBlank() } ?: baseAuthor
     }
 
     private fun rawActiveBookOrTrackBounds(): Pair<Long, Long>? {
@@ -1922,14 +2120,18 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun isCommandAvailable(command: Int): Boolean {
         if (
-            command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
-            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
-            command == Player.COMMAND_SEEK_BACK ||
-            command == Player.COMMAND_SEEK_FORWARD ||
             command == Player.COMMAND_SEEK_TO_PREVIOUS ||
             command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
             command == Player.COMMAND_SEEK_TO_NEXT ||
             command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+        ) {
+            return false
+        }
+        if (
+            command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_BACK ||
+            command == Player.COMMAND_SEEK_FORWARD
         ) {
             return true
         }
@@ -1995,13 +2197,21 @@ internal class LagrangeLibrarySessionPlayer(
     override fun getCurrentMediaItem(): MediaItem? {
         val base = super.getCurrentMediaItem() ?: return null
         val currentDuration = duration
+        val fallback = fallbackMetadataProvider?.invoke()
+        val rawAuthor = base.mediaMetadata.artist?.toString()?.takeIf { it.isNotBlank() }
+            ?: fallback?.artist?.toString()?.takeIf { it.isNotBlank() }
+        val effectiveArtist = resolveSubtitleOrArtist(rawAuthor)
+        val metaBuilder = base.mediaMetadata.buildUpon()
         if (currentDuration != C.TIME_UNSET && currentDuration > 0L) {
-            val updatedMeta = base.mediaMetadata.buildUpon()
-                .setDurationMs(currentDuration)
-                .build()
-            return base.buildUpon().setMediaMetadata(updatedMeta).build()
+            metaBuilder.setDurationMs(currentDuration)
         }
-        return base
+        if (!effectiveArtist.isNullOrBlank()) {
+            metaBuilder.setArtist(effectiveArtist)
+            if (shouldFormatAndroidAutoEtaSubtitle()) {
+                metaBuilder.setSubtitle(effectiveArtist)
+            }
+        }
+        return base.buildUpon().setMediaMetadata(metaBuilder.build()).build()
     }
 
     override fun getCurrentTimeline(): Timeline {
@@ -2064,9 +2274,11 @@ internal class LagrangeLibrarySessionPlayer(
                 unscaledTargetMs
             }
             active.seekToAbsolutePosition(clampedTargetMs)
+            notifyTimelineAndMetadataChanged()
             return
         }
         super.seekTo(unscaledTargetMs)
+        notifyTimelineAndMetadataChanged()
     }
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
@@ -2151,8 +2363,14 @@ internal class LagrangeLibrarySessionPlayer(
         if (!rawTitle.isNullOrBlank()) {
             builder.setTitle(rawTitle.sanitizeAudiobookTitle())
         }
-        if (base.artist.isNullOrBlank() && !fallback?.artist.isNullOrBlank()) {
-            builder.setArtist(fallback?.artist)
+        val rawAuthor = base.artist?.toString()?.takeIf { it.isNotBlank() }
+            ?: fallback?.artist?.toString()?.takeIf { it.isNotBlank() }
+        val effectiveArtist = resolveSubtitleOrArtist(rawAuthor)
+        if (!effectiveArtist.isNullOrBlank()) {
+            builder.setArtist(effectiveArtist)
+            if (shouldFormatAndroidAutoEtaSubtitle()) {
+                builder.setSubtitle(effectiveArtist)
+            }
         }
         if (base.artworkUri == null && fallback?.artworkUri != null) {
             builder.setArtworkUri(fallback.artworkUri)
@@ -2169,10 +2387,14 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun getAvailableCommands(): Player.Commands =
         super.getAvailableCommands().buildUpon()
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_BACK)
+            .add(Player.COMMAND_SEEK_FORWARD)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_TO_NEXT)
+            .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
             .build()
 
     override fun hasPreviousMediaItem(): Boolean = true
@@ -2716,6 +2938,16 @@ internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean {
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.hasConnectedAndroidAutoController(): Boolean {
+    val session = mediaLibrarySession ?: return false
+    return session.connectedControllers.any { controller ->
+        session.isAutoCompanionController(controller) ||
+            session.isAutomotiveController(controller) ||
+            controller.packageName in KNOWN_AUTOMOTIVE_PACKAGES
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
     val current = activeSession() ?: return false
     val chapters = current.book.audioChapters
@@ -2907,5 +3139,5 @@ internal suspend fun ReadiumAudioPlaybackService.currentSessionMediaItemsWithPos
     }
     val currentIndex = player.currentMediaItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val currentPos = (librarySessionPlayer?.currentPosition ?: player.currentPosition).coerceAtLeast(0L)
-    MediaItemsWithStartPosition(items, currentIndex, currentPos)
+    MediaItemsWithStartPosition(items, currentIndex, currentPos) // i18n-ignore: AA accessibility label
 }

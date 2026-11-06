@@ -316,4 +316,54 @@ class AndroidAutoMediaLibraryTest {
 
         assertEquals(listOf("1", "2"), results.map { it.id })
     }
+
+    @Test
+    fun formatAndroidAutoPlaybackSpeedLabelFormatsPresetsAndFineSteps() {
+        assertEquals("0.8x", formatAndroidAutoPlaybackSpeedLabel(0.8f))
+        assertEquals("1.0x", formatAndroidAutoPlaybackSpeedLabel(1.0f))
+        assertEquals("1.2x", formatAndroidAutoPlaybackSpeedLabel(1.2f))
+        assertEquals("1.5x", formatAndroidAutoPlaybackSpeedLabel(1.5f))
+        assertEquals("1.8x", formatAndroidAutoPlaybackSpeedLabel(1.8f))
+        assertEquals("2.0x", formatAndroidAutoPlaybackSpeedLabel(2.0f))
+        assertEquals("1.25x", formatAndroidAutoPlaybackSpeedLabel(1.25f))
+    }
+
+    @Test
+    fun formatAndroidAutoChapterEtaSubtitleScalesRemainingTimeByPlaybackSpeed() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        // Base time: 18:43:00 UTC (6:43 PM)
+        val baseCalendar = java.util.Calendar.getInstance(utc, java.util.Locale.US).apply {
+            set(2026, java.util.Calendar.OCTOBER, 31, 18, 43, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val nowMillis = baseCalendar.timeInMillis
+        // 30 minutes raw remaining at 1.5x speed -> 20 minutes real-world remaining -> 7:03 PM
+        val rawRemainingMs = 30L * 60_000L
+
+        val subtitle = formatAndroidAutoChapterEtaSubtitle(
+            author = "J.R.R. Tolkien",
+            rawRemainingMs = rawRemainingMs,
+            speed = 1.5f,
+            nowEpochMillis = nowMillis,
+            context = null,
+            locale = java.util.Locale.US,
+            timeZone = utc
+        )
+
+        assertTrue("Expected author prefix in: $subtitle", subtitle.startsWith("J.R.R. Tolkien - Ends at "))
+        assertTrue("Expected 7:03 in: $subtitle", subtitle.contains("7:03"))
+        assertTrue("Expected (1.5x) suffix in: $subtitle", subtitle.endsWith("(1.5x)"))
+    }
+
+    @Test
+    fun formatAndroidAutoChapterEtaSubtitleFallsBackWhenRemainingIsZero() {
+        assertEquals(
+            "J.R.R. Tolkien",
+            formatAndroidAutoChapterEtaSubtitle(
+                author = "J.R.R. Tolkien",
+                rawRemainingMs = 0L,
+                speed = 1.25f
+            )
+        )
+    }
 }
