@@ -1643,6 +1643,49 @@ internal fun readiumEpubImageColorOverrideScript(): String = """
     })();
 """.trimIndent()
 
+/**
+ * Constrains large inline illustrations to one rendered page/column.
+ *
+ * Reflowable EPUB images are capped by Readium CSS, but on narrow windows an inline image can
+ * still be laid out at its intrinsic pixel width and spill into the next column/page. The user
+ * supplied an EPUB where a 1026px-wide image was split across two phone pages; this normalizes
+ * only large media (icons/small inline images are left alone) after load/resize.
+ */
+internal fun readiumEpubImageLayoutScript(): String = """
+    (function() {
+      const flag = '__bookorbitImageLayoutInstalled';
+      if (window[flag]) return 'already-installed';
+      if (window.readium && window.readium.isFixedLayout) return 'fixed-layout';
+      window[flag] = true;
+      const normalize = () => {
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        const columns = parseInt(window.getComputedStyle(document.documentElement).columnCount, 10) || 1;
+        // Leave a small edge gap: a 1px overflow shows up as a stray vertical line at the page edge.
+        const pageWidth = Math.floor(viewportWidth / columns) - 8;
+        const pageHeight = Math.max(1, window.innerHeight * 0.95);
+        if (!Number.isFinite(pageWidth) || pageWidth < 32 || !Number.isFinite(pageHeight)) return;
+        document.querySelectorAll('img, svg').forEach((media) => {
+          if ((media.naturalWidth || 0) < 512 && (media.naturalHeight || 0) < 512) return;
+          media.style.setProperty('display', 'block', 'important');
+          media.style.setProperty('width', 'auto', 'important');
+          media.style.setProperty('height', 'auto', 'important');
+          media.style.setProperty('max-width', pageWidth + 'px', 'important');
+          media.style.setProperty('max-height', pageHeight + 'px', 'important');
+          media.style.setProperty('object-fit', 'contain', 'important');
+          media.style.setProperty('margin-left', 'auto', 'important');
+          media.style.setProperty('margin-right', 'auto', 'important');
+        });
+      };
+      window.addEventListener('load', normalize);
+      window.addEventListener('resize', normalize);
+      document.addEventListener('load', normalize, true);
+      requestAnimationFrame(normalize);
+      window.setTimeout(normalize, 100);
+      normalize();
+      return 'installed';
+    })();
+""".trimIndent()
+
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
@@ -1804,6 +1847,8 @@ internal fun epubCurrentDocumentInstallScript(
     continuousScroll: Boolean? = null
 ): String = buildString {
     append(readiumEpubImageColorOverrideScript())
+    append("\n")
+    append(readiumEpubImageLayoutScript())
     if (oledText) {
         append("\n")
         append(readiumEpubOledTextStyleScript())
@@ -2301,6 +2346,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private val windowTracker by lazy { ReaderWindowTracker(this) }
     // Fixed for the navigator's lifetime: Readium CSS properties are set at fragment creation.
     private var twoPageSpreadActive = false
+    private var pendingEpubRelayoutAfterOptions = false
     private var fixedLayoutPublication = false
     private var showTapZoneTutorialAfterChanges by mutableStateOf(true)
     private var highContrastTapZoneTutorial = false
@@ -2884,6 +2930,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             }
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 updateReaderHeaderTopMargin(view, insets)
+                applyReaderPadding()
                 insets
             }
         }
@@ -2966,7 +3013,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                             contentDescription = stringResource(
                                 R.string.epub_dismiss_reader_options_cd
                             ),
-                            onDismiss = ::hideOptions
+                            onDismiss = { hideOptions() }
                         )
                         EpubReaderOptionsBottomSheet(
                             title = if (isPreview) {
@@ -5385,6 +5432,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         val normalized = next.normalized()
         val previousTheme = readerPreferences.theme
         val tapZoneChanged = readerTapZonePreferencesChanged(readerPreferences, normalized)
+        if (epubLayoutChangeRequiresRelayout(readerPreferences, normalized)) {
+            pendingEpubRelayoutAfterOptions = true
+        }
         renderedPageChapterIndex = null
         renderedPageLocator = null
         currentRenderedOverallPosition = null
@@ -5534,6 +5584,22 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             val topMargin = (viewOnlyBannerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
             occupiedPreviewBannerBottom(topMargin, viewOnlyBannerView.height)
         } else 0
+        val headerTopMargin = if (::headerView.isInitialized) {
+            (headerView.layoutParams as? FrameLayout.LayoutParams)?.topMargin ?: 0
+        } else {
+            0
+        }
+        val reservedTopPadding = if (::headerView.isInitialized) {
+            readerHeaderReservedTopSpace(
+                headerTopMargin = headerTopMargin,
+                headerHeight = dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP),
+                previewBannerBottom = occupiedBannerBottom,
+                showHeader = readerPreferences.showHeader
+            )
+        } else {
+            0
+        }
+        val baseTopPadding = maxOf(normalTopPadding, reservedTopPadding)
         val (leftPercent, rightPercent) = epubHorizontalPaddingPercents(
             padding.left,
             padding.right,
@@ -5542,7 +5608,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         )
         readerContainer.setPadding(
             horizontal(leftPercent),
-            effectiveReaderTopSpace(normalTopPadding, occupiedBannerBottom, isPreview),
+            effectiveReaderTopSpace(baseTopPadding, occupiedBannerBottom, isPreview),
             horizontal(rightPercent),
             vertical(padding.bottom) + if (readerPreferences.showPageProgress) {
                 dpToPx(EPUB_READER_PROGRESS_FOOTER_HEIGHT_DP)
@@ -5605,6 +5671,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         ViewCompat.getRootWindowInsets(window.decorView)?.let { insets ->
             updateReaderHeaderTopMargin(headerView, insets)
         }
+        applyReaderPadding()
     }
 
     private fun toggleChrome() {
@@ -5612,7 +5679,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun showChrome() {
-        hideOptions()
+        hideOptions(recreateForRelayout = false)
         chromeView.visibility = View.VISIBLE
         syncProgressFooter()
     }
@@ -5627,8 +5694,14 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         optionsView.bringToFront()
     }
 
-    private fun hideOptions() {
+    private fun hideOptions(recreateForRelayout: Boolean = true) {
         optionsView.visibility = View.GONE
+        if (recreateForRelayout && pendingEpubRelayoutAfterOptions && !isFinishing && !isDestroyed) {
+            pendingEpubRelayoutAfterOptions = false
+            // Readium keeps an index-based offset while its CSS reflows live. Reopen once the
+            // sheet is closed so the final typography/layout pagination is applied in one pass.
+            recreate()
+        }
     }
 
     private fun continueReading() {

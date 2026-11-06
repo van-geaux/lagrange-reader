@@ -150,6 +150,26 @@ data class LibraryReaderPreferences(
     )
 }
 
+/** Layout-affecting EPUB settings that need a fresh Readium pagination pass. */
+internal fun epubLayoutChangeRequiresRelayout(
+    previous: LibraryReaderPreferences,
+    next: LibraryReaderPreferences
+): Boolean =
+    previous.fontFamily != next.fontFamily ||
+        previous.customFont != next.customFont ||
+        previous.fontScale != next.fontScale ||
+        previous.lineSpacing != next.lineSpacing ||
+        previous.wordSpacing != next.wordSpacing ||
+        previous.paragraphSpacing != next.paragraphSpacing ||
+        previous.textAlignment != next.textAlignment ||
+        previous.hyphenation != next.hyphenation ||
+        previous.showHeader != next.showHeader ||
+        previous.showPageProgress != next.showPageProgress ||
+        (previous.epubLayoutMode == ReaderLayoutMode.PAGINATED &&
+            next.epubLayoutMode == ReaderLayoutMode.PAGINATED &&
+            previous.padding != next.padding) ||
+        previous.epubLayoutMode != next.epubLayoutMode
+
 internal data class ReaderSystemBarsPolicy(
     val showStatusBar: Boolean = true,
     val showNavigationBar: Boolean
