@@ -52,6 +52,7 @@ import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
 
 private const val HOME_LIBRARY_REFRESH_CONCURRENCY = 3
 private const val SERVER_SIGN_IN_POLL_DELAY_MS = 1_000L
+private const val SERVER_PROGRESS_TIMESTAMP_TOLERANCE_MS = 1_000L
 
 internal fun shouldRefreshAfterDownloadOutcome(
     logicalBookId: String,
@@ -1430,10 +1431,13 @@ class AppCoordinator internal constructor(
                     firstPage = firstPage.takeUnless { it.isComplete }
                 )
                 if (progressSyncResult == SyncAttemptResult.Success) {
-                    // Once the server has accepted every current-server update and the
-                    // complete fresh catalog has loaded, its progress is authoritative.
-                    latestProgressByTarget.clear()
-                    queuedProgressByTarget.clear()
+                    // A successful write can become visible in the catalog endpoint later.
+                    // Keep the optimistic progress until the refreshed server data reflects it.
+                    clearReflectedProgress(
+                        refreshedCatalog.items +
+                            homeShelves.booksBySection.values.flatten() +
+                            homeShelves.seriesBySection.values.flatten()
+                    )
                 }
                 homeBooks = homeBooks.replaceLibrary(selectedLibrary, refreshedCatalog.items)
                 showBrowser(
@@ -3113,6 +3117,19 @@ class AppCoordinator internal constructor(
             }
             .toList()
         return merged + recentBooks
+    }
+
+    private fun clearReflectedProgress(serverBooks: List<BookSummary>) {
+        val booksByProgressKey = serverBooks.associateBy { it.progressKey() }
+        val reflectedKeys = latestProgressByTarget.mapNotNull { (key, progress) ->
+            val serverBook = booksByProgressKey[key] ?: return@mapNotNull null
+            val serverLastReadAt = serverBook.lastReadAtMillis ?: return@mapNotNull null
+            key.takeIf { serverLastReadAt >= progress.observedAtMillis - SERVER_PROGRESS_TIMESTAMP_TOLERANCE_MS }
+        }
+        reflectedKeys.forEach { key ->
+            latestProgressByTarget.remove(key)
+            queuedProgressByTarget.remove(key)
+        }
     }
 
     private fun mergeKnownProgress(shelves: HomeShelfData): HomeShelfData = shelves.copy(
