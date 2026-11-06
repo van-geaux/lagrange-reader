@@ -5929,6 +5929,9 @@ internal fun coverThumbnailUrl(coverUrl: String): String {
 internal fun bookCoverCandidateUrls(book: BookSummary, serverBase: String): List<String> {
     return buildList {
         if (book.mediaKind == MediaKind.AUDIO) {
+            book.audiobookCoverUrl
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::add)
             serverBase
                 .trim()
                 .trimEnd('/')

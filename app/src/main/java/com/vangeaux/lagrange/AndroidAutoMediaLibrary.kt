@@ -445,6 +445,8 @@ private fun mergeAudiobookMetadata(existing: BookSummary, candidate: BookSummary
         },
         streamUrl = existing.streamUrl ?: candidate.streamUrl,
         coverUrl = existing.coverUrl ?: candidate.coverUrl,
+        audiobookCoverUrl = existing.audiobookCoverUrl ?: candidate.audiobookCoverUrl,
+        coverAspectRatio = if (existing.audiobookCoverUrl != null || candidate.audiobookCoverUrl != null) CoverAspectRatio.SQUARE else existing.coverAspectRatio,
         localPath = existing.localPath ?: candidate.localPath,
         progressPercent = existing.progressPercent ?: candidate.progressPercent,
         progressPositionMs = existing.progressPositionMs ?: candidate.progressPositionMs,
@@ -1537,8 +1539,9 @@ internal class AndroidAutoCatalogBridge private constructor(
                     title = ""
                 )
             }
-            if (serverUrl.isNotBlank() && !baseBook.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(serverUrl, baseBook.id, baseBook.coverUrl)?.let {
+            val preferredBaseCover = baseBook.audiobookCoverUrl?.takeIf { it.isNotBlank() } ?: baseBook.coverUrl
+            if (serverUrl.isNotBlank() && !preferredBaseCover.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, baseBook.id, preferredBaseCover)?.let {
                     return@withContext it
                 }
             }
@@ -1558,8 +1561,9 @@ internal class AndroidAutoCatalogBridge private constructor(
             } else {
                 baseBook
             }
-            if (serverUrl.isNotBlank() && !hydratedBook.coverUrl.isNullOrBlank()) {
-                coverCacheStore.read(serverUrl, hydratedBook.id, hydratedBook.coverUrl)?.let {
+            val preferredHydratedCover = hydratedBook.audiobookCoverUrl?.takeIf { it.isNotBlank() } ?: hydratedBook.coverUrl
+            if (serverUrl.isNotBlank() && !preferredHydratedCover.isNullOrBlank()) {
+                coverCacheStore.read(serverUrl, hydratedBook.id, preferredHydratedCover)?.let {
                     return@withContext it
                 }
             }
@@ -1654,6 +1658,8 @@ internal class AndroidAutoCatalogBridge private constructor(
             return matchedOption.book.copy(
                 libraryId = matchedOption.book.libraryId.ifBlank { baseBook.libraryId },
                 coverUrl = matchedOption.book.coverUrl ?: baseBook.coverUrl,
+                audiobookCoverUrl = matchedOption.book.audiobookCoverUrl ?: baseBook.audiobookCoverUrl,
+                coverAspectRatio = if (matchedOption.book.audiobookCoverUrl != null || baseBook.audiobookCoverUrl != null) CoverAspectRatio.SQUARE else matchedOption.book.coverAspectRatio,
                 audioChapters = chapters
             )
         }
