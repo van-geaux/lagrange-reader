@@ -476,4 +476,82 @@ class LibraryReaderPreferencesTest {
             )
         )
     }
+
+    @Test
+    fun `apply to all libraries only touches the active server profile`() {
+        val profileA = "profile-a"
+        val profileB = "profile-b"
+        val source = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            customTextColor = 0xFFB8B8B8.toInt(),
+            fontScale = 1.25f
+        )
+        val otherServerProfile = LibraryReaderPreferences(theme = EpubReaderTheme.Sepia)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                readerPreferencesStorageKey(profileA, "library-a") to
+                    LibraryReaderPreferences(theme = EpubReaderTheme.Light),
+                readerPreferencesStorageKey(profileA, "library-b") to
+                    LibraryReaderPreferences(theme = EpubReaderTheme.Sepia),
+                readerPreferencesStorageKey(profileB, "library-a") to otherServerProfile,
+                defaultReaderPreferencesStorageKey(profileB) to otherServerProfile
+            )
+        )
+
+        val updated = preferences.withReaderPreferencesForAllLibraries(
+            profileId = profileA,
+            libraryId = "library-a",
+            value = source
+        )
+
+        val expected = source.normalized()
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileA, "library-a")))
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileA, "library-b")))
+        assertEquals(expected, updated.libraryReaderPreferences.getValue(defaultReaderPreferencesStorageKey(profileA)))
+        assertEquals(otherServerProfile, updated.libraryReaderPreferences.getValue(readerPreferencesStorageKey(profileB, "library-a")))
+        assertEquals(otherServerProfile, updated.libraryReaderPreferences.getValue(defaultReaderPreferencesStorageKey(profileB)))
+    }
+
+    @Test
+    fun `reader preferences fall back to the active server default for unknown libraries`() {
+        val profileA = "profile-a"
+        val profileB = "profile-b"
+        val fallbackA = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Dark,
+            customBackgroundColor = 0xFF101010.toInt()
+        )
+        val fallbackB = LibraryReaderPreferences(theme = EpubReaderTheme.Sepia)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                defaultReaderPreferencesStorageKey(profileA) to fallbackA,
+                defaultReaderPreferencesStorageKey(profileB) to fallbackB
+            )
+        )
+
+        assertEquals(fallbackA.normalized(), preferences.readerPreferencesFor(profileA, "never-opened-library"))
+        assertEquals(fallbackB.normalized(), preferences.readerPreferencesFor(profileB, "never-opened-library"))
+
+        val onlyServerB = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                defaultReaderPreferencesStorageKey(profileB) to fallbackB
+            )
+        )
+        assertEquals(LibraryReaderPreferences(), onlyServerB.readerPreferencesFor(profileA, "new-library"))
+    }
+
+    @Test
+    fun `an explicit library profile wins over the active server default`() {
+        val profileId = "profile-a"
+        val explicit = LibraryReaderPreferences(theme = EpubReaderTheme.Light)
+        val fallback = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val preferences = AppPreferences(
+            libraryReaderPreferences = mapOf(
+                readerPreferencesStorageKey(profileId, "library-a") to explicit,
+                defaultReaderPreferencesStorageKey(profileId) to fallback
+            )
+        )
+
+        assertEquals(explicit.normalized(), preferences.readerPreferencesFor(profileId, "library-a"))
+    }
+
 }

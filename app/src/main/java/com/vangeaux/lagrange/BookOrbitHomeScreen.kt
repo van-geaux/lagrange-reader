@@ -4456,11 +4456,17 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             LibraryReaderConfiguration(
                 libraries = libraries,
                 selectedLibraryId = readingLibraryId,
-                preferences = readingLibraryId?.let(preferences::readerPreferencesFor),
+                preferences = readingLibraryId?.let {
+                    preferences.readerPreferencesFor(profileId.orEmpty(), it)
+                },
                 onLibrarySelected = { readingLibraryId = it },
                 onPreferencesChange = { libraryId, readerPreferences ->
                     onPreferencesChange(
-                        preferences.withReaderPreferences(libraryId, readerPreferences)
+                        preferences.withReaderPreferences(
+                            profileId.orEmpty(),
+                            libraryId,
+                            readerPreferences
+                        )
                     )
                 }
             )
@@ -6586,7 +6592,8 @@ internal fun ReaderConfigurationControls(
     testTagPrefix: String = "reader-options-reading",
     format: ReaderConfigurationFormat = ReaderConfigurationFormat.EPUB,
     onCustomFontRequest: () -> Unit = {},
-    onCustomFontRemove: () -> Unit = {}
+    onCustomFontRemove: () -> Unit = {},
+    onApplyToAllLibraries: (() -> Unit)? = null
 ) {
     AppPreferenceSwitchRow(
         title = stringResource(R.string.settings_volume_page_navigation),
@@ -6906,6 +6913,53 @@ internal fun ReaderConfigurationControls(
             onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
             onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
         )
+    }
+    onApplyToAllLibraries?.let { applyToAll ->
+        var confirmVisible by remember { mutableStateOf(false) }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+        Text(
+            stringResource(R.string.sheet_apply_to_all_libraries),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+            stringResource(R.string.sheet_apply_to_all_libraries_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        OutlinedButton(
+            onClick = { confirmVisible = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("$testTagPrefix-apply-to-all-libraries")
+        ) {
+            Text(stringResource(R.string.sheet_apply_to_all_libraries))
+        }
+        if (confirmVisible) {
+            AlertDialog(
+                onDismissRequest = { confirmVisible = false },
+                title = {
+                    Text(stringResource(R.string.sheet_apply_to_all_libraries_confirm_title))
+                },
+                text = {
+                    Text(stringResource(R.string.sheet_apply_to_all_libraries_confirm_message))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirmVisible = false
+                            applyToAll()
+                        }
+                    ) {
+                        Text(stringResource(R.string.sheet_apply_to_all_libraries_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmVisible = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                }
+            )
+        }
     }
 }
 

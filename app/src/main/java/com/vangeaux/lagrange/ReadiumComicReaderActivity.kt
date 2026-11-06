@@ -225,6 +225,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
 
     private lateinit var readerKey: String
     private lateinit var libraryId: String
+    private val readerProfileId by lazy { activeReaderProfileId(this) }
     private lateinit var displayTitle: String
     private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
@@ -310,7 +311,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         val appPreferences = AppPreferencesStore(this).read()
         showTapZoneTutorialAfterChanges = appPreferences.showComicTapZoneTutorialAfterChanges
         appThemeMode = appPreferences.themeMode
-        readerPreferences = appPreferences.readerPreferencesFor(libraryId)
+        readerPreferences = appPreferences.readerPreferencesFor(readerProfileId, libraryId)
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
@@ -520,6 +521,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
                             onPreferencesChange = ::applyReaderPreferences,
                             showTapZoneTutorialAfterChanges = showTapZoneTutorialAfterChanges,
                             onShowTapZoneTutorialAfterChangesChange = ::updateShowTapZoneTutorialAfterChanges,
+                            onApplyToAllLibraries = ::applyCurrentPreferencesToAllLibraries,
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                         )
                     }
@@ -1043,6 +1045,18 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         navigator?.go(link)
     }
 
+    private fun applyCurrentPreferencesToAllLibraries() {
+        val store = AppPreferencesStore(this)
+        store.save(
+            store.read().withReaderPreferencesForAllLibraries(readerProfileId, libraryId, readerPreferences)
+        )
+        Toast.makeText(
+            this,
+            R.string.sheet_apply_to_all_libraries_applied,
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun applyReaderPreferences(next: LibraryReaderPreferences) {
         val normalized = next.normalized()
         val layoutChanged = normalized.comicLayoutMode != readerPreferences.comicLayoutMode
@@ -1051,7 +1065,7 @@ class ReadiumComicReaderActivity : FragmentActivity() {
         readingDirection = normalized.readingDirection
         syncProgressFooter()
         val store = AppPreferencesStore(this)
-        store.save(store.read().withReaderPreferences(libraryId, normalized))
+        store.save(store.read().withReaderPreferences(readerProfileId, libraryId, normalized))
         configureSystemBars()
         if (layoutChanged) {
             rebuildPublication()
