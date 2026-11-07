@@ -132,7 +132,7 @@ Provider-specific validation is tracked in the [provider function matrix](docs/p
 
 Progress uploads are queued and throttled rather than sent immediately, and can be delayed by connectivity; a clean reader/player close attempts a best-effort flush of the pending queue but is not guaranteed to complete before the app fully closes offline.
 
-For BookOrbit, Currently Reading uses locally recorded reading-activity times for books read on this device to keep shelf order stable after refreshes and restarts. A later read on another device does not override that local ordering timestamp; server progress and reading status still sync independently. Explicit local status changes and progress resets clear the local ordering timestamp.
+For BookOrbit, Currently Reading uses locally recorded reading-activity times for books read on this device to keep shelf order stable after refreshes, restarts, and switching between server profiles. The activity is isolated by profile and authenticated account. A later read on another device does not override that local ordering timestamp; server progress and reading status still sync independently. Explicit local status changes, progress resets, and signing out clear the affected local ordering timestamps.
 
 ## Server reading sessions
 

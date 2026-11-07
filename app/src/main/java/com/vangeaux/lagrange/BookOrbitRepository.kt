@@ -824,6 +824,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         val automaticPolicy = runCatching {
             activeAutomaticDownloadPolicy(automaticProfileId, automaticServerUrl)
         }.getOrNull()
+        preserveLegacyReadingActivity(automaticServerUrl.orEmpty(), activeReaderScope)
         try {
             // Covers remain available across profile switches because their disk cache is already
             // isolated by server, profile and account.
@@ -853,6 +854,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
 
     override suspend fun beginInteractiveSignIn() {
         lastHomeShelfPreferences = null
+        val serverUrl = getServerUrl().orEmpty()
+        preserveLegacyReadingActivity(serverUrl, resolveEpubReaderScope(context, serverUrl))
         val profileId = currentProfileId()
         profileId?.let { AuthenticatedAccountScopeStore(context).deactivate(it) }
         mutateCatalogImageSession {
@@ -929,6 +932,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         clearReaderResumeState: Boolean
     ) =
         withContext(NonCancellable) {
+        val legacyReadingActivityServerUrl = getServerUrl().orEmpty()
         var credentialFailure: Exception? = null
         try {
             context.dataStore.edit { prefs ->
@@ -958,7 +962,16 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         bestEffortRuntimeCleanup("clear annotation queue") { annotationMutationQueueStore.clear() }
         bestEffortRuntimeCleanup("clear annotation mappings") { annotationLocalIdMappingStore.clear() }
         bestEffortRuntimeCleanup("clear last synced progress") { lastSyncedProgressStore.clear() }
-        bestEffortRuntimeCleanup("clear reading activity") { readingActivityStore.clear() }
+        if (clearReaderResumeState) {
+            bestEffortRuntimeCleanup("clear reading activity") {
+                activeReaderScope?.let { scope ->
+                    readingActivityStore.clearScope(epubReaderPersistenceScopePrefix(scope))
+                }
+                if (legacyReadingActivityServerUrl.isNotBlank()) {
+                    readingActivityStore.clearScope(legacyReadingActivityServerUrl)
+                }
+            }
+        }
         bestEffortRuntimeCleanup("clear browser snapshot") { browserSnapshotStore.clear() }
         bestEffortRuntimeCleanup("clear catalog snapshot") { catalogSnapshotStore.clear() }
         bestEffortRuntimeCleanup("clear library catalog") { libraryCatalogStore.clear() }
@@ -1089,6 +1102,8 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         if (username.isBlank() || password.isBlank()) {
             throw InvalidCredentialsException()
         }
+        val serverUrl = getServerUrl().orEmpty()
+        preserveLegacyReadingActivity(serverUrl, resolveEpubReaderScope(context, serverUrl))
         val body = JSONObject()
             .put("username", username)
             .put("password", password)
@@ -1096,7 +1111,6 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             .toRequestBody(JSON)
         mutateCatalogImageSession {
             requestLogin(body)
-            val serverUrl = getServerUrl().orEmpty()
             catalogImageAccountScopeStore.write(
                 currentProfileId() ?: serverUrl,
                 catalogImageUserAccountScope(serverUrl, username)
@@ -1321,13 +1335,34 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     }
 
     override suspend fun loadReadingActivity(serverUrl: String): Map<ReadingActivityKey, Long> =
-        withContext(Dispatchers.IO) { readingActivityStore.read(serverUrl) }
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext emptyMap()
+            val storageKey = epubReaderPersistenceScopePrefix(scope)
+            readingActivityStore.migrateLegacy(serverUrl, storageKey)
+            readingActivityStore.read(storageKey)
+        }
+
+    private suspend fun preserveLegacyReadingActivity(serverUrl: String, scope: EpubReaderScope?) {
+        readingActivityStore.preserveLegacy(serverUrl, scope?.let(::epubReaderPersistenceScopePrefix))
+    }
 
     override suspend fun recordReadingActivity(serverUrl: String, key: ReadingActivityKey, timestamp: Long) =
-        withContext(Dispatchers.IO) { readingActivityStore.record(serverUrl, key, timestamp) }
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl)
+                ?: throw IllegalStateException("Cannot save reading activity without an active account.")
+            val storageKey = epubReaderPersistenceScopePrefix(scope)
+            readingActivityStore.migrateLegacy(serverUrl, storageKey)
+            readingActivityStore.record(storageKey, key, timestamp)
+        }
 
     override suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) =
-        withContext(Dispatchers.IO) { readingActivityStore.remove(serverUrl, key) }
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl)
+                ?: throw IllegalStateException("Cannot remove reading activity without an active account.")
+            val storageKey = epubReaderPersistenceScopePrefix(scope)
+            readingActivityStore.migrateLegacy(serverUrl, storageKey)
+            readingActivityStore.remove(storageKey, key)
+        }
 
     override suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = withContext(Dispatchers.IO) {
         runCatching {

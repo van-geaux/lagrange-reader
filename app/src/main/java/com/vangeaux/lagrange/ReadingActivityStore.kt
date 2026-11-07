@@ -34,6 +34,27 @@ internal class ReadingActivityStore(filesDir: File) {
         writeAll(all)
     }
 
+    suspend fun migrateLegacy(serverUrl: String, scope: String) = mutex.withLock {
+        require(serverUrl != scope)
+        val all = readAll().mapValues { it.value.toMutableMap() }.toMutableMap()
+        val legacy = all.remove(serverUrl) ?: return@withLock
+        val activities = all.getOrPut(scope) { mutableMapOf() }
+        legacy.forEach { (key, timestamp) ->
+            activities[key] = maxOf(activities[key] ?: timestamp, timestamp)
+        }
+        writeAll(all)
+    }
+
+    suspend fun clearScope(scope: String) = mutex.withLock {
+        val all = readAll().mapValues { it.value.toMutableMap() }.toMutableMap()
+        if (all.remove(scope) != null) writeAll(all)
+    }
+
+    suspend fun preserveLegacy(serverUrl: String, scope: String?) {
+        if (serverUrl.isBlank()) return
+        if (scope == null) clearScope(serverUrl) else migrateLegacy(serverUrl, scope)
+    }
+
     suspend fun clear() = mutex.withLock {
         Files.deleteIfExists(file.toPath())
     }
