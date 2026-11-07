@@ -6,6 +6,7 @@ import com.vangeaux.lagrange.core.ReaderLifecycleModule
 import com.vangeaux.lagrange.provider.resolveProviderHomeShelfModule
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -2928,6 +2929,46 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `two local reads keep subsecond order across server refresh and restart`() = runTest {
+        val first = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 1_002_000L)
+        val second = book.copy(
+            id = "book-2",
+            fileId = "file-2",
+            readStatus = BookReadStatus.READING,
+            lastReadAtMillis = 1_003_000L
+        )
+        val repository = FakeBookOrbitDataSource(
+            loadLibrariesResult = listOf(library),
+            loadBooksResult = listOf(second, first)
+        ).apply {
+            selectedLibraryId = library.id
+        }
+        repository.recordReadingActivity(serverUrl, ReadingActivityKey(library.id, first.id), 1_000_900L)
+        repository.recordReadingActivity(serverUrl, ReadingActivityKey(library.id, second.id), 1_000_500L)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        val initial = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
+        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(initial, limit = null).map { it.id })
+
+        repository.loadBooksResult = listOf(
+            second.copy(lastReadAtMillis = 1_004_000L),
+            first.copy(lastReadAtMillis = 1_004_000L)
+        )
+        coordinator.refreshBrowser()
+        advanceUntilIdle()
+        val refreshed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
+        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
+
+        val restarted = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        restarted.loadBrowser()
+        advanceUntilIdle()
+        val afterRestart = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
+        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
+    }
+
+    @Test
     fun `currently reading retains local activity order after coordinator restart`() = runTest {
         val justRead = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
         val other = book.copy(
@@ -2968,6 +3009,99 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `reading activity is restored from disk by a new repository and coordinator`() = runTest {
+        val directory = Files.createTempDirectory("coordinator-reading-activity").toFile()
+        val store = ReadingActivityStore(directory)
+        try {
+            val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
+            val other = book.copy(
+                id = "book-2",
+                fileId = "file-2",
+                readStatus = BookReadStatus.READING,
+                lastReadAtMillis = 200L
+            )
+            val repository = FakeBookOrbitDataSource(
+                loadLibrariesResult = listOf(library),
+                loadBooksResult = listOf(current, other),
+                readingActivityStore = store
+            ).apply { selectedLibraryId = library.id }
+            val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+            coordinator.bootstrapIntoBrowser(
+                BrowserState(
+                    serverUrl = serverUrl,
+                    libraries = listOf(library),
+                    selectedLibraryId = library.id,
+                    books = listOf(current, other)
+                )
+            )
+            coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = current)))
+            coordinator.onProgress(current, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+            coordinator.closeReader()
+            val localTimestamp = requireNotNull(
+                (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
+                    .single { it.id == current.id }.lastReadAtMillis
+            )
+            advanceUntilIdle()
+            assertEquals(localTimestamp, store.read(serverUrl)[ReadingActivityKey(library.id, current.id)])
+
+            val newRepository = FakeBookOrbitDataSource(
+                loadLibrariesResult = listOf(library),
+                loadBooksResult = listOf(current, other),
+                readingActivityStore = ReadingActivityStore(directory)
+            ).apply { selectedLibraryId = library.id }
+            val restarted = AppCoordinator(newRepository, StandardTestDispatcher(testScheduler))
+            restarted.loadBrowser()
+            advanceUntilIdle()
+            val books = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
+            assertEquals(localTimestamp, books.single { it.id == current.id }.lastReadAtMillis)
+            assertEquals(listOf(current.id, other.id), currentlyReadingBooks(books, limit = null).map { it.id })
+
+            restarted.removeFromCurrentlyReading(current)
+            advanceUntilIdle()
+            assertEquals(emptyMap<ReadingActivityKey, Long>(), store.read(serverUrl))
+            newRepository.loadBooksResult = listOf(current.withReadingStateReset(), other)
+            val afterReset = AppCoordinator(newRepository, StandardTestDispatcher(testScheduler))
+            afterReset.loadBrowser()
+            advanceUntilIdle()
+            val resetBooks = (afterReset.screen.value as AppScreen.Browser).browserState.homeBooks
+            assertEquals(listOf(other.id), currentlyReadingBooks(resetBooks, limit = null).map { it.id })
+            assertNull(resetBooks.single { it.id == current.id }.lastReadAtMillis)
+        } finally {
+            store.clear()
+            Files.delete(directory.toPath())
+        }
+    }
+
+    @Test
+    fun `offline startup applies persisted reading activity to cached books`() = runTest {
+        val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
+        val other = book.copy(
+            id = "book-2",
+            fileId = "file-2",
+            readStatus = BookReadStatus.READING,
+            lastReadAtMillis = 200L
+        )
+        val repository = FakeBookOrbitDataSource(
+            sessionState = SessionState.Unavailable,
+            cachedBrowserState = BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current, other)
+            )
+        )
+        repository.recordReadingActivity(serverUrl, ReadingActivityKey(library.id, current.id), 300L)
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+
+        val state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertTrue(state.isOfflineSnapshot)
+        assertEquals(listOf(current.id, other.id), currentlyReadingBooks(state.homeBooks, limit = null).map { it.id })
+    }
+
+    @Test
     fun `reset reading state stays removed after refresh and coordinator restart`() = runTest {
         val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
         val other = book.copy(
@@ -2999,6 +3133,7 @@ class AppCoordinatorTest {
         coordinator.removeFromCurrentlyReading(current)
         advanceUntilIdle()
         assertEquals(listOf(current), repository.resetReadingStateBooks)
+        assertTrue(repository.loadReadingActivity(serverUrl).isEmpty())
         val afterReset = (coordinator.screen.value as AppScreen.Browser).browserState
         assertEquals(listOf(other.id), currentlyReadingBooks(afterReset.homeBooks, limit = null).map { it.id })
 
@@ -3043,6 +3178,7 @@ class AppCoordinatorTest {
 
             coordinator.setBookReadingStatus(current, status)
             advanceUntilIdle()
+            assertTrue(repository.loadReadingActivity(serverUrl).isEmpty())
             val changed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks.single()
             assertEquals(status, changed.readStatus)
             assertTrue(currentlyReadingBooks(listOf(changed), limit = null).isEmpty())
@@ -3064,7 +3200,7 @@ class AppCoordinatorTest {
     }
 
     @Test
-    fun `newer remote reading activity replaces local ordering timestamp`() = runTest {
+    fun `remote reading activity orders books without local activity`() = runTest {
         val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
         val other = book.copy(
             id = "book-2",
@@ -3091,22 +3227,69 @@ class AppCoordinatorTest {
         val localReadAt = requireNotNull(local.single { it.id == current.id }.lastReadAtMillis)
         val remoteReadAt = localReadAt + 10_000L
         repository.loadBooksResult = listOf(
-            current.copy(lastReadAtMillis = remoteReadAt, progressPercent = 75f),
-            other.copy(lastReadAtMillis = localReadAt + 5_000L)
+            current.copy(lastReadAtMillis = localReadAt - 1_000L, progressPercent = 75f),
+            other.copy(lastReadAtMillis = remoteReadAt)
         )
 
         advanceUntilIdle()
 
         val refreshed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(remoteReadAt, refreshed.single { it.id == current.id }.lastReadAtMillis)
-        assertEquals(listOf(current.id, other.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
+        assertEquals(localReadAt, refreshed.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(remoteReadAt, refreshed.single { it.id == other.id }.lastReadAtMillis)
+        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
 
         val restarted = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
         restarted.loadBrowser()
         advanceUntilIdle()
         val afterRestart = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(remoteReadAt, afterRestart.single { it.id == current.id }.lastReadAtMillis)
-        assertEquals(listOf(current.id, other.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
+        assertEquals(localReadAt, afterRestart.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(remoteReadAt, afterRestart.single { it.id == other.id }.lastReadAtMillis)
+        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
+    }
+
+    @Test
+    fun `local reading timestamp wins even when server timestamp is later`() = runTest {
+        val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
+        val other = book.copy(
+            id = "book-2",
+            fileId = "file-2",
+            readStatus = BookReadStatus.READING,
+            lastReadAtMillis = 200L
+        )
+        val repository = FakeBookOrbitDataSource(loadLibrariesResult = listOf(library)).apply {
+            selectedLibraryId = library.id
+        }
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(current, other)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = current)))
+        coordinator.onProgress(current, position = 90_000L, pageIndex = 9, progressPercent = 50f)
+        coordinator.closeReader()
+        val local = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
+        val localReadAt = requireNotNull(local.single { it.id == current.id }.lastReadAtMillis)
+        repository.loadBooksResult = listOf(
+            current.copy(lastReadAtMillis = localReadAt + 10_000L, progressPercent = 75f),
+            other.copy(lastReadAtMillis = localReadAt + 5_000L)
+        )
+        advanceUntilIdle()
+
+        val refreshed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
+        assertEquals(localReadAt, refreshed.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(75f, refreshed.single { it.id == current.id }.progressPercent)
+        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
+
+        val restarted = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        restarted.loadBrowser()
+        advanceUntilIdle()
+        val afterRestart = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
+        assertEquals(localReadAt, afterRestart.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
     }
 
     @Test
@@ -3659,6 +3842,7 @@ private class FakeBookOrbitDataSource(
     var downloadGate: CompletableDeferred<Unit>? = null,
     var loadLibrariesResult: List<LibrarySummary> = emptyList(),
     var loadBooksResult: List<BookSummary> = emptyList(),
+    var readingActivityStore: ReadingActivityStore? = null,
     var homeShelvesResult: HomeShelfData = HomeShelfData(),
     var cachedLibraryCatalog: LibraryBooksPage? = null,
     var refreshLibraryCatalogResult: LibraryBooksPage? = null,
@@ -3681,6 +3865,29 @@ private class FakeBookOrbitDataSource(
     var restoreAnnotationError: Throwable? = null,
     var purgeAnnotationError: Throwable? = null
 ) : BookOrbitDataSource {
+    override val supportsLocalReadingActivity: Boolean = true
+    val readingActivity = mutableMapOf<String, MutableMap<ReadingActivityKey, Long>>()
+
+    override suspend fun loadReadingActivity(serverUrl: String): Map<ReadingActivityKey, Long> =
+        readingActivityStore?.read(serverUrl) ?: readingActivity[serverUrl].orEmpty().toMap()
+
+    override suspend fun recordReadingActivity(serverUrl: String, key: ReadingActivityKey, timestamp: Long) {
+        readingActivityStore?.let {
+            it.record(serverUrl, key, timestamp)
+            return
+        }
+        val entries = readingActivity.getOrPut(serverUrl) { mutableMapOf() }
+        entries[key] = maxOf(entries[key] ?: timestamp, timestamp)
+    }
+
+    override suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) {
+        readingActivityStore?.let {
+            it.remove(serverUrl, key)
+            return
+        }
+        readingActivity[serverUrl]?.remove(key)
+    }
+
     val restoreActiveReaderCalls = mutableListOf<Boolean>()
     val buildReaderLocalOnlyCalls = mutableListOf<Boolean>()
     val buildReaderBooks = mutableListOf<BookSummary>()

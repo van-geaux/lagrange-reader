@@ -17,6 +17,8 @@ import kotlinx.coroutines.awaitAll
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -471,6 +473,9 @@ class AppCoordinator internal constructor(
     private var manualBrowserRefreshInFlight = false
     private val latestProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
     private val queuedProgressByTarget = mutableMapOf<BookProgressKey, PendingProgress>()
+    private val readingActivityMutex = Mutex()
+    private val localReadingActivity = mutableMapOf<ReadingActivityKey, Long>()
+    private var readingActivityServerUrl: String? = null
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var allowCachedLoginFallback = true
     private var acceptAudioProgress = true
@@ -603,6 +608,16 @@ class AppCoordinator internal constructor(
                 sessionModule?.restoreCurrentProfileSession() ?: true
             if (!restoredProfileSession) {
                 allowCachedLoginFallback = false
+            }
+
+            if (restoredProfileSession) {
+                try {
+                    loadLocalReadingActivity(serverUrl)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    Log.w("ReadingActivity", "Unable to load reading activity", error)
+                }
             }
 
             val localAudioState = if (restoredProfileSession) {
@@ -1331,6 +1346,7 @@ class AppCoordinator internal constructor(
                 )
             }
             runCatching {
+                loadLocalReadingActivity(serverUrl)
                 val libraries = libraryModule()?.loadLibraries() ?: repository.loadLibraries()
                 val selectedLibrary = resolveSelectedLibraryId(
                     preferredId = serverSelectionModule()?.getSelectedLibraryId() ?: repository.getSelectedLibraryId(),
@@ -2392,6 +2408,7 @@ class AppCoordinator internal constructor(
             else -> scope.launch {
                 try {
                     readingStatusModule()?.setBookReadingStatus(book, status) ?: repository.setBookReadingStatus(book, status)
+                    removeLocalReadingActivity(book)
                     latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                     queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                     val current = lastBrowserState ?: return@launch
@@ -2452,6 +2469,7 @@ class AppCoordinator internal constructor(
         scope.launch {
             try {
                 readingStatusModule()?.markBookAsRead(book) ?: repository.markBookAsRead(book)
+                removeLocalReadingActivity(book)
                 latestProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 queuedProgressByTarget.entries.removeAll { (key, _) -> key.bookId == book.id }
                 val current = lastBrowserState ?: return@launch
@@ -2536,6 +2554,7 @@ class AppCoordinator internal constructor(
         scope.launch {
             try {
                 readingStatusModule()?.resetBookReadingState(book) ?: repository.resetBookReadingState(book)
+                removeLocalReadingActivity(book)
                 readerLifecycleModule?.clearEpubReaderPosition(
                     (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty(),
                     book
@@ -2799,6 +2818,11 @@ class AppCoordinator internal constructor(
         // Keep this assignment outside the coroutine. A reader can be closed immediately
         // after a page callback, and closeReader must still be able to flush this update.
         latestProgressByTarget[key] = progress
+        val activityServerUrl = lastBrowserState?.serverUrl
+        if (repository.supportsLocalReadingActivity && !activityServerUrl.isNullOrBlank()) {
+            useReadingActivityServer(activityServerUrl)
+            localReadingActivity[book.readingActivityKey()] = progress.observedAtMillis
+        }
         scope.launch {
             saveActiveReader(
                 book.copy(
@@ -2821,6 +2845,9 @@ class AppCoordinator internal constructor(
                 acceptAudioProgress &&
                     ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())
             ) {
+                if (!activityServerUrl.isNullOrBlank()) {
+                    persistReadingActivitySafely(activityServerUrl, progress)
+                }
                 runCatching { queueProgress(key, progress) }
                     .onFailure { error -> Log.w("ProgressSync", "Unable to queue reading progress", error) }
             }
@@ -2875,6 +2902,9 @@ class AppCoordinator internal constructor(
             if (launchMode == ReaderLaunchMode.NORMAL) {
                 val key = book.progressKey()
                 latestProgressByTarget[key]?.let { progress ->
+                    lastBrowserState?.serverUrl?.takeIf(String::isNotBlank)?.let { serverUrl ->
+                        persistReadingActivitySafely(serverUrl, progress)
+                    }
                     if (ProgressQueuePolicy.isMeaningfullyDifferent(
                             progress.toSnapshot(),
                             queuedProgressByTarget[key]?.toSnapshot()
@@ -2993,7 +3023,7 @@ class AppCoordinator internal constructor(
     }
 
     private fun showBrowser(state: BrowserState) {
-        val profileScopedState = state.copy(
+        val profileScopedState = state.withLocalReadingActivity().copy(
             profileId = serverProfileStore?.activeId() ?: state.profileId
         )
         val restored = restoredInterruptedDownloads
@@ -3020,8 +3050,9 @@ class AppCoordinator internal constructor(
     }
 
     private fun navigateToBrowser(state: BrowserState) {
-        lastBrowserState = state
-        _screen.value = AppScreen.Browser(browserState = state)
+        val next = state.withLocalReadingActivity()
+        lastBrowserState = next
+        _screen.value = AppScreen.Browser(browserState = next)
     }
 
     private fun updateLocalFileState(
@@ -3112,7 +3143,27 @@ class AppCoordinator internal constructor(
                 )
             }
             .toList()
-        return merged + recentBooks
+        return applyLocalReadingActivity(merged + recentBooks)
+    }
+
+    private fun applyLocalReadingActivity(books: List<BookSummary>): List<BookSummary> =
+        books.map { book ->
+            val localTimestamp = localReadingActivity[book.readingActivityKey()]
+            if (localTimestamp == null || (book.readStatus != BookReadStatus.READING &&
+                    book.readStatus != BookReadStatus.REREADING)) {
+                book
+            } else {
+                // This first-pass ordering is local-device authoritative, not a cross-device merge.
+                book.copy(lastReadAtMillis = localTimestamp)
+            }
+        }
+
+    private fun BrowserState.withLocalReadingActivity(): BrowserState {
+        if (readingActivityServerUrl != serverUrl || localReadingActivity.isEmpty()) return this
+        return copy(
+            books = applyLocalReadingActivity(books),
+            homeBooks = applyLocalReadingActivity(homeBooks)
+        )
     }
 
     private fun mergeKnownProgress(shelves: HomeShelfData): HomeShelfData = shelves.copy(
@@ -3149,6 +3200,8 @@ class AppCoordinator internal constructor(
         reconciledActiveDownloadsByFileId = emptyMap()
         latestProgressByTarget.clear()
         queuedProgressByTarget.clear()
+        localReadingActivity.clear()
+        readingActivityServerUrl = null
         pendingPostLoginDestination = null
         loginRefreshInFlight = false
         loginSubmitInFlight = false
@@ -3241,6 +3294,9 @@ class AppCoordinator internal constructor(
         reader ?: return
         val key = reader.readerState.book.progressKey()
         val progress = latestProgressByTarget[key] ?: return
+        lastBrowserState?.serverUrl?.takeIf(String::isNotBlank)?.let { serverUrl ->
+            persistReadingActivitySafely(serverUrl, progress)
+        }
         if (ProgressQueuePolicy.isMeaningfullyDifferent(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())) {
             queueProgress(key, progress)
         }
@@ -3272,6 +3328,55 @@ class AppCoordinator internal constructor(
             fileId = fileId,
             mediaKind = mediaKind
         )
+    }
+
+    private fun BookSummary.readingActivityKey() = ReadingActivityKey(libraryId, id)
+
+    private fun useReadingActivityServer(serverUrl: String) {
+        if (readingActivityServerUrl != serverUrl) {
+            localReadingActivity.clear()
+            readingActivityServerUrl = serverUrl
+        }
+    }
+
+    private suspend fun loadLocalReadingActivity(serverUrl: String) {
+        if (!repository.supportsLocalReadingActivity) return
+        readingActivityMutex.withLock {
+            useReadingActivityServer(serverUrl)
+            repository.loadReadingActivity(serverUrl).forEach { (key, timestamp) ->
+                localReadingActivity[key] = maxOf(localReadingActivity[key] ?: timestamp, timestamp)
+            }
+        }
+    }
+
+    private suspend fun persistReadingActivity(serverUrl: String, progress: PendingProgress) {
+        if (!repository.supportsLocalReadingActivity) return
+        readingActivityMutex.withLock {
+            val key = progress.book.readingActivityKey()
+            if (readingActivityServerUrl == serverUrl && localReadingActivity[key] == progress.observedAtMillis) {
+                repository.recordReadingActivity(serverUrl, key, progress.observedAtMillis)
+            }
+        }
+    }
+
+    private suspend fun persistReadingActivitySafely(serverUrl: String, progress: PendingProgress) {
+        try {
+            persistReadingActivity(serverUrl, progress)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w("ReadingActivity", "Unable to save reading activity", error)
+        }
+    }
+
+    private suspend fun removeLocalReadingActivity(book: BookSummary) {
+        if (!repository.supportsLocalReadingActivity) return
+        val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
+        readingActivityMutex.withLock {
+            val key = book.readingActivityKey()
+            repository.removeReadingActivity(serverUrl, key)
+            if (readingActivityServerUrl == serverUrl) localReadingActivity.remove(key)
+        }
     }
 
     private data class BookProgressKey(

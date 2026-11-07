@@ -368,6 +368,7 @@ internal fun extractAccessToken(payload: String): String? {
 }
 
 interface BookOrbitDataSource {
+    val supportsLocalReadingActivity: Boolean get() = false
     /** An interactive sign-in (server sign-in page) is starting; its account is not known yet. */
     suspend fun beginInteractiveSignIn() {}
     /** The interactive sign-in started by [beginInteractiveSignIn] has authenticated. */
@@ -417,6 +418,9 @@ interface BookOrbitDataSource {
     suspend fun loadCachedHomeBooks(): List<BookSummary> = emptyList()
     suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData()
+    suspend fun loadReadingActivity(serverUrl: String): Map<ReadingActivityKey, Long> = emptyMap()
+    suspend fun recordReadingActivity(serverUrl: String, key: ReadingActivityKey, timestamp: Long) = Unit
+    suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) = Unit
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -576,6 +580,7 @@ internal fun bookOrbitAuthenticatedPrincipal(payload: String): AuthenticatedAcco
     )
 
 class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, ProfileSessionAware, BookOrbitAuthenticatedJsonRequestExecutor {
+    override val supportsLocalReadingActivity: Boolean = true
     /**
      * Feature modules are composed around the existing BookOrbit implementation.
      * The legacy data-source surface remains temporarily for compatibility while
@@ -598,6 +603,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val activeReaderStore = ActiveReaderStore(context)
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
+    private val readingActivityStore = ReadingActivityStore(context)
     private val appStorageManager = AppStorageManager(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
@@ -952,6 +958,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         bestEffortRuntimeCleanup("clear annotation queue") { annotationMutationQueueStore.clear() }
         bestEffortRuntimeCleanup("clear annotation mappings") { annotationLocalIdMappingStore.clear() }
         bestEffortRuntimeCleanup("clear last synced progress") { lastSyncedProgressStore.clear() }
+        bestEffortRuntimeCleanup("clear reading activity") { readingActivityStore.clear() }
         bestEffortRuntimeCleanup("clear browser snapshot") { browserSnapshotStore.clear() }
         bestEffortRuntimeCleanup("clear catalog snapshot") { catalogSnapshotStore.clear() }
         bestEffortRuntimeCleanup("clear library catalog") { libraryCatalogStore.clear() }
@@ -1312,6 +1319,15 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
         }
         books.withCoverAspectRatios(libraryCoverAspectRatios).withCurrentDownloads(downloads)
     }
+
+    override suspend fun loadReadingActivity(serverUrl: String): Map<ReadingActivityKey, Long> =
+        withContext(Dispatchers.IO) { readingActivityStore.read(serverUrl) }
+
+    override suspend fun recordReadingActivity(serverUrl: String, key: ReadingActivityKey, timestamp: Long) =
+        withContext(Dispatchers.IO) { readingActivityStore.record(serverUrl, key, timestamp) }
+
+    override suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) =
+        withContext(Dispatchers.IO) { readingActivityStore.remove(serverUrl, key) }
 
     override suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = withContext(Dispatchers.IO) {
         runCatching {
