@@ -225,7 +225,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 - [x] Stream/open a supported EPUB online.
 - [ ] Stream/open a supported PDF online.
-- [x] Stream/open a supported comic online. (User confirmed the online Komga comic opens and the page counter advances in the issue-223 APK; the validated scope is the streamed CBZ/CBR path.)
+- [x] Stream/open a supported comic online. (User confirmed the online Komga comic opens and the page counter advances in the issue-223 APK; the validated scope is the streamed CBZ/CBR path. Issue [#398](https://github.com/van-geaux/lagrange-reader/issues/398) additionally covers the affected online CBZ page-list path, user-confirmed working on 9 November 2026 with `Lagrange-debug-202611091440.apk` against Komga. Server instance label, device model/OS, and screenshot/log evidence were not supplied; this confirmation does not claim CBR/CB7, page-counter progression, download retention, or broader functionality.)
 - [-] Stream/listen to a supported audiobook online. (Komga does not support audiobook)
 - [x] Authentication headers/session handling work for every supported media type.
 - [x] Preview opens without writing normal progress or incorrectly marking the book read.
