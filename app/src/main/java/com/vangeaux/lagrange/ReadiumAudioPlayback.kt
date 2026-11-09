@@ -89,6 +89,7 @@ internal const val AUDIO_OPEN_CANCELLED_MESSAGE = "Audiobook opening was cancell
 internal const val AUDIO_SEEK_BACK_INCREMENT_MS = 10_000L
 internal const val AUDIO_SEEK_FORWARD_INCREMENT_MS = 30_000L
 internal const val AUDIO_SEEK_BACK_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_BACK_10"
+internal const val AUDIO_SEEK_BACK_30_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_BACK_30"
 internal const val AUDIO_SEEK_FORWARD_SESSION_ACTION = "com.vangeaux.lagrange.AUDIO_SEEK_FORWARD_30"
 private const val AUDIO_SERVICE_BIND_TIMEOUT_MILLIS = 10_000L
 private const val AUDIO_ENGINE_PREPARATION_TIMEOUT_MILLIS = 30_000L
@@ -98,6 +99,10 @@ private const val READALONG_NEXT_ACTION = "com.vangeaux.lagrange.READALONG_NEXT"
 
 internal val audiobookSeekBackSessionCommand = SessionCommand(
     AUDIO_SEEK_BACK_SESSION_ACTION,
+    Bundle()
+)
+internal val audiobookAutoSeekBackSessionCommand = SessionCommand(
+    AUDIO_SEEK_BACK_30_SESSION_ACTION,
     Bundle()
 )
 internal val audiobookSeekForwardSessionCommand = SessionCommand(
@@ -154,11 +159,11 @@ internal fun audiobookReadiumEngineConfiguration(): ExoPlayerEngine.Configuratio
 internal fun audiobookMediaButtonPreferences(): List<CommandButton> = listOf(
     CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
         .setSessionCommand(audiobookSeekBackSessionCommand)
-        .setDisplayName("Replay 10 seconds")
+        .setDisplayName("Replay 10 seconds") // i18n-ignore: test-stable fallback without context
         .build(),
     CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
         .setSessionCommand(audiobookSeekForwardSessionCommand)
-        .setDisplayName("Forward 30 seconds")
+        .setDisplayName("Forward 30 seconds") // i18n-ignore: test-stable fallback without context
         .build()
 )
 
@@ -179,6 +184,7 @@ internal fun audiobookMediaButtonPreferences(context: Context): List<CommandButt
 internal fun audiobookAvailableSessionCommands(): SessionCommands =
     MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
         .add(audiobookSeekBackSessionCommand)
+        .add(audiobookAutoSeekBackSessionCommand)
         .add(audiobookSeekForwardSessionCommand)
         .add(audiobookPreviousChapterSessionCommand)
         .add(audiobookNextChapterSessionCommand)
@@ -198,6 +204,8 @@ internal fun audiobookExternalPlayerCommands(
 ): Player.Commands = commands.buildUpon()
     .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
     .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+    .add(Player.COMMAND_SEEK_BACK)
+    .add(Player.COMMAND_SEEK_FORWARD)
     .add(Player.COMMAND_SEEK_TO_PREVIOUS)
     .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
     .add(Player.COMMAND_SEEK_TO_NEXT)
@@ -457,23 +465,42 @@ internal class AudiobookMediaSessionCallback(
         // building the custom layout that contains playback button labels.
         serviceProvider()?.let { AndroidAutoStrings.attach(it) }
         val isAutoController = session.isAutoCompanionController(controller) ||
-            session.isAutomotiveController(controller)
-        val hasChapters = serviceProvider()?.activeSessionHasChapters() == true
-        val currentSpeed = session.player.playbackParameters.speed.takeIf { it > 0f } ?: 1.0f
-        val customLayout = if (isAutoController) {
-            audiobookAutoMediaButtonPreferences(hasChapters = hasChapters, currentSpeed = currentSpeed)
+            session.isAutomotiveController(controller) ||
+            controller.packageName in KNOWN_AUTOMOTIVE_PACKAGES ||
+            serviceProvider()?.hasConnectedAndroidAutoController() == true
+        val playerCommands = if (isAutoController) {
+            audiobookAutoPlayerCommands(session.player.availableCommands)
         } else {
-            appContext?.let { audiobookMediaButtonPreferences(it) } ?: audiobookMediaButtonPreferences()
+            audiobookExternalPlayerCommands(session.player.availableCommands)
         }
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
             .setAvailableSessionCommands(audiobookAvailableSessionCommands())
-            .setAvailablePlayerCommands(
-                audiobookExternalPlayerCommands(
-                    session.player.availableCommands
-                )
-            )
-            .setCustomLayout(customLayout)
+            .setAvailablePlayerCommands(playerCommands)
+            .setSessionExtras(androidAutoSessionExtras())
             .build()
+    }
+
+    override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
+        super.onPostConnect(session, controller)
+        serviceProvider()?.refreshAndroidAutoCustomLayout()
+        serviceProvider()?.librarySessionPlayer?.notifyTimelineAndMetadataChanged()
+    }
+
+    override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
+        super.onDisconnected(session, controller)
+        serviceProvider()?.refreshAndroidAutoCustomLayout()
+        serviceProvider()?.librarySessionPlayer?.notifyTimelineAndMetadataChanged()
+    }
+
+    override fun onMediaButtonEvent(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        intent: Intent
+    ): Boolean {
+        if (handleAndroidAutoMediaButtonEvent(session, controllerInfo, intent)) {
+            return true
+        }
+        return super.onMediaButtonEvent(session, controllerInfo, intent)
     }
 
     override fun onCustomCommand(
@@ -1260,20 +1287,16 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             sessionProvider = ::activeSession,
             scaleBySpeedProvider = {
                 AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
-            }
+            },
+            isAutoConnectedProvider = ::hasConnectedAndroidAutoController
         ).also {
             librarySessionPlayer = it
         }
-        val initialSpeed = AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
         return MediaLibrarySession.Builder(this, forwarding, mediaSessionCallback)
             .setId(LIBRARY_SESSION_ID)
             .setSessionActivity(createSessionActivityIntent())
-            .setCustomLayout(
-                audiobookAutoMediaButtonPreferences(
-                    hasChapters = false,
-                    currentSpeed = initialSpeed
-                )
-            )
+            .setSessionExtras(androidAutoSessionExtras())
+            .setCustomLayout(audiobookMediaButtonPreferences(applicationContext))
             .build()
             .also { created ->
                 mediaLibrarySession = created
@@ -1319,7 +1342,8 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     sessionProvider = ::activeSession,
                     scaleBySpeedProvider = {
                         AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
-                    }
+                    },
+                    isAutoConnectedProvider = ::hasConnectedAndroidAutoController
                 )
                 wrappedPlayer.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -1342,12 +1366,8 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 wrappedPlayer.notifyTimelineAndMetadataChanged()
                 val currentSpeed = engine.player.playbackParameters.speed.takeIf { it > 0f }
                     ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
-                librarySession.setCustomLayout(
-                    audiobookAutoMediaButtonPreferences(
-                        hasChapters = book.audioChapters.isNotEmpty() || audioFiles.size > 1,
-                        currentSpeed = currentSpeed
-                    )
-                )
+                val hasChapters = book.audioChapters.isNotEmpty() || audioFiles.size > 1
+                refreshAndroidAutoCustomLayout(currentSpeed, hasChaptersOverride = hasChapters)
                 grantBookCoverPermissions(this@ReadiumAudioPlaybackService, book)
                 return Session(
                     book,
@@ -1358,6 +1378,7 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     aggregateDurationMs
                 ).also { session ->
                     mutableSession.value = session
+                    refreshAndroidAutoCustomLayout(currentSpeed, hasChaptersOverride = hasChapters)
                     libraryScope.launch {
                         delay(500)
                         if (mutableSession.value === session) {
