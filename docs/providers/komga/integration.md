@@ -19,6 +19,8 @@ The implementation follows Komga's documented REST contract:
 - book details: `GET /api/v1/books/{bookId}`;
 - cover thumbnails: `GET /api/v1/books/{bookId}/thumbnail` and `GET /api/v1/series/{seriesId}/thumbnail`;
 - book file: `GET /api/v1/books/{bookId}/file`;
+- comic page list: `GET /api/v1/books/{bookId}/pages?zero_based=true` with `Accept: application/json`;
+- comic page image: `GET /api/v1/books/{bookId}/pages/{pageNumber}` with `Accept: image/*`;
 - reading progress: `PATCH /api/v1/books/{bookId}/read-progress` and Readium progression `PUT /api/v1/books/{bookId}/progression`;
 - reading status: `PATCH` and `DELETE` on `/api/v1/books/{bookId}/read-progress`.
 

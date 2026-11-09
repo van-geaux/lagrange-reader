@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Credentials
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -1378,7 +1379,19 @@ private fun JSONArray?.toStringList(): List<String> = buildList {
     }
 }
 
-class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverModule {
+private fun komgaCatalogImageAcceptHeader(url: String): String {
+    val segments = url.toHttpUrlOrNull()?.pathSegments.orEmpty().filter(String::isNotEmpty)
+    val isComicPageList = segments.size >= 5 && segments.takeLast(5).let { suffix ->
+        suffix[0] == "api" &&
+            suffix[1] == "v1" &&
+            suffix[2] == "books" &&
+            suffix[3].isNotBlank() &&
+            suffix[4] == "pages"
+    }
+    return if (isComicPageList) "application/json" else "image/*"
+}
+
+class KomgaCoverModuleImpl(private val auth: KomgaAuthModule) : KomgaCoverModule {
     private val client = OkHttpClient.Builder()
         .followRedirects(true)
         .followSslRedirects(true)
@@ -1411,7 +1424,7 @@ class KomgaCoverModuleImpl(private val auth: KomgaAuthModuleImpl) : KomgaCoverMo
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Accept", "image/*")
+            .header("Accept", komgaCatalogImageAcceptHeader(url))
             .apply {
                 if (sameHttpOrigin(url, credentialOrigin.orEmpty())) {
                     auth.requestHeaders(url).forEach { (name, value) -> header(name, value) }
