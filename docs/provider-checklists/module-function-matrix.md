@@ -20,6 +20,8 @@ On 2026-10-30, the maintainer verified the Kavita selected-folder EPUB integrity
 
 On 2026-11-03, the user confirmed the complete BookOrbit EPUB bookmark flow (list/create/open/edit/delete), including correct mid-chapter return with normal top/bottom spacing, and the complete Kavita PToC flow (list/add/open/delete) with page-number and `BookScrollId` mapping. Exact build, server labels, device, and evidence location were not supplied. Preview/Komga UI gating and Kavita's unmappable-location rejection were not checked on-device.
 
+On 2026-11-09, the user confirmed the affected online Komga CBZ page-list path works with `Lagrange-debug-202611091440.apk` under issue [#398](https://github.com/van-geaux/lagrange-reader/issues/398). Server instance label, device model/OS, and screenshot/log evidence were not supplied. This confirmation is limited to the online CBZ path and does not claim CBR/CB7, page-counter progression, download retention, or broader functionality.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -101,7 +103,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Reader | EPUB reading | Read/Preview | S | S | Verify authenticated file preparation and local reopen. |
 | Reader | EPUB bookmark operations | EPUB reader bookmark list/actions | S | U | User confirmed BookOrbit list/create/open/edit/delete and Kavita PToC list/add/open/delete with location mapping on-device. Build/server/device/evidence details were not supplied. Preview/Komga gating and Kavita unmappable-location rejection remain unconfirmed on-device; source and automated capability-gate evidence exist. |
 | Reader | PDF reading | Read/Preview | S | S | Verify provider file mapping. |
-| Reader | Comic reading | Read/Preview | S | S | Verify supported comic formats. |
+| Reader | Comic reading | Read/Preview | S | S | Verify supported comic formats. Issue [#398](https://github.com/van-geaux/lagrange-reader/issues/398) online CBZ page-list path confirmed; see Latest manual validation. |
 | Reader | Audiobook streaming/listening | Listen/player | S | P | BookOrbit runtime playback rebinding after provider/server switch was user-confirmed under issue [#216](https://github.com/van-geaux/lagrange-reader/issues/216); Komga audio file access exists, while progress/session behavior is unsupported. |
 | Reader | EPUB image library | Book Detail/reader | S | P | Verify durable local preparation and authenticated source access. |
 | Reader | Preview isolation | Preview/Go to read | S | S | User-confirmed Komga Preview isolation and Preview → Read progress reconciliation; ordinary Preview remains non-persistent. |
