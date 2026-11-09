@@ -2442,7 +2442,8 @@ internal fun ComicReaderProgressFooter(
     currentPage: Int,
     pageCount: Int,
     modifier: Modifier = Modifier,
-    showBorder: Boolean = false
+    showBorder: Boolean = false,
+    spreadFirstPage: Int? = null
 ) {
     Surface(
         modifier = modifier.height(EPUB_READER_PROGRESS_FOOTER_HEIGHT),
@@ -2453,13 +2454,19 @@ internal fun ComicReaderProgressFooter(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            val comicFooterDescription = stringResource(
-                R.string.chrome_footer_comic_page_of,
-                currentPage + 1,
-                pageCount
-            )
+            val pages = comicReaderFooterPages(currentPage, pageCount, spreadFirstPage)
+            val footerText = if (pages.first != null) {
+                stringResource(R.string.chrome_footer_pages_of, pages.first, pages.last, pages.count)
+            } else {
+                stringResource(R.string.chrome_footer_page_of, pages.last, pages.count)
+            }
+            val comicFooterDescription = if (pages.first != null) {
+                stringResource(R.string.chrome_footer_comic_pages_of, pages.first, pages.last, pages.count)
+            } else {
+                stringResource(R.string.chrome_footer_comic_page_of, pages.last, pages.count)
+            }
             Text(
-                text = stringResource(R.string.chrome_footer_page_of, currentPage + 1, pageCount),
+                text = footerText,
                 modifier = Modifier.padding(horizontal = 8.dp).semantics {
                     contentDescription = comicFooterDescription
                 },

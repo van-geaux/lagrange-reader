@@ -197,6 +197,10 @@
     <string name="settings_two_page_spread">展开时双页显示</string>
     <string name="settings_two_page_spread_summary_paginated">在横向握持的大屏幕上并排显示两页</string>
     <string name="settings_two_page_spread_summary_other">适用于横向握持大屏幕上的分页布局</string>
+    <string name="settings_comic_spread_cover_alone">封面单独显示</string>
+    <string name="settings_comic_spread_cover_alone_summary">第一页单独显示，之后的页面像印刷书一样两两成对</string>
+    <string name="settings_comic_spread_shift">页面配对错开一页</string>
+    <string name="settings_comic_spread_shift_summary">跨页图被拆在两组之间时，将配对整体移动一页</string>
 
     <!-- 选项标签：应用偏好 -->
     <string name="settings_theme_system">跟随系统</string>
