@@ -15,6 +15,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -109,6 +111,69 @@ class EpubOledActivityInstrumentedTest {
                     "false",
                     awaitJavascript(scenario, "document.getElementById('lagrange-readium-epub-oled-text') !== null")
                 )
+            }
+        } finally {
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun oledMenusOverAnotherReadingBackgroundDoNotGetOledPageStyle(): Unit = runBlocking {
+        val epub = File(context.cacheDir, "oled-menus-${System.nanoTime()}.epub")
+        val readerKey = "oled-menus-epub-${System.nanoTime()}"
+        writeEpub(epub)
+        // White links and rules would be unreadable on the sepia page.
+        useProfile(
+            LibraryReaderPreferences(theme = EpubReaderTheme.OledBlack, backgroundTheme = EpubReaderTheme.Sepia)
+        )
+        try {
+            launchEpub(epub, readerKey).use { scenario ->
+                awaitEpubReady(scenario, readerKey)
+                awaitJavascript(
+                    scenario,
+                    "document.getElementById('bookorbit-readium-epub-image-color-preservation') !== null"
+                ) { it == "true" }
+                assertEquals(
+                    "false",
+                    awaitJavascript(scenario, "document.getElementById('lagrange-readium-epub-oled-text') !== null")
+                )
+                assertNotEquals(
+                    "\"rgb(255, 255, 255)\"",
+                    awaitJavascript(scenario, "getComputedStyle(document.getElementById('link')).color")
+                )
+            }
+        } finally {
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun readingBackgroundChangesSwitchTheOledPageStyleWithoutReopening(): Unit = runBlocking {
+        val epub = File(context.cacheDir, "oled-switch-${System.nanoTime()}.epub")
+        val readerKey = "oled-switch-epub-${System.nanoTime()}"
+        writeEpub(epub)
+        useProfile(
+            LibraryReaderPreferences(theme = EpubReaderTheme.Light, backgroundTheme = EpubReaderTheme.OledBlack)
+        )
+        val styleInstalled = "document.getElementById('lagrange-readium-epub-oled-text') !== null"
+        try {
+            launchEpub(epub, readerKey).use { scenario ->
+                awaitEpubReady(scenario, readerKey)
+                lateinit var opened: ReadiumEpubReaderActivity
+                scenario.onActivity { opened = it }
+                assertEquals("true", awaitJavascript(scenario, styleInstalled) { it == "true" })
+
+                scenario.onActivity { activity ->
+                    activity.applyReaderPreferencesForTest { it.copy(backgroundTheme = EpubReaderTheme.Sepia) }
+                }
+                assertEquals("false", awaitJavascript(scenario, styleInstalled) { it == "false" })
+
+                scenario.onActivity { activity ->
+                    activity.applyReaderPreferencesForTest { it.copy(backgroundTheme = EpubReaderTheme.OledBlack) }
+                }
+                assertEquals("true", awaitJavascript(scenario, styleInstalled) { it == "true" })
+                // Applied live: the reader was not recreated.
+                scenario.onActivity { activity -> assertSame(opened, activity) }
             }
         } finally {
             epub.delete()

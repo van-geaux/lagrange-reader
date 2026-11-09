@@ -138,6 +138,23 @@ internal fun epubReaderThemeChangeRequiresRecreate(
 ): Boolean = previous.isOled() != next.isOled()
 
 /**
+ * Whether the page itself is OLED: the OLED black reading background with its own white text. The
+ * in-page style follows the page, not the menu theme, which can differ since the reading background
+ * is chosen separately; white links and rules on a light or custom page would be unreadable.
+ */
+internal fun epubOledPageStyleActive(preferences: LibraryReaderPreferences): Boolean =
+    preferences.backgroundTheme.isOled() &&
+        activeCustomReaderBackground(preferences) == null &&
+        !(preferences.useCustomTextColor && preferences.customTextColor != null)
+
+/** Removes the in-page OLED style, so a reading background change away from OLED applies live. */
+internal fun readiumEpubOledTextStyleRemovalScript(): String =
+    "(function(){const s=document.getElementById('$EPUB_OLED_TEXT_STYLE_ID');" +
+        "if(!s)return 'absent';s.remove();return 'removed';})();"
+
+private const val EPUB_OLED_TEXT_STYLE_ID = "lagrange-readium-epub-oled-text"
+
+/**
  * In-page OLED overrides. ReadiumCSS night mode forces blue links and a pale-blue text selection;
  * these rules are more specific than ReadiumCSS's `:root[style*=readium-night-on] a:link` and keep
  * the page strictly white on black. Images are left untouched (see the image colour preservation
@@ -145,7 +162,7 @@ internal fun epubReaderThemeChangeRequiresRecreate(
  */
 internal fun readiumEpubOledTextStyleScript(): String = """
     (function() {
-      const styleId = 'lagrange-readium-epub-oled-text';
+      const styleId = '$EPUB_OLED_TEXT_STYLE_ID';
       if (document.getElementById(styleId)) return 'already-installed';
       const style = document.createElement('style');
       style.id = styleId;

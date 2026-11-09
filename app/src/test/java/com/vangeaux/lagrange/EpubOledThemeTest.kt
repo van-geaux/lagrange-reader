@@ -148,21 +148,68 @@ class EpubOledThemeTest {
     }
 
     @Test
-    fun `oled page script is installed only for oled and before the gesture bridge`() {
+    fun `oled page script is installed only for oled and removed otherwise, before the gesture bridge`() {
         val oled = epubCurrentDocumentInstallScript("gesture-installer", oledText = true)
         val normal = epubCurrentDocumentInstallScript("gesture-installer", oledText = false)
         val default = epubCurrentDocumentInstallScript("gesture-installer")
 
-        assertTrue(oled.contains("lagrange-readium-epub-oled-text"))
+        assertTrue(oled.contains(readiumEpubOledTextStyleScript()))
+        assertFalse(oled.contains(readiumEpubOledTextStyleRemovalScript()))
         assertTrue(oled.contains("bookorbit-readium-epub-image-color-preservation"))
         assertTrue(oled.endsWith("gesture-installer"))
-        assertFalse(normal.contains("lagrange-readium-epub-oled-text"))
-        assertTrue(normal.endsWith("gesture-installer"))
-        assertEquals(normal, default)
+        // Not OLED: a style left from an OLED reading background is removed in place.
+        assertFalse(normal.contains(readiumEpubOledTextStyleScript()))
         assertEquals(
-            readiumEpubImageColorOverrideScript() + "\n" +
-                readiumEpubImageLayoutScript() + "\n" + "gesture-installer",
+            readiumEpubImageColorOverrideScript() + "\n" + readiumEpubImageLayoutScript() + "\n" +
+                readiumEpubOledTextStyleRemovalScript() + "\n" + "gesture-installer",
             normal
+        )
+        assertEquals(normal, default)
+    }
+
+    @Test
+    fun `oled page style removal targets the installed style only`() {
+        val removal = readiumEpubOledTextStyleRemovalScript()
+
+        assertTrue(removal.contains("getElementById('lagrange-readium-epub-oled-text')"))
+        assertTrue(removal.contains("remove()"))
+        assertFalse(removal.contains("createElement"))
+    }
+
+    @Test
+    fun `oled page style follows the reading background, not the menu theme`() {
+        val oledPage = LibraryReaderPreferences(
+            theme = EpubReaderTheme.Light,
+            backgroundTheme = EpubReaderTheme.OledBlack
+        )
+        assertTrue(epubOledPageStyleActive(oledPage))
+        assertTrue(epubOledPageStyleActive(oledPage.copy(theme = EpubReaderTheme.OledBlack)))
+
+        // OLED menus over another page: white links and rules would be unreadable there.
+        EpubReaderTheme.entries.filterNot { it == EpubReaderTheme.OledBlack }.forEach { background ->
+            assertFalse(
+                epubOledPageStyleActive(
+                    LibraryReaderPreferences(theme = EpubReaderTheme.OledBlack, backgroundTheme = background)
+                )
+            )
+        }
+        // A custom background or text colour replaces the OLED page.
+        assertFalse(
+            epubOledPageStyleActive(oledPage.copy(customBackgroundColor = 0xFFF5F0E6.toInt(), useCustomBackground = true))
+        )
+        assertFalse(
+            epubOledPageStyleActive(oledPage.copy(customTextColor = 0xFFFFB000.toInt(), useCustomTextColor = true))
+        )
+        // Retained but inactive custom colours do not.
+        assertTrue(
+            epubOledPageStyleActive(
+                oledPage.copy(
+                    customBackgroundColor = 0xFFF5F0E6.toInt(),
+                    useCustomBackground = false,
+                    customTextColor = 0xFFFFB000.toInt(),
+                    useCustomTextColor = false
+                )
+            )
         )
     }
 

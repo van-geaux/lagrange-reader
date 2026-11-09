@@ -81,6 +81,15 @@ class EpubOledWebViewInstrumentedTest {
             "1",
             evaluateJavascript(webView, "document.querySelectorAll('#lagrange-readium-epub-oled-text').length")
         )
+
+        // Leaving the OLED reading background removes the style in place: ReadiumCSS colours return.
+        evaluateJavascript(webView, readiumEpubOledTextStyleRemovalScript())
+        evaluateJavascript(webView, readiumEpubOledTextStyleRemovalScript())
+        assertEquals("rgb(99, 202, 255)", styles()[3])
+        assertEquals(
+            "0",
+            evaluateJavascript(webView, "document.querySelectorAll('#lagrange-readium-epub-oled-text').length")
+        )
     }
 
     private fun loadPage(rootStyle: String, body: String, widthDp: Int, heightDp: Int): WebView {

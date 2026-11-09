@@ -1849,10 +1849,8 @@ internal fun epubCurrentDocumentInstallScript(
     append(readiumEpubImageColorOverrideScript())
     append("\n")
     append(readiumEpubImageLayoutScript())
-    if (oledText) {
-        append("\n")
-        append(readiumEpubOledTextStyleScript())
-    }
+    append("\n")
+    append(if (oledText) readiumEpubOledTextStyleScript() else readiumEpubOledTextStyleRemovalScript())
     append("\n")
     append(gestureScript)
     if (continuousScroll == true) {
@@ -4390,17 +4388,18 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         val gestureScript = runCatching {
             assets.open(EPUB_IMAGE_GESTURE_ASSET).bufferedReader().use { it.readText() }
         }.getOrNull() ?: return
-        // OLED in-page styling is fixed per navigator: switching into or out of OLED recreates.
         val installScript = {
             epubCurrentDocumentInstallScript(
                 gestureScript,
-                oledText = selectedTheme.isOled(),
+                oledText = epubOledPageStyleActive(readerPreferences),
                 continuousScroll = epubLayoutMode == ReaderLayoutMode.CONTINUOUS
             )
         }
         epubImageGestureJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 runEpubCurrentDocumentBridgeLoop(
+                    // Re-evaluated on every pass, so reading-background and book-language changes
+                    // apply to the current document without reopening it.
                     installScript = {
                         installScript() + "\n" + epubDocumentLanguageScript(bookLanguageOverride)
                     },
