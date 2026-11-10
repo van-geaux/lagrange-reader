@@ -166,7 +166,7 @@ internal class KavitaBookCatalogModuleImpl(
         filter: BookBrowseFilter
     ): LibraryBooksPage = withContext(Dispatchers.IO) {
         val base = auth.serverUrl() ?: throw UserFacingException("Enter a valid Kavita server URL.")
-        val series = loadSeriesPage(base, page)
+        val series = loadSeriesPage(base, page, libraryId)
         val books = series.flatMap { (seriesId, seriesName, seriesLibraryId, lastAdded) ->
             loadSeriesChapters(base, seriesId, seriesName, seriesLibraryId, lastAdded)
         }.filter { it.libraryId == libraryId }
@@ -431,12 +431,13 @@ internal class KavitaBookCatalogModuleImpl(
         }
     }
 
-    private fun loadSeriesPage(base: String, page: Int): List<KavitaSeriesProjection> {
+    private fun loadSeriesPage(base: String, page: Int, libraryId: String? = null): List<KavitaSeriesProjection> {
+        val filterBody = kavitaLibrarySeriesFilterBody(libraryId)
         val request = Request.Builder()
             .url("$base/api/Series/v2?PageNumber=$page&PageSize=$KAVITA_PAGE_SIZE")
             .header("Content-Type", "application/json")
             .apply { auth.requestHeaders().forEach { (name, value) -> header(name, value) } }
-            .post("{}".toRequestBody(jsonMediaType))
+            .post(filterBody.toRequestBody(jsonMediaType))
             .build()
         client.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
@@ -538,6 +539,19 @@ internal class KavitaBookCatalogModuleImpl(
         filter.genre.isNullOrBlank() || book.genres.any { it.equals(filter.genre, ignoreCase = true) }
     }
 }
+
+internal fun kavitaLibrarySeriesFilterBody(libraryId: String?): String = JSONObject().apply {
+    put("statements", JSONArray().apply {
+        libraryId?.toIntOrNull()?.let { id ->
+            put(JSONObject().apply {
+                put("field", 19)
+                put("comparison", 0)
+                put("value", id.toString())
+            })
+        }
+    })
+    put("combination", 0)
+}.toString()
 
 private fun normalizeKavitaTitle(value: String): String =
     value.replaceFirst(Regex("^Book\\s+-100000\\s+-\\s*", RegexOption.IGNORE_CASE), "").trim()

@@ -147,19 +147,7 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         }
     )
 
-    val featureAvailability = ProviderFeatureAvailability(
-        serverHostedSignIn = true,
-        libraryBookCatalog = false,
-        seriesCatalog = false,
-        achievements = false,
-        statistics = false,
-        smartScopes = false,
-        collections = true,
-        authors = false,
-        userRating = false,
-        extendedReadingStatuses = false,
-        readingStatusOptions = listOf(BookReadStatus.UNREAD, BookReadStatus.READ)
-    )
+    val featureAvailability = kavitaFeatureAvailability()
 
     val session: ProviderSessionModule = object : ProviderSessionModule {
         override suspend fun saveCurrentProfileSession(): Boolean {
@@ -227,3 +215,17 @@ internal class KavitaModuleSet(private val repository: KavitaRepository) {
         }
     }
 }
+
+internal fun kavitaFeatureAvailability() = ProviderFeatureAvailability(
+    serverHostedSignIn = true,
+    libraryBookCatalog = true,
+    seriesCatalog = true,
+    achievements = false,
+    statistics = false,
+    smartScopes = false,
+    collections = true,
+    authors = false,
+    userRating = false,
+    extendedReadingStatuses = false,
+    readingStatusOptions = listOf(BookReadStatus.UNREAD, BookReadStatus.READ)
+)

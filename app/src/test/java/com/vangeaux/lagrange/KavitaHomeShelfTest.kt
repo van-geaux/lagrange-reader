@@ -3,6 +3,8 @@ package com.vangeaux.lagrange
 import com.vangeaux.lagrange.provider.kavita.kavitaDashboardItems
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesPageItems
 import com.vangeaux.lagrange.provider.kavita.kavitaSeriesCard
+import com.vangeaux.lagrange.provider.kavita.runKavitaShelfRequest
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -73,5 +75,14 @@ class KavitaHomeShelfTest {
 
         assertEquals("42", card?.seriesId)
         assertEquals("Actual Series", card?.title)
+    }
+
+    @Test
+    fun failedHomeShelfFallsBackWithoutFailingOtherShelves() = runBlocking {
+        val successful = runKavitaShelfRequest(emptyList<String>()) { listOf("recent") }
+        val failed = runKavitaShelfRequest(emptyList<String>()) { throw IllegalStateException("offline") }
+
+        assertEquals(listOf("recent"), successful)
+        assertEquals(emptyList<String>(), failed)
     }
 }

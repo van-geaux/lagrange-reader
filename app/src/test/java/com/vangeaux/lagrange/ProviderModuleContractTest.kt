@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.core.ProviderModules
 import com.vangeaux.lagrange.core.ProviderFeatureAvailability
+import com.vangeaux.lagrange.provider.kavita.kavitaFeatureAvailability
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,5 +25,13 @@ class ProviderModuleContractTest {
     fun libraryBookCatalogAvailabilityIsIndependentFromHomeCatalogLoading() {
         assertTrue(ProviderFeatureAvailability().libraryBookCatalog)
         assertFalse(ProviderFeatureAvailability(libraryBookCatalog = false).libraryBookCatalog)
+    }
+
+    @Test
+    fun kavitaAdvertisesImplementedCatalogCapabilities() {
+        val availability = kavitaFeatureAvailability()
+
+        assertTrue(availability.libraryBookCatalog)
+        assertTrue(availability.seriesCatalog)
     }
 }
