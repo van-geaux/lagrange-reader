@@ -24,6 +24,8 @@ On 2026-11-09, the user confirmed the affected online Komga CBZ page-list path w
 
 On 2026-11-10, at Van Geaux's request, the maintainer tested the Kavita 2.1.2 debug APK on an Android 15/API 35 `sdk_gphone64_x86_64` emulator using a separate private Kavita profile. Username/password sign-in succeeded; Home showed Continue reading/On deck data; Libraries → Browse loaded and paged the Light Novel and Manga libraries. Evidence and exact counts are in `kavita.md`; per-shelf failure isolation, remaining shelves, and physical-device behavior were not validated. The library book catalog row is now manually verified for this scoped browse/paging path; no other provider-function status is promoted based on this test.
 
+On 2026-11-10, the JVM `KavitaHomeShelfTest.homeShelfFailureDoesNotDiscardSuccessfulSiblingShelves` used a controlled MockWebServer: `/api/series/recently-added-v2` returned HTTP 503 while the successful On Deck and Recently Updated shelves still appeared. This is automated controlled-server regression evidence, not a manual/live Kavita failure test; it does not promote any Kavita matrix status to `S` or alter the manual-validation record.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -146,7 +148,7 @@ This provider is implemented but has not received complete authenticated device/
 | Library discovery | S | `GET /api/Library/libraries` | Library picker showed Light Novel, Manga, and Sample; Light Novel and Manga catalog browsing were validated on emulator. |
 | Book catalog and chapter projection | S | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters project as shared book entries. Authenticated Libraries → Browse and Load more were emulator-validated for Light Novel and Manga on 2026-11-10; other filters/sorting and all libraries remain untested. |
 | Series catalog and detail | V | Series projection from Kavita chapter hierarchy | Series filters and detail are provider-routed. |
-| Home shelves | P | Kavita `/api/series/on-deck`, `/api/series/recently-updated-series`, `/api/series/recently-added-v2` | Home Continue reading and On deck were visible on emulator; remaining shelves and independent failure behavior are not manually verified. |
+| Home shelves | P | Kavita `/api/series/on-deck`, `/api/series/recently-updated-series`, `/api/series/recently-added-v2` | Home Continue reading and On deck were visible on emulator; a controlled JVM MockWebServer test returned HTTP 503 for `/api/series/recently-added-v2` while On Deck and Recently Updated still appeared. Remaining shelves and live/manual failure behavior are not verified. |
 | Authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
 | Book detail and covers | V | `GET /api/Series/chapter`, `/api/Image/series-cover` | Authenticated requests are wired. |
 | EPUB/PDF/comic reader routing | V | `/api/Reader/chapter-info`, `/api/Reader/image`, `/api/Reader/pdf`, authenticated `/api/Download/chapter` | EPUB is downloaded into app-private storage before opening with the shared local EPUB reader; comic and PDF chapters use Kavita reader endpoints. |
