@@ -31,6 +31,8 @@ The Komga adapter is implemented as provider-specific feature modules in `komga/
   - omits an individual shelf when its endpoint is unavailable or returns no items.
 - `KomgaReadingProgressModule`
   - synchronizes EPUB reader locators through Komga's Readium `progression` PUT endpoint and page-based progress through `read-progress` when applicable;
+  - when an EPUB progression `PUT` returns HTTP 400, fetches `/api/v1/books/{bookId}/positions`, chooses the last server-provided same-resource candidate at or before the current resource progression, or falls back to the nearest total point by `totalProgression` only if that field is present, and retries once;
+  - preserves an explicit synchronization error when no locator can be selected or Komga rejects the retry;
   - maps the shared reader progress callback to the provider-specific payload;
   - uses the server as the source of truth when Home is reloaded.
 - `KomgaReadingStatusModule`
@@ -65,6 +67,8 @@ The Komga adapter is implemented as provider-specific feature modules in `komga/
 - `GET /api/v1/books?read_status=READ`
 - `GET /api/v1/series/new`
 - `PATCH /api/v1/books/{bookId}/read-progress`
+- `PUT /api/v1/books/{bookId}/progression`
+- `GET /api/v1/books/{bookId}/positions`
 - `DELETE /api/v1/books/{bookId}/read-progress`
 
 Komga authentication uses HTTP Basic Auth. A `401` or `403` library response is treated as a reachable Komga server so the login screen can collect credentials.
@@ -73,7 +77,7 @@ Komga authentication uses HTTP Basic Auth. A `401` or `403` library response is 
 
 `KomgaModuleSet` is the Komga composition root for the provider-neutral capability modules. It owns the supported and explicitly unsupported Komga adapters, including authentication, library, catalog, Series, detail, cover, reader, download, status, cache, session, and authenticated-media behavior. `KomgaRepository` remains a temporary compatibility adapter for the legacy data-source surface. `ProviderRepositoryResolver` creates it only when the active server profile has provider ID `komga`; it does not infer BookOrbit by falling back from a failed Komga probe.
 
-Active-reader session save/read/clear persistence and EPUB page-position persistence are supplied by the shared `ReaderLifecycleModuleImpl`, not by Komga. Komga remains responsible only for provider-dependent reader preparation and currently does not provide progress synchronization.
+Active-reader session save/read/clear persistence and EPUB page-position persistence are supplied by the shared `ReaderLifecycleModuleImpl`, not by Komga. Komga is responsible for provider-dependent reader preparation and progress synchronization, including locator recovery after a rejected EPUB progression update.
 
 The provider ID is stored alongside the canonical server URL in `ServerProfile`. It is not appended to the URL and credentials are not stored in the profile record.
 

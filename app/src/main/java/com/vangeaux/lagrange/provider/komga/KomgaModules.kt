@@ -107,6 +107,39 @@ internal fun komgaReaderProgressBook(book: BookSummary, payload: String): BookSu
 internal fun komgaProgressionLocatorJson(payload: String): String? =
     JSONObject(payload).optJSONObject("locator")?.toString()
 
+internal fun komgaSnapLocator(positions: JSONArray, wanted: JSONObject): JSONObject? {
+    val known = (0 until positions.length()).mapNotNull { index ->
+        positions.optJSONObject(index)
+    }
+    if (known.isEmpty()) return null
+
+    val wantedHref = wanted.optString("href").trimStart('/').takeIf(String::isNotBlank)
+    val wantedLocations = wanted.optJSONObject("locations")
+    val wantedProgression = wantedLocations?.optDouble("progression")
+        ?.takeIf { !it.isNaN() } ?: 0.0
+    val inResource = known.filter { it.optString("href") == wantedHref }
+    if (inResource.isNotEmpty()) {
+        return inResource.lastOrNull { position ->
+            val progression = position.optJSONObject("locations")
+                ?.optDouble("progression")?.takeIf { !it.isNaN() } ?: 0.0
+            progression <= wantedProgression + KOMGA_PROGRESSION_EPSILON
+        }
+    }
+
+    val wantedTotal = wantedLocations?.optDouble("totalProgression")
+        ?.takeIf { !it.isNaN() } ?: return null
+    val withTotal = known.mapNotNull { candidate ->
+        val total = candidate.optJSONObject("locations")
+            ?.optDouble("totalProgression")?.takeIf { !it.isNaN() }
+            ?: return@mapNotNull null
+        candidate to total
+    }
+    return withTotal.minByOrNull { (_, total) -> kotlin.math.abs(total - wantedTotal) }
+        ?.first
+}
+
+private const val KOMGA_PROGRESSION_EPSILON = 1e-6
+
 internal fun komgaProgressEndpoint(base: String, bookId: String, hasLocator: Boolean): String =
     if (hasLocator) "$base/api/v1/books/$bookId/progression"
     else "$base/api/v1/books/$bookId/read-progress"
@@ -1077,10 +1110,10 @@ class KomgaHomeShelfModuleImpl(private val auth: KomgaAuthModuleImpl) {
 }
 
 class KomgaReadingProgressModuleImpl(
-    private val auth: KomgaAuthModuleImpl,
+    private val auth: KomgaAuthModule,
+    private val client: OkHttpClient = KomgaHttpClient().client,
     private val serverUrlProvider: suspend () -> String
 ) : ReadingProgressModule {
-    private val client = KomgaHttpClient().client
     private val json = "application/json; charset=utf-8".toMediaType()
 
     override suspend fun queueProgress(
@@ -1095,33 +1128,67 @@ class KomgaReadingProgressModuleImpl(
         val completed = progressPercent != null && progressPercent >= 99.5f
         val locator = book.readerLocatorJson
             ?.let { runCatching { JSONObject(it) }.getOrNull() }
-        val endpoint: String
-        val payload = if (locator != null) {
-            endpoint = komgaProgressEndpoint(base, book.id, hasLocator = true)
+        val endpoint = komgaProgressEndpoint(base, book.id, hasLocator = locator != null)
+        val payloadPosition = locator ?: JSONObject()
+            .put("page", page)
+            .put("completed", completed)
+        val request = progressionRequest(base, endpoint, payloadPosition, locator != null)
+        val responseCode = client.newCall(request).execute().use { response -> response.code }
+        if (locator != null && responseCode == 400) {
+            val snapped = fetchKomgaPositions(base, book.id)
+                ?.let { positions -> komgaSnapLocator(positions, locator) }
+                ?: throw progressFailure(responseCode)
+            val retry = progressionRequest(base, endpoint, snapped, hasLocator = true)
+            val retryCode = client.newCall(retry).execute().use { it.code }
+            if (retryCode !in 200..299) throw progressFailure(retryCode)
+        } else if (responseCode !in 200..299) {
+            throw progressFailure(responseCode)
+        }
+    }
+
+    private fun progressionRequest(
+        base: String,
+        endpoint: String,
+        position: JSONObject,
+        hasLocator: Boolean
+    ): Request {
+        val payload = if (hasLocator) {
             JSONObject()
                 .put("modified", Instant.now().toString())
                 .put("device", JSONObject().put("id", "lagrange-android").put("name", "Lagrange Android"))
-                .put("locator", locator)
+                .put("locator", position)
         } else {
-            endpoint = komgaProgressEndpoint(base, book.id, hasLocator = false)
-            JSONObject()
-                .put("page", page)
-                .put("completed", completed)
+            position
         }
-        val request = Request.Builder()
+        return Request.Builder()
             .url(endpoint)
             .header("Content-Type", "application/json")
             .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
-            .method(if (locator != null) "PUT" else "PATCH", payload.toString().toRequestBody(json))
+            .method(if (hasLocator) "PUT" else "PATCH", payload.toString().toRequestBody(json))
             .build()
-        client.newCall(request).execute().use { response ->
-            Log.d("KomgaProgress", "book=${book.id} endpoint=${endpoint.substringAfter("/api/v1/")} code=${response.code} page=$page completed=$completed")
-            if (!response.isSuccessful) {
-                Log.w("KomgaProgress", "error=${response.body?.string()?.take(400).orEmpty()}")
-                throw UserFacingException(auth.localizedMessage(R.string.perror_komga_progress_http, "Unable to synchronize Komga reading progress (HTTP ${response.code}).", response.code))
-            }
+    }
+
+    private fun fetchKomgaPositions(base: String, bookId: String): JSONArray? {
+        val request = Request.Builder()
+            .url("$base/api/v1/books/$bookId/positions")
+            .apply { auth.requestHeaders(base).forEach { (name, value) -> header(name, value) } }
+            .get()
+            .build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            runCatching {
+                JSONObject(response.body?.string().orEmpty()).optJSONArray("positions")
+            }.getOrNull()
         }
     }
+
+    private fun progressFailure(code: Int) = UserFacingException(
+        auth.localizedMessage(
+            R.string.perror_komga_progress_http,
+            "Unable to synchronize Komga reading progress (HTTP $code).",
+            code
+        )
+    )
 
     override suspend fun pendingProgressCount(): Int = 0
 
