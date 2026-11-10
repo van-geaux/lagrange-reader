@@ -122,7 +122,7 @@ For every provider-exclusive row, manually verify all of the following:
 | Downloads | Queue/cancel/retry/status | Downloads section | S | S | User confirmed Komga background/screen-off download completion and visible notification progress for issue #203. |
 | Downloads | Downloaded status tag | Cards/detail/local | S | S | Shared DownloadStore metadata is used. |
 | Local books | Local book discovery | Local Books | S | S | Komga downloads use shared local metadata. |
-| Local books | Offline reopen | Local Books/reader | S | S | User-confirmed Komga local-reader fallback and offline reopen; provider progress synchronization remains unsupported. |
+| Local books | Offline reopen | Local Books/reader | S | S | User-confirmed Komga local-reader fallback and offline reopen; Komga provider progress synchronization is implemented when a serialized EPUB locator is supplied. |
 | Local books | Local deletion | Context menu/detail | S | S | Deletes file and provider-scoped record. |
 | Annotations | Annotation load/write/delete | Reader annotations | S | U | Explicitly unsupported by Komga adapter. |
 | Achievements | Achievement loading | Achievements | S | U | Explicitly unsupported by Komga adapter. |
