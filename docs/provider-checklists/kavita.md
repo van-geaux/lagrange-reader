@@ -5,22 +5,24 @@ Copy this file into this folder using the target server/provider name, for examp
 ## Validation record
 
 - Provider/server type: `Kavita`
-- Server base URL: `[non-secret URL or redacted label]`
-- App build/version: `[version]`
-- APK path: `[path or release URL]`
-- Maintainer: `[name]`
-- User/reporter: `[name]`
-- Device/emulator: `[model and Android version]`
-- Date: `[YYYY-MM-DD]`
-- Account/library fixture: `[description]`
-- Result key: `[x] Pass  [!] Fail  [-] Blocked / unavailable by provider contract  [ ] Not tested`
-- Evidence links/screenshots/logs: `[locations]`
+- Server base URL: `Private Kavita test profile (URL not recorded)`
+- App build/version: `Lagrange 2.1.2 debug`
+- APK path: `/projects/bookorbit-android-issue-409/app/build/outputs/apk/debug/Lagrange-debug-202611101451.apk`
+- APK SHA-256: `9c098509d3c2d2af1ebd321d9de83f030e75cc2e3f2ff6aba96468574a2d127a`
+- Maintainer/requester: `Van Geaux`
+- Device/emulator: `sdk_gphone64_x86_64 emulator, Android 15 (API 35)`
+- Date: `2026-11-10`
+- Account/library fixture: `Kavita test profile; Light Novel and Manga libraries`
+- Result key: `[x] Pass for the scoped checks below; other checklist items remain unchanged`
+- Evidence links/screenshots/logs: `/home/vangeaux/.hermes/cache/scratch/kavita-home-post-login.png`, `/home/vangeaux/.hermes/cache/scratch/kavita-manga-browse.png`
 
-User confirmation:
+User/maintainer validation record:
 
 - On 2026-10-29, the user reported that the latest Kavita audit APK works. The APK was `/projects/bookorbit-android-issue-343-home-rewrite/app/build/outputs/apk/debug/Lagrange-debug-202610291842.apk` with SHA-256 `646f283e8a883587aec58f67d80a04ae3e20cdf69184aab0ea8b2d23edbb53f3`.
 - Device, Kavita server/library, exact manually exercised screens, and external evidence were not supplied. This confirmation does not mark additional checklist items as manually validated.
 - On 2026-10-30, the maintainer verified Kavita `Secrets of the Silent Witch, Vol. 4` downloaded successfully to a user-selected SAF folder on Samsung SM-S931B / Android 17 over ADB (`100.90.237.107:45013`) using `Lagrange-debug-202610301648.apk` with SHA-256 `7fecacc03425c1ef6fb82bf0c715b6e9d4f542f630bb91fa1263c7b95adc4b29`. The user subsequently confirmed that the fix works. This validates the selected-folder EPUB integrity path for one Kavita file; it does not validate every Kavita format or the equivalent BookOrbit/Komga server payloads.
+
+- On 2026-11-10, at Van Geaux's request, the maintainer installed `Lagrange-debug-202611101451.apk` (SHA-256 above) on the `sdk_gphone64_x86_64` Android 15/API 35 emulator and signed in to a separate Kavita test profile using credentials kept in `/projects/bookorbit-android/auth.env`. The existing BookOrbit and Komga profiles were left in place. Home displayed Continue reading and On deck content; Libraries → Browse showed 2 books / 2 series in Light Novel, then Load more completed at 13 books / 3 series. Switching to Manga showed 1 book / 1 series before Load more, then 11 books / 2 series at completion. This validates authenticated login, Home display for observed shelves, selected-library catalog switching, and paging for those two libraries only. It does not validate induced per-shelf failures, all Home shelves, every library, or physical-device behavior. URL and credentials were not recorded.
 
 Use these result markers for every item:
 
