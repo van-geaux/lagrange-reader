@@ -22,6 +22,7 @@ The implementation follows Komga's documented REST contract:
 - comic page list: `GET /api/v1/books/{bookId}/pages?zero_based=true` with `Accept: application/json`;
 - comic page image: `GET /api/v1/books/{bookId}/pages/{pageNumber}` with `Accept: image/*`;
 - reading progress: `PATCH /api/v1/books/{bookId}/read-progress` and Readium progression `PUT /api/v1/books/{bookId}/progression`;
+- EPUB progression recovery: after an HTTP 400 from the progression `PUT`, `GET /api/v1/books/{bookId}/positions` supplies known locators; the adapter chooses the nearest valid same-resource point at or before the current progression, or otherwise the nearest `totalProgression` only when that field is present, then retries the progression update once. If no candidate is possible or the retry is rejected, it retains an explicit synchronization error;
 - reading status: `PATCH` and `DELETE` on `/api/v1/books/{bookId}/read-progress`.
 
 A `401` or `403` response from the library probe is treated as a reachable Komga server. Basic credentials are stored in the encrypted Android Keystore-backed credential store, and a failed credential write is surfaced as a user-facing persistence error rather than treated as a successful durable login. Web-session cookies are cleared when the active profile has no matching cookie-owner marker, preventing a process-wide WebView cookie from being reused by another authenticated profile. No credential or cookie values are stored in this documentation.
