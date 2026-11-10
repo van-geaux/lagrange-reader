@@ -19,6 +19,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
+internal suspend fun <T> runKavitaShelfRequest(fallback: T, block: suspend () -> T): T = try {
+    block()
+} catch (cancelled: kotlinx.coroutines.CancellationException) {
+    throw cancelled
+} catch (_: Exception) {
+    fallback
+}
+
 private const val KAVITA_HOME_PAGE_SIZE = 8
 private val KAVITA_HOME_JSON = "application/json; charset=utf-8".toMediaType()
 
@@ -30,23 +38,29 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             ?: throw UserFacingException("Enter a valid Kavita server URL.")
         val (onDeck, recentlyUpdated, recentlyAdded) = coroutineScope {
             val onDeckRequest = async {
-                requestDashboardItems(
-                    base,
-                    "/api/series/on-deck?libraryId=0&pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
-                )
+                runShelfRequest(emptyList()) {
+                    requestDashboardItems(
+                        base,
+                        "/api/series/on-deck?libraryId=0&pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
+                    )
+                }
             }
             val updatedRequest = async {
-                requestDashboardItems(
-                    base,
-                    "/api/series/recently-updated-series?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
-                )
+                runShelfRequest(emptyList()) {
+                    requestDashboardItems(
+                        base,
+                        "/api/series/recently-updated-series?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE"
+                    )
+                }
             }
             val addedRequest = async {
-                requestDashboardItems(
-                    base,
-                    "/api/series/recently-added-v2?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE",
-                    body = "{}"
-                )
+                runShelfRequest(emptyList()) {
+                    requestDashboardItems(
+                        base,
+                        "/api/series/recently-added-v2?pageNumber=1&pageSize=$KAVITA_HOME_PAGE_SIZE",
+                        body = "{}"
+                    )
+                }
             }
             Triple(onDeckRequest.await(), updatedRequest.await(), addedRequest.await())
         }
@@ -54,19 +68,21 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
         val updatedIds = recentlyUpdated.mapNotNull { item ->
             item.optInt("seriesId", -1).takeIf { it >= 0 }
         }
-        val updatedSeries = resolveSeriesCards(base, updatedIds)
+        val updatedSeries = runShelfRequest(emptyList()) { resolveSeriesCards(base, updatedIds) }
         val onDeckSeries = onDeck.mapNotNull { item -> kavitaSeriesCard(item, base) }
-        val onDeckBooks = coroutineScope {
-            onDeckSeries.map { series ->
-                async {
-                    loadSeriesBooks(
-                        base,
-                        series.seriesId ?: return@async emptyList(),
-                        series.seriesName ?: series.title,
-                        series.libraryId
-                    )
-                }
-            }.awaitAll().flatten()
+        val onDeckBooks = runShelfRequest(emptyList()) {
+            coroutineScope {
+                onDeckSeries.map { series ->
+                    async {
+                        loadSeriesBooks(
+                            base,
+                            series.seriesId ?: return@async emptyList(),
+                            series.seriesName ?: series.title,
+                            series.libraryId
+                        )
+                    }
+                }.awaitAll().flatten()
+            }
         }
         val readingShelves = kavitaHomeReadingShelves(onDeckBooks)
         val recentlyAddedSeries = recentlyAdded.mapNotNull { item -> kavitaSeriesCard(item, base) }
@@ -90,6 +106,9 @@ internal class KavitaHomeShelfModuleImpl(private val auth: KavitaAuthModule) {
             deferInitialCatalogLoad = true
         )
     }
+
+    private suspend fun <T> runShelfRequest(fallback: T, block: suspend () -> T): T =
+        runKavitaShelfRequest(fallback, block)
 
     private suspend fun resolveSeriesCards(base: String, ids: List<Int>): List<BookSummary> {
         if (ids.isEmpty()) return emptyList()

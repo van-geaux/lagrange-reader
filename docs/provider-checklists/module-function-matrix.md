@@ -22,6 +22,10 @@ On 2026-11-03, the user confirmed the complete BookOrbit EPUB bookmark flow (lis
 
 On 2026-11-09, the user confirmed the affected online Komga CBZ page-list path works with `Lagrange-debug-202611091440.apk` under issue [#398](https://github.com/van-geaux/lagrange-reader/issues/398). Server instance label, device model/OS, and screenshot/log evidence were not supplied. This confirmation is limited to the online CBZ path and does not claim CBR/CB7, page-counter progression, download retention, or broader functionality.
 
+On 2026-11-10, at Van Geaux's request, the maintainer tested the Kavita 2.1.2 debug APK on an Android 15/API 35 `sdk_gphone64_x86_64` emulator using a separate private Kavita profile. Username/password sign-in succeeded; Home showed Continue reading/On deck data; Libraries → Browse loaded and paged the Light Novel and Manga libraries. Evidence and exact counts are in `kavita.md`; per-shelf failure isolation, remaining shelves, and physical-device behavior were not validated. The library book catalog row is now manually verified for this scoped browse/paging path; no other provider-function status is promoted based on this test.
+
+On 2026-11-10, the JVM `KavitaHomeShelfTest.homeShelfFailureDoesNotDiscardSuccessfulSiblingShelves` used a controlled MockWebServer: `/api/series/recently-added-v2` returned HTTP 503 while the successful On Deck and Recently Updated shelves still appeared. This is automated controlled-server regression evidence, not a manual/live Kavita failure test; it does not promote any Kavita matrix status to `S` or alter the manual-validation record.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.
@@ -139,11 +143,13 @@ This provider is implemented but has not received complete authenticated device/
 
 | Function group | Kavita status | Endpoint/source evidence | UI/capability note |
 |---|---:|---|---|
-| Server selection and username/password login | V | `POST /api/Account/login`, JSON username/password body | Kavita returns a JWT; credentials are not persisted. |
+| Server selection and username/password login | S | `POST /api/Account/login`, JSON username/password body | Kavita JWT login succeeded on the emulator with the separate test profile on 2026-11-10; invalid-credential and logout paths remain untested. |
 | OIDC/SSO login | V | Kavita `/Oidc/login` and `/signin-oidc` server flow | Server-hosted OIDC is capability-gated and uses the shared sign-in WebView; native AppAuth remains unavailable. |
-| Library discovery | V | `GET /api/Library/libraries` | Provider-specific library module is wired. |
-| Book catalog and chapter projection | V | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters are projected into shared book entries. |
+| Library discovery | S | `GET /api/Library/libraries` | Library picker showed Light Novel, Manga, and Sample; Light Novel and Manga catalog browsing were validated on emulator. |
+| Book catalog and chapter projection | S | `POST /api/Series/v2`, `GET /api/Series/series-detail` | Chapters project as shared book entries. Authenticated Libraries → Browse and Load more were emulator-validated for Light Novel and Manga on 2026-11-10; other filters/sorting and all libraries remain untested. |
 | Series catalog and detail | V | Series projection from Kavita chapter hierarchy | Series filters and detail are provider-routed. |
+| Home shelves | P | Kavita `/api/series/on-deck`, `/api/series/recently-updated-series`, `/api/series/recently-added-v2` | Home Continue reading and On deck were visible on emulator; a controlled JVM MockWebServer test returned HTTP 503 for `/api/series/recently-added-v2` while On Deck and Recently Updated still appeared. Remaining shelves and live/manual failure behavior are not verified. |
+| Authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
 | Book detail and covers | V | `GET /api/Series/chapter`, `/api/Image/series-cover` | Authenticated requests are wired. |
 | EPUB/PDF/comic reader routing | V | `/api/Reader/chapter-info`, `/api/Reader/image`, `/api/Reader/pdf`, authenticated `/api/Download/chapter` | EPUB is downloaded into app-private storage before opening with the shared local EPUB reader; comic and PDF chapters use Kavita reader endpoints. |
 | Progress read/write | V | `/api/Reader/get-progress`, `/api/Reader/progress` | Requires exact library/series/volume/chapter IDs. |

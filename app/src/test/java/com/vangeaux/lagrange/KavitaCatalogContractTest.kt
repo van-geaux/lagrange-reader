@@ -9,6 +9,7 @@ import com.vangeaux.lagrange.provider.kavita.kavitaSeriesChapters
 import com.vangeaux.lagrange.provider.kavita.kavitaWantToReadSeriesIds
 import com.vangeaux.lagrange.provider.kavita.KAVITA_WANT_TO_READ_COLLECTION_ID
 import com.vangeaux.lagrange.provider.kavita.mergeKavitaCatalogPages
+import com.vangeaux.lagrange.provider.kavita.kavitaLibrarySeriesFilterBody
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -16,6 +17,25 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class KavitaCatalogContractTest {
+    @Test
+    fun seriesPageFilterRestrictsResultsToSelectedLibraryBeforePagination() {
+        val filter = JSONObject(kavitaLibrarySeriesFilterBody("42"))
+        val statements = filter.getJSONArray("statements")
+        val statement = statements.getJSONObject(0)
+
+        assertEquals(0, filter.getInt("combination"))
+        assertEquals(19, statement.getInt("field"))
+        assertEquals(0, statement.getInt("comparison"))
+        assertEquals("42", statement.getString("value"))
+    }
+
+    @Test
+    fun seriesPageFilterOmitsLibraryStatementForUnfilteredCatalog() {
+        val filter = JSONObject(kavitaLibrarySeriesFilterBody(null))
+
+        assertEquals(0, filter.getJSONArray("statements").length())
+    }
+
     @Test
     fun wantToReadCollectionUsesStableSyntheticId() {
         assertEquals("want-to-read", KAVITA_WANT_TO_READ_COLLECTION_ID)
