@@ -123,7 +123,7 @@ internal fun komgaSnapLocator(positions: JSONArray, wanted: JSONObject): JSONObj
             val progression = position.optJSONObject("locations")
                 ?.optDouble("progression")?.takeIf { !it.isNaN() } ?: 0.0
             progression <= wantedProgression + KOMGA_PROGRESSION_EPSILON
-        } ?: inResource.first()
+        }
     }
 
     val wantedTotal = wantedLocations?.optDouble("totalProgression")

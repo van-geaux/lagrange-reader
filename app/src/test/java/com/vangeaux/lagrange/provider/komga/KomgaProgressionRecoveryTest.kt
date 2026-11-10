@@ -42,6 +42,28 @@ class KomgaProgressionRecoveryTest {
     }
 
     @Test
+    fun `rejected locator does not snap forward within the same resource`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(400))
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"positions":[{"href":"OEBPS/chapter.xhtml","locations":{"progression":0.8}}]}"""
+                )
+            )
+            val module = progressModule(server)
+            val wanted = """{"href":"OEBPS/chapter.xhtml","locations":{"progression":0.4}}"""
+
+            val failure = runCatching {
+                module.queueProgress(progressBook(wanted), 0, 0, 0.4f)
+            }.exceptionOrNull()
+
+            assertNotNull(failure)
+            assertTrue(failure is UserFacingException)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test
     fun `snap refuses to guess without a matching resource or total progression`() {
         val positions = JSONObject(POSITIONS).getJSONArray("positions")
         val wanted = JSONObject(
