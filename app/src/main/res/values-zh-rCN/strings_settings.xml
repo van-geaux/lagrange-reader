@@ -171,8 +171,8 @@
     <string name="settings_invert_pdf_colors_summary">反转页面颜色和图片以提升可读性</string>
     <string name="settings_tap_zones">点击区域</string>
     <string name="settings_tap_zone_inversion">点击区域反转</string>
-    <string name="settings_margin_tap_zone_exclusion">从点击区域中排除左右边距：%1$d%%</string>
-    <string name="settings_margin_tap_zone_exclusion_summary">配置的左右页面边距中不响应点击和翻页滑动的百分比。</string>
+    <string name="settings_margin_tap_zone_exclusion">从点击区域中排除边距：%1$d%%</string>
+    <string name="settings_margin_tap_zone_exclusion_summary">配置的页面边距中不响应点击和翻页滑动的百分比。</string>
     <string name="settings_volume_page_navigation">使用音量键翻页</string>
     <string name="settings_volume_page_navigation_summary">使用音量加、音量减键进行阅读导航，而不是调节音量。</string>
     <string name="settings_swap_volume_buttons">交换音量键功能</string>

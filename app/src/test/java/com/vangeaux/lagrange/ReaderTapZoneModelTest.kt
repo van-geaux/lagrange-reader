@@ -117,28 +117,38 @@ class ReaderTapZoneModelTest {
     }
 
     @Test
-    fun `horizontal margin exclusion progressively enables inner padding bands`() {
-        fun side(x: Float, exclusionPercent: Int) = readerHorizontalMarginSide(
+    fun `margin exclusion progressively enables inner padding bands on all sides`() {
+        fun hit(x: Float, y: Float, exclusionPercent: Int) = isReaderMarginTouchInteractive(
             x = x,
+            y = y,
             width = 100f,
+            height = 100f,
             leftPadding = 20f,
+            topPadding = 20f,
             rightPadding = 10f,
+            bottomPadding = 10f,
             exclusionPercent = exclusionPercent
         )
 
-        assertEquals(ReaderHorizontalMarginSide.LEFT, side(0f, 0))
-        assertEquals(ReaderHorizontalMarginSide.LEFT, side(19f, 0))
-        assertEquals(ReaderHorizontalMarginSide.LEFT, side(10f, 50))
-        assertEquals(null, side(9f, 50))
-        assertEquals(null, side(0f, 100))
-        assertEquals(null, side(99f, 100))
-        assertEquals(ReaderHorizontalMarginSide.RIGHT, side(92f, 50))
-        assertEquals(null, side(89f, 50))
-        assertEquals(null, side(95f, 50))
+        assertEquals(true, hit(0f, 50f, 0))
+        assertEquals(true, hit(50f, 0f, 0))
+        assertEquals(true, hit(0f, 0f, 0))
+        assertEquals(false, hit(50f, 50f, 0))
+        assertEquals(true, hit(10f, 50f, 50))
+        assertEquals(false, hit(9f, 50f, 50))
+        assertEquals(true, hit(50f, 10f, 50))
+        assertEquals(false, hit(50f, 9f, 50))
+        assertEquals(true, hit(50f, 92f, 50))
+        assertEquals(false, hit(50f, 95f, 50))
+        assertEquals(true, hit(92f, 50f, 50))
+        assertEquals(false, hit(95f, 50f, 50))
+        assertEquals(false, hit(10f, 9f, 50))
+        assertEquals(false, hit(0f, 50f, 100))
+        assertEquals(false, hit(50f, 99f, 100))
     }
 
     @Test
-    fun `horizontal margin exclusion values clamp and snap to five percent`() {
+    fun `margin exclusion values clamp and snap to five percent`() {
         assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(-1))
         assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(2))
         assertEquals(5, normalizedReaderMarginTapZoneExclusionPercent(3))

@@ -2368,7 +2368,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var lastCanonicalPosition: EpubReaderPosition? = null
     private val passiveRecoveryGuard = EpubPassiveRecoveryGuard()
     private var pageSwipeActive = false
-    private var readerMarginTouchSide: ReaderHorizontalMarginSide? = null
+    private var readerMarginTouchActive = false
     private var readerMarginTouchDownX = 0f
     private var readerMarginTouchDownY = 0f
     private var readerMarginPageSwipeStarted = false
@@ -5629,21 +5629,27 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         if (!::readerContainer.isInitialized) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val side = readerHorizontalMarginSide(
-                    x = event.x,
-                    width = readerContainer.width.toFloat(),
-                    leftPadding = readerContainer.paddingLeft.toFloat(),
-                    rightPadding = readerContainer.paddingRight.toFloat(),
-                    exclusionPercent = readerPreferences.horizontalMarginTapZoneExclusionPercent
-                ) ?: return false
-                readerMarginTouchSide = side
+                if (
+                    !isReaderMarginTouchInteractive(
+                        x = event.x,
+                        y = event.y,
+                        width = readerContainer.width.toFloat(),
+                        height = readerContainer.height.toFloat(),
+                        leftPadding = readerContainer.paddingLeft.toFloat(),
+                        topPadding = readerContainer.paddingTop.toFloat(),
+                        rightPadding = readerContainer.paddingRight.toFloat(),
+                        bottomPadding = readerContainer.paddingBottom.toFloat(),
+                        exclusionPercent = readerPreferences.marginTapZoneExclusionPercent
+                    )
+                ) return false
+                readerMarginTouchActive = true
                 readerMarginTouchDownX = event.x
                 readerMarginTouchDownY = event.y
                 readerMarginPageSwipeStarted = false
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                if (readerMarginTouchSide == null) return false
+                if (!readerMarginTouchActive) return false
                 val deltaX = event.x - readerMarginTouchDownX
                 val deltaY = event.y - readerMarginTouchDownY
                 if (
@@ -5660,7 +5666,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 return true
             }
             MotionEvent.ACTION_UP -> {
-                val side = readerMarginTouchSide ?: return false
+                if (!readerMarginTouchActive) return false
                 val deltaX = event.x - readerMarginTouchDownX
                 val deltaY = event.y - readerMarginTouchDownY
                 val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
@@ -5682,7 +5688,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                     kotlin.math.abs(deltaX) <= touchSlop &&
                     kotlin.math.abs(deltaY) <= touchSlop
                 ) {
-                    handleReaderMarginTap(event, side)
+                    handleReaderMarginTap(event)
                 }
                 clearReaderMarginGesture()
                 return true
@@ -5695,18 +5701,17 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 clearReaderMarginGesture()
                 return true
             }
-            else -> return readerMarginTouchSide != null
+            else -> return readerMarginTouchActive
         }
     }
 
-    private fun handleReaderMarginTap(event: MotionEvent, side: ReaderHorizontalMarginSide) {
+    private fun handleReaderMarginTap(event: MotionEvent) {
         val publicationView = navigator?.publicationView ?: return
         val width = publicationView.width.toFloat().takeIf { it > 0f } ?: return
         val height = publicationView.height.toFloat().takeIf { it > 0f } ?: return
-        val y = (event.y - readerContainer.paddingTop).coerceIn(0f, height)
         val action = readerTapZoneAction(
-            x = if (side == ReaderHorizontalMarginSide.LEFT) 0f else width,
-            y = y,
+            x = (event.x - readerContainer.paddingLeft).coerceIn(0f, width),
+            y = (event.y - readerContainer.paddingTop).coerceIn(0f, height),
             width = width,
             height = height,
             layout = readerPreferences.tapZoneLayout,
@@ -5735,7 +5740,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     }
 
     private fun clearReaderMarginGesture() {
-        readerMarginTouchSide = null
+        readerMarginTouchActive = false
         readerMarginPageSwipeStarted = false
     }
 

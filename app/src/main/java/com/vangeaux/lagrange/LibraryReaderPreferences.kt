@@ -104,7 +104,7 @@ data class LibraryReaderPreferences(
     val reverseVolumeButtonNavigation: Boolean = false,
     val tapZoneLayout: ReaderTapZoneLayout = ReaderTapZoneLayout.CURRENT_EDGES,
     val tapZoneInvertMode: ReaderTapZoneInvertMode = ReaderTapZoneInvertMode.NONE,
-    val horizontalMarginTapZoneExclusionPercent: Int =
+    val marginTapZoneExclusionPercent: Int =
         DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT,
     val theme: EpubReaderTheme = EpubReaderTheme.Sepia,
     val backgroundTheme: EpubReaderTheme = EpubReaderTheme.Sepia,
@@ -141,8 +141,8 @@ data class LibraryReaderPreferences(
         useCustomBackground = useCustomBackground && customBackgroundColor != null,
         customTextColor = normalizedReaderTextColor(customTextColor),
         useCustomTextColor = useCustomTextColor && customTextColor != null,
-        horizontalMarginTapZoneExclusionPercent =
-            normalizedReaderMarginTapZoneExclusionPercent(horizontalMarginTapZoneExclusionPercent),
+        marginTapZoneExclusionPercent =
+            normalizedReaderMarginTapZoneExclusionPercent(marginTapZoneExclusionPercent),
         fontScale = fontScale.coerceIn(MIN_EPUB_FONT_SCALE, MAX_EPUB_FONT_SCALE),
         lineSpacing = lineSpacing.coerceIn(DEFAULT_EPUB_LINE_SPACING, MAX_EPUB_LINE_SPACING),
         wordSpacing = wordSpacing.coerceIn(DEFAULT_EPUB_WORD_SPACING, MAX_EPUB_WORD_SPACING),
@@ -301,8 +301,8 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
             put("tapZoneLayout", readerTapZoneLayoutStorageValue(normalized.tapZoneLayout))
             put("tapZoneInvertMode", readerTapZoneInvertModeStorageValue(normalized.tapZoneInvertMode))
             put(
-                "horizontalMarginTapZoneExclusionPercent",
-                normalized.horizontalMarginTapZoneExclusionPercent
+                "marginTapZoneExclusionPercent",
+                normalized.marginTapZoneExclusionPercent
             )
             put("theme", epubReaderThemeStorageValue(normalized.theme))
             put("backgroundTheme", epubReaderThemeStorageValue(normalized.backgroundTheme))
@@ -368,8 +368,8 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                         reverseVolumeButtonNavigation = item.optBoolean("reverseVolumeButtonNavigation", false),
                         tapZoneLayout = readerTapZoneLayoutFromStorage(item.optString("tapZoneLayout")),
                         tapZoneInvertMode = readerTapZoneInvertModeFromStorage(item.optString("tapZoneInvertMode")),
-                        horizontalMarginTapZoneExclusionPercent = item.optInt(
-                            "horizontalMarginTapZoneExclusionPercent",
+                        marginTapZoneExclusionPercent = item.optInt(
+                            "marginTapZoneExclusionPercent",
                             DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT
                         ),
                         theme = theme,

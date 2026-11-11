@@ -5812,10 +5812,10 @@ private enum class PageMarginSide(@StringRes val labelRes: Int) {
 @Composable
 private fun ReaderPageMarginsSettings(
     padding: EpubPaddingPercentages,
-    horizontalMarginTapZoneExclusionPercent: Int,
+    marginTapZoneExclusionPercent: Int,
     testTagPrefix: String,
     onPaddingChange: (EpubPaddingPercentages) -> Unit,
-    onHorizontalMarginTapZoneExclusionChange: (Int) -> Unit
+    onMarginTapZoneExclusionChange: (Int) -> Unit
 ) {
     Text(
         stringResource(R.string.settings_page_margins),
@@ -5855,7 +5855,7 @@ private fun ReaderPageMarginsSettings(
         Text(
             stringResource(
                 R.string.settings_margin_tap_zone_exclusion,
-                horizontalMarginTapZoneExclusionPercent
+                marginTapZoneExclusionPercent
             ),
             style = MaterialTheme.typography.bodyMedium
         )
@@ -5865,9 +5865,9 @@ private fun ReaderPageMarginsSettings(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Slider(
-            value = horizontalMarginTapZoneExclusionPercent.toFloat(),
+            value = marginTapZoneExclusionPercent.toFloat(),
             onValueChange = { next ->
-                onHorizontalMarginTapZoneExclusionChange(
+                onMarginTapZoneExclusionChange(
                     normalizedReaderMarginTapZoneExclusionPercent(next.roundToInt())
                 )
             },
@@ -6101,16 +6101,16 @@ private fun LibraryReaderConfiguration(
             )
             ReaderPageMarginsSettings(
                 padding = value.padding,
-                horizontalMarginTapZoneExclusionPercent =
-                    value.horizontalMarginTapZoneExclusionPercent,
+                marginTapZoneExclusionPercent =
+                    value.marginTapZoneExclusionPercent,
                 testTagPrefix = "options-reading",
                 onPaddingChange = { padding ->
                     onPreferencesChange(selectedLibrary.id, value.copy(padding = padding))
                 },
-                onHorizontalMarginTapZoneExclusionChange = { exclusionPercent ->
+                onMarginTapZoneExclusionChange = { exclusionPercent ->
                     onPreferencesChange(
                         selectedLibrary.id,
-                        value.copy(horizontalMarginTapZoneExclusionPercent = exclusionPercent)
+                        value.copy(marginTapZoneExclusionPercent = exclusionPercent)
                     )
                 }
             )
@@ -6921,15 +6921,15 @@ internal fun ReaderConfigurationControls(
             )
             ReaderPageMarginsSettings(
                 padding = value.padding,
-                horizontalMarginTapZoneExclusionPercent =
-                    value.horizontalMarginTapZoneExclusionPercent,
+                marginTapZoneExclusionPercent =
+                    value.marginTapZoneExclusionPercent,
                 testTagPrefix = testTagPrefix,
                 onPaddingChange = { padding ->
                     onPreferencesChange(value.copy(padding = padding))
                 },
-                onHorizontalMarginTapZoneExclusionChange = { exclusionPercent ->
+                onMarginTapZoneExclusionChange = { exclusionPercent ->
                     onPreferencesChange(
-                        value.copy(horizontalMarginTapZoneExclusionPercent = exclusionPercent)
+                        value.copy(marginTapZoneExclusionPercent = exclusionPercent)
                     )
                 }
             )

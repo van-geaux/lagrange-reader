@@ -33,7 +33,7 @@ class LibraryReaderPreferencesTest {
         assertTrue(LibraryReaderPreferences().showPageProgress)
         assertEquals(
             DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT,
-            LibraryReaderPreferences().horizontalMarginTapZoneExclusionPercent
+            LibraryReaderPreferences().marginTapZoneExclusionPercent
         )
         assertFalse(LibraryReaderPreferences().showHeader)
         assertFalse(LibraryReaderPreferences().showHeaderFooterBorders)
@@ -45,7 +45,7 @@ class LibraryReaderPreferencesTest {
         assertTrue(legacy.showPageProgress)
         assertEquals(
             DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT,
-            legacy.horizontalMarginTapZoneExclusionPercent
+            legacy.marginTapZoneExclusionPercent
         )
         assertFalse(legacy.showHeader)
         assertFalse(legacy.showHeaderFooterBorders)
@@ -57,7 +57,7 @@ class LibraryReaderPreferencesTest {
             readingDirection = LibraryReadingDirection.RIGHT_TO_LEFT,
             volumeButtonPageNavigation = true,
             reverseVolumeButtonNavigation = true,
-            horizontalMarginTapZoneExclusionPercent = 65,
+            marginTapZoneExclusionPercent = 65,
             theme = EpubReaderTheme.Dark,
             backgroundTheme = EpubReaderTheme.Light,
             customBackgroundColor = 0xFF123456.toInt(),
@@ -153,7 +153,7 @@ class LibraryReaderPreferencesTest {
                 lineSpacing = 3f,
                 wordSpacing = 2f,
                 paragraphSpacing = 3f,
-                horizontalMarginTapZoneExclusionPercent = 102,
+                marginTapZoneExclusionPercent = 102,
                 padding = EpubPaddingPercentages(-1f, 101f, 25f, 50f),
                 pdfPageGapDp = -10f,
                 comicPageGapDp = 100f
@@ -164,7 +164,7 @@ class LibraryReaderPreferencesTest {
         assertEquals(MAX_EPUB_FONT_SCALE, initial.readerPreferencesFor("manga").fontScale)
         assertEquals(MAX_EPUB_LINE_SPACING, initial.readerPreferencesFor("manga").lineSpacing)
         assertEquals(MAX_EPUB_WORD_SPACING, initial.readerPreferencesFor("manga").wordSpacing)
-        assertEquals(100, initial.readerPreferencesFor("manga").horizontalMarginTapZoneExclusionPercent)
+        assertEquals(100, initial.readerPreferencesFor("manga").marginTapZoneExclusionPercent)
         assertEquals(
             MAX_EPUB_PARAGRAPH_SPACING,
             initial.readerPreferencesFor("manga").paragraphSpacing
