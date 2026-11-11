@@ -1689,6 +1689,12 @@ internal fun readiumEpubImageLayoutScript(): String = """
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
     "(function(){const k='__bookorbitImageGesture';const v=window[k]||null;window[k]=null;return v;})()"
+private const val EPUB_IMAGE_LINK_PROBE_SCRIPT =
+    "(function(){const k='__bookorbitImageLink';const v=window[k]||null;window[k]=null;return v;})()"
+private const val EPUB_IMAGE_LINK_RESUME_SCRIPT =
+    "window.__bookorbitResumeImageLinkClick && window.__bookorbitResumeImageLinkClick()"
+private const val EPUB_IMAGE_LINK_CANCEL_SCRIPT =
+    "window.__bookorbitCancelImageLinkClick && window.__bookorbitCancelImageLinkClick()"
 internal const val EPUB_CONTINUOUS_CHAPTER_BOUNDARY_MARKER =
     "bookorbit-continuous-chapter-boundary"
 private const val EPUB_CONTINUOUS_CHAPTER_BOUNDARY_PROBE_SCRIPT =
@@ -1866,6 +1872,7 @@ internal suspend fun runEpubCurrentDocumentBridgeLoop(
     installScript: () -> String,
     evaluateJavascript: suspend (String) -> String?,
     onGesture: (String) -> Unit,
+    onImageLinkClick: (String) -> Unit,
     onBoundaryGesture: ((String) -> Unit)? = null,
     pollIntervalMillis: Long = 16L,
     installIntervalMillis: Long = 250L
@@ -1882,6 +1889,11 @@ internal suspend fun runEpubCurrentDocumentBridgeLoop(
                 ?.let(::decodeJavascriptString)
         }.getOrNull()
         if (event != null) onGesture(event)
+        val imageLinkEvent = runCatching {
+            evaluateJavascript(EPUB_IMAGE_LINK_PROBE_SCRIPT)
+                ?.let(::decodeJavascriptString)
+        }.getOrNull()
+        if (imageLinkEvent != null) onImageLinkClick(imageLinkEvent)
         val boundaryEvent = onBoundaryGesture?.let {
             runCatching {
                 evaluateJavascript(EPUB_CONTINUOUS_CHAPTER_BOUNDARY_PROBE_SCRIPT)
@@ -4410,6 +4422,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                     },
                     evaluateJavascript = fragment::evaluateJavascript,
                     onGesture = { event -> handleEpubImageGesture(fragment, event) },
+                    onImageLinkClick = { event -> handleEpubImageLinkClick(fragment, event) },
                     onBoundaryGesture = { event -> handleContinuousChapterBoundaryGesture(event) }
                 )
             }
@@ -4510,6 +4523,32 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 ).show()
             }
         }
+    }
+
+    private fun handleEpubImageLinkClick(fragment: EpubNavigatorFragment, event: String) {
+        val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
+        if (payload.optString("gesture") != "image_link") return
+        var confirmed = false
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.epub_image_link_confirmation_title))
+            .setMessage(getString(R.string.epub_image_link_confirmation_message))
+            .setPositiveButton(getString(R.string.epub_image_link_open)) { _, _ ->
+                confirmed = true
+                lifecycleScope.launch { fragment.evaluateJavascript(EPUB_IMAGE_LINK_RESUME_SCRIPT) }
+            }
+            .setNegativeButton(getString(R.string.epub_image_link_stay)) { _, _ ->
+                lifecycleScope.launch { fragment.evaluateJavascript(EPUB_IMAGE_LINK_CANCEL_SCRIPT) }
+            }
+            .create()
+        dialog.setOnCancelListener {
+            lifecycleScope.launch { fragment.evaluateJavascript(EPUB_IMAGE_LINK_CANCEL_SCRIPT) }
+        }
+        dialog.setOnDismissListener {
+            if (!confirmed) {
+                lifecycleScope.launch { fragment.evaluateJavascript(EPUB_IMAGE_LINK_CANCEL_SCRIPT) }
+            }
+        }
+        dialog.show()
     }
 
     private fun loadHighlights(openedPublication: Publication) {

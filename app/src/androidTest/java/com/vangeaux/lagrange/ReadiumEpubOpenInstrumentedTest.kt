@@ -560,6 +560,7 @@ class ReadiumEpubOpenInstrumentedTest {
                     }
                 },
                 onGesture = {},
+                onImageLinkClick = {},
                 pollIntervalMillis = 1L
             )
         }
