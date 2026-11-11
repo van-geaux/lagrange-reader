@@ -7,6 +7,38 @@ import org.junit.Test
 
 class ReadingActivityStoreTest {
     @Test
+    fun `remote baseline persists and compare-and-set protects newer local activity`() = runBlocking {
+        val directory = Files.createTempDirectory("reading-activity-remote").toFile()
+        val store = ReadingActivityStore(directory)
+        val key = ReadingActivityKey("library", "book")
+        try {
+            store.record("scope", key, 100L)
+            assertEquals(ReadingActivityValue(200L, 100L), store.recordRemote("scope", key, 100L, 200L))
+            assertEquals(ReadingActivityValue(200L, 100L), ReadingActivityStore(directory).readValues("scope")[key])
+            assertEquals(ReadingActivityValue(201L, 100L), store.recordRemote("scope", key, 200L, 201L))
+            store.record("scope", key, 300L)
+            assertEquals(ReadingActivityValue(300L), store.recordRemote("scope", key, 201L, 400L))
+            assertEquals(ReadingActivityValue(300L), store.readValues("scope")[key])
+        } finally {
+            store.clear()
+            Files.delete(directory.toPath())
+        }
+    }
+
+    @Test
+    fun `optimistic ordering stays ahead of known reading activity when device clock is behind`() {
+        val reading = BookSummary("library", "reading", null, "Reading",
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 5_000L)
+        val finished = BookSummary("library", "finished", null, "Finished",
+            readStatus = BookReadStatus.READ, lastReadAtMillis = 20_000L)
+
+        assertEquals(5_001L, nextReadingActivityOrder(100L, listOf(reading, finished), emptyList()))
+        assertEquals(6_001L, nextReadingActivityOrder(100L, listOf(reading), listOf(6_000L)))
+        assertEquals(7_000L, nextReadingActivityOrder(7_000L, listOf(reading), emptyList()))
+        assertEquals(Long.MAX_VALUE, nextReadingActivityOrder(100L, emptyList(), listOf(Long.MAX_VALUE)))
+    }
+
+    @Test
     fun `legacy activity migrates once and scoped cleanup preserves other accounts`() = runBlocking {
         val directory = Files.createTempDirectory("reading-activity-scopes").toFile()
         val store = ReadingActivityStore(directory)

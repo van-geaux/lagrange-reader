@@ -256,6 +256,17 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `currently reading uses established tie order only when timestamps match`() {
+        val first = seriesBook("book-z", 1.0, status = BookReadStatus.READING)
+            .copy(lastReadAtMillis = 1_000L, currentlyReadingTieOrder = 0)
+        val second = seriesBook("book-a", 2.0, status = BookReadStatus.READING)
+            .copy(lastReadAtMillis = 1_000L, currentlyReadingTieOrder = 1)
+        assertEquals(listOf(first, second), currentlyReadingBooks(listOf(second, first), limit = null))
+        val newer = second.copy(lastReadAtMillis = 1_001L)
+        assertEquals(listOf(newer, first), currentlyReadingBooks(listOf(first, newer), limit = null))
+    }
+
+    @Test
     fun `BookOrbit recently added series uses import sequence instead of configurable file date`() {
         val earlyImportedSeries = listOf(
             seriesBook("100", 1.0, addedAt = 5_000L),

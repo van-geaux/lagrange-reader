@@ -1605,7 +1605,7 @@ internal class AndroidAutoCatalogBridge private constructor(
                 }
                 if (repository.supportsLocalReadingActivity) {
                     try {
-                        repository.recordReadingActivity(
+                        repository.recordBackgroundReadingActivity(
                             serverUrl,
                             ReadingActivityKey(book.libraryId, book.id),
                             now

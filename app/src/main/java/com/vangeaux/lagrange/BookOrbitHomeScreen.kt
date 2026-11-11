@@ -13947,6 +13947,7 @@ internal fun sortCurrentlyReadingBooks(books: List<BookSummary>): List<BookSumma
     books.sortedWith(
         compareByDescending<BookSummary> { it.lastReadAtMillis != null }
             .thenByDescending { it.lastReadAtMillis ?: 0L }
+            .thenBy { it.currentlyReadingTieOrder ?: Int.MAX_VALUE }
             .thenBy { it.libraryId }
             .thenBy { it.id }
     )

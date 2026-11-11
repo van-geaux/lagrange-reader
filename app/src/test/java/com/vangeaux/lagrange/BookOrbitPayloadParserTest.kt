@@ -765,6 +765,105 @@ class BookOrbitPayloadParserTest {
     }
 
     @Test
+    fun `parseBooks prefers authoritative last read timestamp over progress and status updates`() {
+        val books = BookOrbitPayloadParser.parseBooks(
+            libraryId = "library",
+            payload = """
+                {"items": [
+                  {
+                    "id": "scalar",
+                    "title": "Scalar progress",
+                    "readingProgress": 25,
+                    "lastReadAt": "2026-07-10T12:00:00Z",
+                    "readStatus": {"status": "reading", "startedAt": "2026-07-01T00:00:00Z"}
+                  },
+                  {
+                    "id": "object",
+                    "title": "Object progress",
+                    "readingProgress": {
+                      "percentage": 25,
+                      "updatedAt": "2026-07-12T12:00:00Z",
+                      "lastReadAt": "2026-07-11T12:00:00Z"
+                    },
+                    "lastReadAt": "2026-07-10T12:00:00Z",
+                    "readStatus": {"status": "reading", "startedAt": "2026-07-01T00:00:00Z"}
+                  },
+                  {
+                    "id": "nested",
+                    "title": "Nested progress",
+                    "readingProgress": {
+                      "percentage": 25,
+                      "updatedAt": "2026-07-12T12:00:00Z",
+                      "lastReadAt": "2026-07-11T12:00:00Z"
+                    },
+                    "readStatus": {"status": "reading"}
+                  }
+                ]}
+            """.trimIndent(),
+            downloads = emptyMap(),
+            serverBase = "https://example.test"
+        )
+
+        assertEquals(java.time.Instant.parse("2026-07-10T12:00:00Z").toEpochMilli(), books[0].lastReadAtMillis)
+        assertEquals(books[0].lastReadAtMillis, books[1].lastReadAtMillis)
+        assertEquals(java.time.Instant.parse("2026-07-11T12:00:00Z").toEpochMilli(), books[2].lastReadAtMillis)
+        assertEquals(books[0].lastReadAtMillis, books[0].serverLastReadAtMillis)
+        assertEquals(books[2].lastReadAtMillis, books[2].serverLastReadAtMillis)
+    }
+
+    @Test
+    fun `reading activity parses file ids and file last read timestamp`() {
+        assertEquals(
+            listOf("7", "9"),
+            BookOrbitPayloadParser.parseReadingActivityFileIds(
+                """[{"fileId":7,"percentage":0},{"fileId":9},{"fileId":7}]"""
+            )
+        )
+        assertEquals(
+            java.time.Instant.parse("2026-07-10T12:00:00Z").toEpochMilli(),
+            BookOrbitPayloadParser.parseFileLastReadAt(
+                """{"updatedAt":"2026-07-11T12:00:00Z","lastReadAt":"2026-07-10T12:00:00Z"}"""
+            )
+        )
+        assertNull(BookOrbitPayloadParser.parseFileLastReadAt("""{"updatedAt":"2026-07-11T12:00:00Z"}"""))
+    }
+
+    @Test
+    fun `reading activity obtains maximum last read across every file`() {
+        val requests = mutableListOf<String>()
+        val result = loadBookLastReadAt("42") { path ->
+            requests += path
+            when (path) {
+                "/api/v1/books/42/progress" -> """[{"fileId":7},{"fileId":9}]"""
+                "/api/v1/books/files/7/progress" -> """{"lastReadAt":"2026-07-10T12:00:00Z"}"""
+                "/api/v1/books/files/9/progress" -> """{"lastReadAt":"2026-07-11T12:00:00Z"}"""
+                else -> error("Unexpected request $path")
+            }
+        }
+        assertEquals(java.time.Instant.parse("2026-07-11T12:00:00Z").toEpochMilli(), result)
+        assertEquals(
+            listOf("/api/v1/books/42/progress", "/api/v1/books/files/7/progress", "/api/v1/books/files/9/progress"),
+            requests
+        )
+    }
+
+    @Test
+    fun `reading activity rejects invalid file identifiers and does not use a partial maximum`() {
+        assertTrue(runCatching {
+            BookOrbitPayloadParser.parseReadingActivityFileIds("""[{"fileId":"../7"}]""")
+        }.isFailure)
+        assertTrue(runCatching {
+            loadBookLastReadAt("42") { path ->
+                when (path) {
+                    "/api/v1/books/42/progress" -> """[{"fileId":7},{"fileId":9}]"""
+                    "/api/v1/books/files/7/progress" -> """{"lastReadAt":"2026-07-10T12:00:00Z"}"""
+                    else -> throw java.io.IOException("file request failed")
+                }
+            }
+        }.isFailure)
+    }
+
+    @Test
     fun `parseBooks does not treat an unread status update as reading activity`() {
         val book = BookOrbitPayloadParser.parseBooks(
             libraryId = "lib-reset",

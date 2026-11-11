@@ -872,7 +872,7 @@ class EpubTtsPlaybackService : Service() {
                 try {
                     val serverUrl = resolveProviderServerSelectionModule(repository).getServerUrl().orEmpty()
                     if (serverUrl.isNotBlank() && isSpecCurrent(spec)) {
-                        repository.recordReadingActivity(
+                        repository.recordBackgroundReadingActivity(
                             serverUrl,
                             ReadingActivityKey(spec.libraryId, currentBookId),
                             now

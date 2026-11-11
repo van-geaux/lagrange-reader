@@ -85,6 +85,17 @@ private val progressSyncMutex = Mutex()
 private val readingSessionSyncMutex = Mutex()
 private val annotationSyncMutex = Mutex()
 
+internal fun loadBookLastReadAt(bookId: String, request: (String) -> String): Long? {
+    val fileIds = BookOrbitPayloadParser.parseReadingActivityFileIds(
+        request("/api/v1/books/$bookId/progress")
+    )
+    return fileIds.mapNotNull { fileId ->
+        BookOrbitPayloadParser.parseFileLastReadAt(
+            request("/api/v1/books/files/$fileId/progress")
+        )
+    }.maxOrNull()
+}
+
 private object CatalogImageCoordinator {
     val generation = AtomicLong(0L)
     val sessionMutationMutex = Mutex()
@@ -419,8 +430,18 @@ interface BookOrbitDataSource {
     suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = HomeShelfPreferences()
     suspend fun loadHomeShelves(): HomeShelfData = HomeShelfData()
     suspend fun loadReadingActivity(serverUrl: String): Map<ReadingActivityKey, Long> = emptyMap()
+    suspend fun loadReadingActivityValues(serverUrl: String): Map<ReadingActivityKey, ReadingActivityValue> =
+        loadReadingActivity(serverUrl).mapValues { ReadingActivityValue(it.value) }
     suspend fun recordReadingActivity(serverUrl: String, key: ReadingActivityKey, timestamp: Long) = Unit
+    suspend fun recordRemoteReadingActivity(
+        serverUrl: String,
+        key: ReadingActivityKey,
+        expectedTimestamp: Long,
+        timestamp: Long
+    ): ReadingActivityValue? = throw UnsupportedOperationException("Remote reading activity is not supported.")
     suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) = Unit
+    suspend fun loadReadingShelfOrder(serverUrl: String): List<ReadingActivityKey> = emptyList()
+    suspend fun saveReadingShelfOrder(serverUrl: String, order: List<ReadingActivityKey>) = Unit
     suspend fun loadLocalBooks(): List<BookSummary> = emptyList()
     suspend fun loadSeriesCatalog(query: String? = null, page: Int = 0): SeriesCatalogPage = SeriesCatalogPage()
     suspend fun loadSeriesCatalog(filter: SeriesCatalogFilter, page: Int = 0): SeriesCatalogPage =
@@ -604,6 +625,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
     private val epubReaderPositionStore = EpubReaderPositionStore(context)
     private val lastSyncedProgressStore = LastSyncedProgressStore(context)
     private val readingActivityStore = ReadingActivityStore(context)
+    private val readingShelfOrderStore = ReadingShelfOrderStore(context)
     private val appStorageManager = AppStorageManager(context)
     private val client = OkHttpClient.Builder()
         .cookieJar(WebViewCookieJar())
@@ -966,6 +988,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             bestEffortRuntimeCleanup("clear reading activity") {
                 activeReaderScope?.let { scope ->
                     readingActivityStore.clearScope(epubReaderPersistenceScopePrefix(scope))
+                    readingShelfOrderStore.clearScope(epubReaderPersistenceScopePrefix(scope))
                 }
                 if (legacyReadingActivityServerUrl.isNotBlank()) {
                     readingActivityStore.clearScope(legacyReadingActivityServerUrl)
@@ -1342,6 +1365,14 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             readingActivityStore.read(storageKey)
         }
 
+    override suspend fun loadReadingActivityValues(serverUrl: String): Map<ReadingActivityKey, ReadingActivityValue> =
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext emptyMap()
+            val storageKey = epubReaderPersistenceScopePrefix(scope)
+            readingActivityStore.migrateLegacy(serverUrl, storageKey)
+            readingActivityStore.readValues(storageKey)
+        }
+
     private suspend fun preserveLegacyReadingActivity(serverUrl: String, scope: EpubReaderScope?) {
         readingActivityStore.preserveLegacy(serverUrl, scope?.let(::epubReaderPersistenceScopePrefix))
     }
@@ -1355,6 +1386,19 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             readingActivityStore.record(storageKey, key, timestamp)
         }
 
+    override suspend fun recordRemoteReadingActivity(
+        serverUrl: String,
+        key: ReadingActivityKey,
+        expectedTimestamp: Long,
+        timestamp: Long
+    ): ReadingActivityValue? = withContext(Dispatchers.IO) {
+        val scope = resolveEpubReaderScope(context, serverUrl)
+            ?: throw IllegalStateException("Cannot save reading activity without an active account.")
+        val storageKey = epubReaderPersistenceScopePrefix(scope)
+        readingActivityStore.migrateLegacy(serverUrl, storageKey)
+        readingActivityStore.recordRemote(storageKey, key, expectedTimestamp, timestamp)
+    }
+
     override suspend fun removeReadingActivity(serverUrl: String, key: ReadingActivityKey) =
         withContext(Dispatchers.IO) {
             val scope = resolveEpubReaderScope(context, serverUrl)
@@ -1362,6 +1406,19 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             val storageKey = epubReaderPersistenceScopePrefix(scope)
             readingActivityStore.migrateLegacy(serverUrl, storageKey)
             readingActivityStore.remove(storageKey, key)
+        }
+
+    override suspend fun loadReadingShelfOrder(serverUrl: String): List<ReadingActivityKey> =
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl) ?: return@withContext emptyList()
+            readingShelfOrderStore.read(epubReaderPersistenceScopePrefix(scope))
+        }
+
+    override suspend fun saveReadingShelfOrder(serverUrl: String, order: List<ReadingActivityKey>) =
+        withContext(Dispatchers.IO) {
+            val scope = resolveEpubReaderScope(context, serverUrl)
+                ?: throw IllegalStateException("Cannot save reading shelf order without an active account.")
+            readingShelfOrderStore.write(epubReaderPersistenceScopePrefix(scope), order)
         }
 
     override suspend fun loadHomeShelfPreferences(): HomeShelfPreferences = withContext(Dispatchers.IO) {
@@ -1422,6 +1479,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 providerErrorMessage(context, R.string.perror_bookorbit_library_changed_refresh, "The library changed while it was refreshing. Pull to refresh again.")
             )
         }
+        books = enrichCurrentlyReadingActivity(books)
         val reportedTotal = pages.mapNotNull { it.total }.lastOrNull()
         val total = reportedTotal ?: books.size
         val seriesTotal = pages.mapNotNull { it.seriesTotal }.maxOrNull()
@@ -1456,6 +1514,42 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             refreshedAtMillis = refreshedAtMillis,
             jumpBuckets = jumpBuckets
         )
+    }
+
+    private suspend fun enrichCurrentlyReadingActivity(books: List<BookSummary>): List<BookSummary> {
+        val candidates = books.filter {
+            (it.readStatus == BookReadStatus.READING || it.readStatus == BookReadStatus.REREADING) &&
+                it.serverLastReadAtMillis == null
+        }
+        val activity = mutableMapOf<ReadingActivityKey, Long>()
+        candidates.chunked(LIBRARY_MAX_CONCURRENT_PAGE_REQUESTS).forEach { batch ->
+            coroutineScope {
+                batch.map { book ->
+                    async {
+                        try {
+                            val lastReadAt = loadBookLastReadAt(book.id) { path ->
+                                request(path, "GET", null)
+                            }
+                            ReadingActivityKey(book.libraryId, book.id) to lastReadAt
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: AuthenticationRequiredException) {
+                            throw error
+                        } catch (error: Exception) {
+                            Log.w("ReadingActivity", "Unable to load server reading activity for book ${book.id}", error)
+                            ReadingActivityKey(book.libraryId, book.id) to null
+                        }
+                    }
+                }.awaitAll().forEach { (key, timestamp) ->
+                    if (timestamp != null) activity[key] = timestamp
+                }
+            }
+        }
+        return books.map { book ->
+            activity[ReadingActivityKey(book.libraryId, book.id)]?.let {
+                book.copy(lastReadAtMillis = it, serverLastReadAtMillis = it)
+            } ?: book
+        }
     }
 
     private fun requestLibraryBooksPage(
@@ -4595,13 +4689,14 @@ internal object BookOrbitPayloadParser {
                     .takeUnless { suppressUnreadReadingActivity }
                 val progressPageIndex = readingProgress.progressPageIndex(mediaKind)
                     .takeUnless { suppressUnreadReadingActivity }
+                val serverLastReadAtMillis = if (suppressUnreadReadingActivity) null else
+                    obj.timestampValue("lastReadAt", "lastReadDate") ?: readingProgress.timestampValue("lastReadAt")
                 val lastReadAtMillis = if (suppressUnreadReadingActivity) {
                     null
                 } else {
-                    readingProgress.timestampValue(
-                        "updatedAt", "lastReadAt", "finishedAt", "completedAt"
-                    ) ?: readStatus.timestampValue("finishedAt", "startedAt", "updatedAt")
-                        ?: obj.timestampValue("lastReadAt", "lastReadDate")
+                    serverLastReadAtMillis
+                        ?: readingProgress.timestampValue("updatedAt", "finishedAt", "completedAt")
+                        ?: readStatus.timestampValue("finishedAt", "startedAt", "updatedAt")
                 }
                 add(
                     BookSummary(
@@ -4645,7 +4740,8 @@ internal object BookOrbitPayloadParser {
                         isLocalOnlyOverride = isLocalOnlyOverride,
                         addedAtMillis = obj.timestampValue("createdAt", "addedAt", "dateAdded"),
                         updatedAtMillis = obj.timestampValue("updatedAt", "modifiedAt", "dateModified"),
-                        lastReadAtMillis = lastReadAtMillis
+                        lastReadAtMillis = lastReadAtMillis,
+                        serverLastReadAtMillis = serverLastReadAtMillis
                     )
                 )
             }
@@ -4668,6 +4764,7 @@ internal object BookOrbitPayloadParser {
                         .firstOrNull { entry ->
                             entry.stringValue("fileId", "file_id") == book.fileId
                         }
+
                 }
                 ?: return book
         }
@@ -4689,6 +4786,35 @@ internal object BookOrbitPayloadParser {
         }
         return book.mergeReaderProgress(progress)
     }
+
+    fun parseReadingActivityFileIds(payload: String): List<String> {
+        val entries = try {
+            when (val root = JSONTokener(payload).nextValue()) {
+                is JSONArray -> root
+                is JSONObject -> root.optJSONArray("data") ?: root.optJSONArray("items")
+                    ?: root.optJSONArray("progress") ?: root.optJSONArray("results")
+                    ?: throw UserFacingException("The server returned malformed reading activity.")
+                else -> throw UserFacingException("The server returned malformed reading activity.")
+            }
+        } catch (error: org.json.JSONException) {
+            throw UserFacingException("The server returned malformed reading activity.")
+        }
+        return buildList {
+            for (index in 0 until entries.length()) {
+                val entry = entries.optJSONObject(index)
+                    ?: throw UserFacingException("The server returned malformed reading activity.")
+                val id = entry.stringValue("fileId", "file_id")
+                    ?: throw UserFacingException("The server returned a reading activity without a file ID.")
+                if (!id.matches(Regex("[0-9]+"))) {
+                    throw UserFacingException("The server returned an invalid reading activity file ID.")
+                }
+                add(id)
+            }
+        }.distinct()
+    }
+
+    fun parseFileLastReadAt(payload: String): Long? =
+        extractObject(payload, "load file reading activity").timestampValue("lastReadAt")
 
     fun parseAudiobookManifest(payload: String): AudiobookManifest {
         val root = extractObject(payload, "load audiobook manifest")
