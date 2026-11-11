@@ -124,21 +124,21 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ### Book-list filters: Library, Home More/See all, Search, and any book catalog screen
 
-- [ ] Title text filter
-- [ ] Author text filter
-- [ ] Series text filter
+- [x] Title text filter. (Fresh emulator check: applying the title query returned `1 books · 1 series`.)
+- [x] Author text filter. (Fresh emulator check: applying the author query independently returned `2 books · 1 series`.)
+- [x] Series text filter. (Fresh emulator check: applying the series query returned `1 books · 1 series`.)
 - [ ] Genre text filter
-- [ ] Read status: All
-- [ ] Read status: Unread
-- [ ] Read status: In progress
-- [ ] Read status: Finished
-- [ ] Format: All formats
-- [ ] Format: EPUB
-- [ ] Format: PDF
-- [ ] Format: Audio
-- [ ] Format: Comic
+- [x] Read status: All. (Fresh emulator reset restored `6119 books · 24 series`.)
+- [x] Read status: Unread. (Fresh emulator check returned `6113 books · 20 series`.)
+- [x] Read status: In progress. (Fresh emulator check returned `5 books · 5 series`.)
+- [x] Read status: Finished. (Fresh emulator check returned `1 books · 1 series`.)
+- [x] Format: All formats. (Fresh emulator reset restored `6119 books · 24 series`.)
+- [x] Format: EPUB. (Fresh emulator check returned `6030 books · 11 series`.)
+- [x] Format: PDF. (Fresh emulator check: applying PDF alone returned `1 books · 1 series`.)
+- [x] Format: Audio. (Fresh emulator check returned `8 books · 8 series`.)
+- [x] Format: Comic. (Fresh emulator check returned `80 books · 5 series`.)
 - [ ] Sort: Server default
-- [ ] Sort: Title
+- [x] Sort: Title. (Fresh emulator check: ascending and descending produced opposite title-order views; descending showed the reverse alphabet rail.)
 - [ ] Sort: Author
 - [ ] Sort: Series
 - [ ] Sort: Date added
@@ -146,27 +146,27 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [ ] Sort: Read progress
 - [ ] Sort: Last read
 - [ ] Sort: Format
-- [ ] Direction: Ascending
-- [ ] Direction: Descending
-- [ ] Reset clears every active book-list filter.
+- [x] Direction: Ascending. (Fresh emulator check applied with Title sorting in Books and Name sorting in Series.)
+- [x] Direction: Descending. (Fresh emulator check applied with Title sorting in Books.)
+- [x] Reset clears every active book-list filter. (Fresh emulator check: reset cleared the title/author filter and restored `6119 books · 24 series`.)
 
 ### Series filters: Series screen and Series More/See all
 
-- [ ] Series name/query
-- [ ] Author
-- [ ] Genre
-- [ ] Library
-- [ ] Completion: All
-- [ ] Completion: Not started
-- [ ] Completion: In progress
-- [ ] Completion: Complete
-- [ ] Sort: Name
-- [ ] Sort: Book count
+- [!] Series name/query. (Series filters expose no name/query field; the global Search route explicitly searches books only. Series-title query was not available to test.)
+- [x] Author. (Fresh emulator check returned `2 series`.)
+- [!] Genre. (Fresh emulator filter with a known book genre showed “No series found”; the matching authenticated BookOrbit `/api/v1/series?...&genre=` request returned HTTP 400, so the filter query is rejected rather than a valid empty result.)
+- [x] Library. (Fresh emulator check: the only listed library filter returned `24 series`.)
+- [x] Completion: All. (Fresh reset restored `24 series`.)
+- [x] Completion: Not started. (Fresh emulator check returned `23 series`.)
+- [x] Completion: In progress. (Fresh emulator check returned `1 series`.)
+- [x] Completion: Complete. (Fresh emulator check returned `1 series`.)
+- [x] Sort: Name. (Fresh emulator check: ascending and descending visibly reversed the series order.)
+- [x] Sort: Book count. (Fresh emulator check: ascending put one-book series first; descending put 5-, 4-, and 2-book series first.)
 - [ ] Sort: Last added
-- [ ] Sort: Read progress
-- [ ] Direction: Ascending
-- [ ] Direction: Descending
-- [ ] Reset clears the intended Series filters while retaining no stale filter.
+- [x] Sort: Read progress. (Fresh emulator check: descending put the highest visible read count first.)
+- [x] Direction: Ascending. (Fresh emulator check applied with Name sorting in Series.)
+- [x] Direction: Descending. (Fresh emulator check applied with Name and Book count sorting in Series.)
+- [x] Reset clears the intended Series filters while retaining no stale filter. (Fresh emulator check restored `24 series` after the author filter.)
 
 ### Screen coverage matrix
 
@@ -206,7 +206,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 ## 7. Reading, listening, preview, and navigation
 
 - [x] Stream/open a supported EPUB online.
-- [ ] Stream/open a supported PDF online.
+- [x] Stream/open a supported PDF online. (Fresh emulator check: the online PDF rendered, and vertical scrolling advanced to page 2 of 391.)
 - [x] Stream/open a supported comic online.
 - [x] Stream/listen to a supported audiobook online.
 - [x] After switching from another provider to BookOrbit without restarting the app, opening a supported audiobook installs the BookOrbit playback configuration and starts playback.
@@ -226,7 +226,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Opening a book with existing server progress restores the expected Lagrange reader/player position.
 - [x] Opening a book with existing Lagrange-local progress does not silently overwrite newer target-server progress.
 - [x] EPUB progress synchronization is verified, including chapter/resource and percentage behavior where supported.
-- [ ] PDF progress synchronization is verified, including page/index behavior where supported.
+- [!] PDF progress synchronization is verified, including page/index behavior where supported. (Fresh emulator: PDF advanced to page 2/391 and Detail showed 0.26% locally; authenticated BookOrbit GET for the same book returned HTTP 200 but reported 0% and no page number. Server progress did not reflect the reader position.)
 - [x] Comic progress synchronization is verified for each supported comic format.
 - [x] Audiobook progress synchronization is verified for single-file playback.
 - [x] Multipart audiobook progress maps to the correct book, file/asset, chapter, and playback position.
@@ -246,7 +246,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 
 ## 8. Downloads and Local books
 
-- [!] Download a single supported book/file. (I cant find the trigger but sometimes tapping the download button crashes the app)
+- [!] Download a single supported book/file. (Fresh emulator check: a 2.5 MB PDF completed on the first tap without a crash; the previously reported intermittent crash remains unresolved.)
 - [x] Download a multipart or multi-file book where supported.
 - [x] Download progress is accurate and tied to the correct book/file.
 - [x] Queueing multiple downloads preserves order and identity.
@@ -254,7 +254,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Cancel works for active and queued downloads.
 - [x] Retry works after a failed download.
 - [x] Interrupted downloads recover according to the provider contract.
-- [ ] Downloaded content is stored at the expected local path.
+- [x] Downloaded content is stored at the expected local path. (Fresh emulator check: the downloaded PDF exists under app-private `files/downloads/<server-scope>/` and appears in Local Books as offline.)
 - [x] Download metadata persists after process recreation.
 - [x] Download status appears on the originating book and remains correct after reopening.
 - [x] Local books screen lists completed local copies.
@@ -283,7 +283,7 @@ Test each filter independently, then test meaningful combinations. Confirm reset
 - [x] Mark as: Want to read, if exposed
 - [x] Mark as: On deck, if exposed
 - [x] Mark as: remove/clear status, if exposed
-- [ ] Any additional Mark as action: `[name]`
+- [x] Any additional Mark as action: Rereading, On hold, Abandoned, Skimmed. (Visible in the Mark as menu; not selected to preserve existing reading state.)
 - [x] Mark-as changes persist or report provider unavailability accurately.
 - [x] Series button opens the correct Series.
 - [x] Book-in-Series navigation shows the correct previous/next members.
