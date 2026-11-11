@@ -1767,10 +1767,17 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
             val serverBase = serverBase()
             val downloads = downloadStore.readAll(serverUrl).associateBy { it.fileId }
             try {
+                val body = JSONObject().apply {
+                    put("sort", JSONArray())
+                    put("pagination", JSONObject().apply {
+                        put("page", page)
+                        put("size", 100)
+                    })
+                }.toString().toRequestBody(JSON)
                 val payload = request(
-                    "/api/v1/smart-scopes/$scopeId/books?page=$page&size=100",
-                    "GET",
-                    null
+                    "/api/v1/smart-scopes/$scopeId/books/query",
+                    "POST",
+                    body
                 )
                 val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
                 catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, page, payload)

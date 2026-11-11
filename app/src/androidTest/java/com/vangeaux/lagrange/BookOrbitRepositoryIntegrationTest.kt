@@ -113,6 +113,35 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun smartScopeBooksUsePaginatedQueryAndCacheEachPage() = runBlocking {
+        server.enqueue(jsonResponse("""{"items":[{"id":"book-1","title":"One"}],"total":101,"page":0,"size":100}"""))
+        server.enqueue(jsonResponse("""{"items":[{"id":"book-2","title":"Two"}],"total":101,"page":1,"size":100}"""))
+
+        val first = repository.loadSmartScopeBooksPage(42, 0)
+        val second = repository.loadSmartScopeBooksPage(42, 1)
+
+        assertEquals(listOf("book-1"), first.items.map { it.id })
+        assertEquals(false, first.isComplete)
+        assertEquals(listOf("book-2"), second.items.map { it.id })
+        assertEquals(true, second.isComplete)
+        for (page in 0..1) {
+            val request = server.takeRequest(5, TimeUnit.SECONDS)!!
+            assertEquals("POST", request.method)
+            assertEquals("/api/v1/smart-scopes/42/books/query", request.path)
+            val body = JSONObject(request.body.readUtf8())
+            assertEquals(0, body.getJSONArray("sort").length())
+            assertEquals(page, body.getJSONObject("pagination").getInt("page"))
+            assertEquals(100, body.getJSONObject("pagination").getInt("size"))
+        }
+
+        server.enqueue(MockResponse().setResponseCode(503))
+        val cached = repository.loadSmartScopeBooksPage(42, 1)
+        assertEquals(listOf("book-2"), cached.items.map { it.id })
+        assertEquals(1, cached.page)
+        assertEquals(true, cached.isComplete)
+    }
+
+    @Test
     fun failedOnDeckEndpointDoesNotFallBackToLocallyGeneratedBooks() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(503))
 

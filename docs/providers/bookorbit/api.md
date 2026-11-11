@@ -263,10 +263,13 @@ The current discovery response is a top-level JSON array of Smart Scope objects,
 After a scope is selected, it fetches the scope's books in pages from:
 
 ```text
-GET /api/v1/smart-scopes/:id/books?page=0&size=100
+POST /api/v1/smart-scopes/:id/books/query
+Content-Type: application/json
+
+{"sort":[],"pagination":{"page":0,"size":100}}
 ```
 
-The client follows the paginated book response, groups the returned books by their Series identity, and derives the Series catalog locally. No authoritative Series-aware Smart Scope endpoint was verified, so the Android client does not claim that the server supplies a Series catalog for a scope. Each successful scoped-books page is cached separately per configured server, Smart Scope ID, and page. Offline catalog and Series-detail views can reconstruct their content from the cached scoped book pages; cached content is best-effort and refreshes when online. A non-authentication request failure can fall back to the relevant cached response. Authentication failures remain errors.
+The query endpoint returns the same paginated book response as the older GET endpoint. BookOrbit 3.7.0 requires Apple App Attest for that GET endpoint, so it is not suitable for the Android client. The client follows the paginated book response, groups the returned books by their Series identity, and derives the Series catalog locally. No authoritative Series-aware Smart Scope endpoint was verified, so the Android client does not claim that the server supplies a Series catalog for a scope. Each successful scoped-books page is cached separately per configured server, Smart Scope ID, and page. Offline catalog and Series-detail views can reconstruct their content from the cached scoped book pages; cached content is best-effort and refreshes when online. A non-authentication request failure can fall back to the relevant cached response. Authentication failures remain errors.
 
 ### Series catalog filters
 
