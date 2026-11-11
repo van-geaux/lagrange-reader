@@ -211,7 +211,9 @@ data class BookSummary(
     val isLocalOnlyOverride: Boolean? = null,
     val availableFormats: List<String> = emptyList(),
     val downloadedFormats: List<String> = emptyList(),
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    val currentlyReadingTieOrder: Int? = null,
+    val serverLastReadAtMillis: Long? = null
 ) {
     val isDownloaded: Boolean get() = !localPath.isNullOrBlank()
     val isLocalOnly: Boolean get() = isLocalOnlyOverride ?: libraryId.isBlank()

@@ -867,8 +867,26 @@ class EpubTtsPlaybackService : Service() {
         lastQueuedChapter = chapter
         val job = scope.launch(Dispatchers.IO) {
             if (!isSpecCurrent(spec)) return@launch
+            val repository = activeProviderRepository(applicationContext)
+            if (repository.supportsLocalReadingActivity) {
+                try {
+                    val serverUrl = resolveProviderServerSelectionModule(repository).getServerUrl().orEmpty()
+                    if (serverUrl.isNotBlank() && isSpecCurrent(spec)) {
+                        repository.recordBackgroundReadingActivity(
+                            serverUrl,
+                            ReadingActivityKey(spec.libraryId, currentBookId),
+                            now
+                        )
+                    }
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    android.util.Log.w("ReadingActivity", "Unable to save text-to-speech reading activity", error)
+                }
+            }
+            if (!isSpecCurrent(spec)) return@launch
             runCatching {
-                resolveActiveProviderReadingProgressModule(applicationContext).queueProgress(
+                resolveProviderReadingProgressModule(repository).queueProgress(
                     book = BookSummary(
                         libraryId = spec.libraryId,
                         id = currentBookId,

@@ -306,7 +306,7 @@ internal fun resolveProviderBackgroundCacheModule(repository: BookOrbitDataSourc
         }
     }
 
-private fun activeProviderRepository(context: Context): BookOrbitDataSource {
+internal fun activeProviderRepository(context: Context): BookOrbitDataSource {
     val profile = ServerProfileStore(context).active()
     return profile?.serverUrl?.let { resolveProviderRepository(context, it) } ?: BookOrbitRepository(context)
 }

@@ -132,6 +132,10 @@ Provider-specific validation is tracked in the [provider function matrix](docs/p
 
 Progress uploads are queued and throttled rather than sent immediately, and can be delayed by connectivity; a clean reader/player close attempts a best-effort flush of the pending queue but is not guaranteed to complete before the app fully closes offline.
 
+For BookOrbit, Currently Reading uses locally recorded reading-activity ordering values for books read on this device to keep shelf order stable after refreshes, restarts, and switching between server profiles. A local read is ordered ahead of activity already visible on the shelf even if the device clock is behind. Equal timestamps retain the previously established order; both activity and tie order are isolated by profile and authenticated account. When available, the catalog's explicit `lastReadAt` takes precedence over progress or status update times.
+
+BookOrbit's existing progress-write response does not identify the resulting last-read value, so the app cannot safely treat a refresh as an acknowledgment. For Currently Reading books, it uses the catalog's explicit last-read value or reads the server's file progress records. When that value is at least one minute newer than the stored local ordering value and no progress is pending, it updates the ordering value; this heuristic is not an acknowledgment and cannot account for clock skew greater than one minute or distinguish a delayed local write from a remote read. If the server omits or cannot provide last-read activity, the local value is retained. Server progress and reading status still sync independently. Explicit local status changes, progress resets, and signing out clear the affected local ordering values.
+
 ## Server reading sessions
 
 Lagrange separately records active reading/listening intervals through BookOrbit's file-scoped `POST /api/v1/books/files/{fileId}/sessions` endpoint. Sessions are authenticated, stored in a durable offline queue, retried in the background, and deduplicated with a stable session ID. The server source is `web`, which BookOrbit reports in its native `BookOrbit` source bucket.

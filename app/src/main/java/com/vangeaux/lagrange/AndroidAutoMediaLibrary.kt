@@ -1603,6 +1603,19 @@ internal class AndroidAutoCatalogBridge private constructor(
                         launchMode = launchMode
                     )
                 }
+                if (repository.supportsLocalReadingActivity) {
+                    try {
+                        repository.recordBackgroundReadingActivity(
+                            serverUrl,
+                            ReadingActivityKey(book.libraryId, book.id),
+                            now
+                        )
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        android.util.Log.w("ReadingActivity", "Unable to save Android Auto reading activity", error)
+                    }
+                }
             }
             runCatching {
                 resolveProviderReadingProgressModule(repository).queueProgress(
