@@ -26,7 +26,19 @@ Provider collection contract tests use MockWebServer fixtures rather than live p
 
 These tests verify the client-side endpoint and projection contract; they do not establish that a live provider server currently returns the fixture shapes.
 
+For issue #411's audiobook notification regression, run the focused connected test `AudiobookMediaNotificationInstrumentedTest#notificationPublisherRequestsManagerUpdate`. It verifies that the notification publisher forwards the notification unchanged with `DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID`; it covers the dispatch seam, not WhatsApp/call/audio-focus lifecycle simulation.
+
 For release work, also verify the approved release assembly/workflow and the release asset naming policy. For PDFium packaging, verify the built APK is `arm64-v8a`-only, run `zipalign -P 16 -c`, and inspect packaged native libraries for `p_align=0x4000`. These checks do not replace connected UI tests.
+
+## Issue #411 manual regression procedure
+
+1. Build and install the timestamped debug APK from the final worktree.
+2. Start audiobook playback and leave Lagrange backgrounded.
+3. Place an outgoing WhatsApp call while playback/notification updates are active.
+4. Confirm the audiobook notification update does not trigger a foreground-service-start exception and that the reported playback/notification behavior remains usable.
+5. Record the device model, Android version, APK filename, and SHA-256. Treat this as physical validation of the exercised scenario only; do not infer that every WhatsApp call, audio-focus, or process-lifecycle state was revalidated.
+
+The verified issue #411 handoff used `app/build/outputs/apk/debug/Lagrange-debug-202611111842.apk` with SHA-256 `9d41c90b6517d945eee66ec14e0dc7854fe78d4bf71ac7dc921f5af5f4475120`; the user confirmed it worked on Samsung SM-S931B.
 
 ## Debug APK handoff
 

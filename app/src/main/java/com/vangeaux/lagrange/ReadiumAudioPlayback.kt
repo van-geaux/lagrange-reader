@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import androidx.annotation.StringRes
 
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -10,7 +11,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -190,6 +190,17 @@ internal fun audiobookAvailableSessionCommands(): SessionCommands =
 @androidx.annotation.OptIn(UnstableApi::class)
 private fun audiobookCompactViewExtras(index: Int): Bundle = Bundle().apply {
     putInt(DefaultMediaNotificationProvider.COMMAND_KEY_COMPACT_VIEW_INDEX, index)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun publishAudiobookNotification(
+    notification: Notification,
+    updateNotification: (Int, Notification) -> Unit
+) {
+    updateNotification(
+        DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
+        notification
+    )
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -1543,12 +1554,11 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     .setMediaSession(session.getSessionCompatToken())
             )
             .build()
-        ServiceCompat.startForeground(
-            this,
-            DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID,
-            notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-        )
+        getSystemService(NotificationManager::class.java)?.let { manager ->
+            publishAudiobookNotification(notification) { notificationId, updated ->
+                manager.notify(notificationId, updated)
+            }
+        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {

@@ -1,11 +1,13 @@
 package com.vangeaux.lagrange
 
+import android.app.Notification
 import androidx.media3.common.Player
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -13,6 +15,21 @@ import org.junit.runner.RunWith
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @RunWith(AndroidJUnit4::class)
 class AudiobookMediaNotificationInstrumentedTest {
+    @Test
+    fun notificationPublisherRequestsManagerUpdate() {
+        val notification = Notification()
+        var updatedId: Int? = null
+        var updatedNotification: Notification? = null
+
+        publishAudiobookNotification(notification) { id, updated ->
+            updatedId = id
+            updatedNotification = updated
+        }
+
+        assertEquals(DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID, updatedId)
+        assertSame(notification, updatedNotification)
+    }
+
     @Test
     fun externalCommandsReplaceChapterSkipWithTimedSeeking() {
         val commands = audiobookExternalPlayerCommands(
