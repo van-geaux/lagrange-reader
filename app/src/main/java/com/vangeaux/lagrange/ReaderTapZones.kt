@@ -29,6 +29,47 @@ enum class ReaderTapZoneAction(val displayName: String, @StringRes val displayNa
     MENU("Menu", R.string.label_tap_action_menu)
 }
 
+internal const val DEFAULT_READER_MARGIN_TAP_ZONE_EXCLUSION_PERCENT = 100
+private const val READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT = 5
+
+internal fun normalizedReaderMarginTapZoneExclusionPercent(value: Int): Int =
+    ((value.coerceIn(0, 100) + READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT / 2) /
+        READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT) *
+        READER_MARGIN_TAP_ZONE_EXCLUSION_STEP_PERCENT
+
+/**
+ * True when a touch lands in the page padding but outside the outer [exclusionPercent] of every
+ * side's padding, so it should still drive tap zones and page-turn swipes.
+ */
+internal fun isReaderMarginTouchInteractive(
+    x: Float,
+    y: Float,
+    width: Float,
+    height: Float,
+    leftPadding: Float,
+    topPadding: Float,
+    rightPadding: Float,
+    bottomPadding: Float,
+    exclusionPercent: Int
+): Boolean {
+    if (!x.isFinite() || !y.isFinite() || !width.isFinite() || !height.isFinite()) return false
+    if (width <= 0f || height <= 0f) return false
+
+    val left = leftPadding.coerceIn(0f, width)
+    val right = rightPadding.coerceIn(0f, width)
+    val top = topPadding.coerceIn(0f, height)
+    val bottom = bottomPadding.coerceIn(0f, height)
+    val inPadding = x < left || x >= width - right || y < top || y >= height - bottom
+    if (!inPadding) return false
+
+    val fraction = exclusionPercent.coerceIn(0, 100) / 100f
+    val excluded = x < left * fraction ||
+        x >= width - right * fraction ||
+        y < top * fraction ||
+        y >= height - bottom * fraction
+    return !excluded
+}
+
 data class ReaderTapZoneRect(
     val x: Float,
     val y: Float,

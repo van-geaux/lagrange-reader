@@ -39,7 +39,7 @@ other fields and the custom-color UI are new in this change:
 ### Migration
 
 Profiles are still read through `libraryReaderPreferencesFromStorage` and remain tolerant of older
-JSON (storage version 3):
+JSON (including storage version 3):
 
 - released profiles only contain `theme` and the previously existing keys; missing
   `backgroundTheme` falls back to `theme`, preserving the old unified appearance;
@@ -167,6 +167,11 @@ Reader options and **Options → Library → reader profile** use shared control
 The Library editor also gained the previously missing volume-page-navigation, page-progress, and
 PDF facing-page controls. Reading direction, tap zones, font size, layout modes, margins, spread,
 and EPUB alignment/hyphenation were already present.
+
+EPUB page-margin settings include an **Exclude margins from tap zone** slider. It ranges
+from 0% to 100% in 5% steps, defaults to 100% to preserve the existing behavior, and changes only
+touch handling: the selected percentage of the configured padding on every side (outer edge first)
+remains excluded from tap zones and page-turn swipes without changing the displayed margins.
 
 Still reader-options-only (pre-existing divergence, tracked as a follow-up):
 

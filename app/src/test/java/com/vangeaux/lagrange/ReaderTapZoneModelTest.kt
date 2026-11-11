@@ -117,6 +117,46 @@ class ReaderTapZoneModelTest {
     }
 
     @Test
+    fun `margin exclusion progressively enables inner padding bands on all sides`() {
+        fun hit(x: Float, y: Float, exclusionPercent: Int) = isReaderMarginTouchInteractive(
+            x = x,
+            y = y,
+            width = 100f,
+            height = 100f,
+            leftPadding = 20f,
+            topPadding = 20f,
+            rightPadding = 10f,
+            bottomPadding = 10f,
+            exclusionPercent = exclusionPercent
+        )
+
+        assertEquals(true, hit(0f, 50f, 0))
+        assertEquals(true, hit(50f, 0f, 0))
+        assertEquals(true, hit(0f, 0f, 0))
+        assertEquals(false, hit(50f, 50f, 0))
+        assertEquals(true, hit(10f, 50f, 50))
+        assertEquals(false, hit(9f, 50f, 50))
+        assertEquals(true, hit(50f, 10f, 50))
+        assertEquals(false, hit(50f, 9f, 50))
+        assertEquals(true, hit(50f, 92f, 50))
+        assertEquals(false, hit(50f, 95f, 50))
+        assertEquals(true, hit(92f, 50f, 50))
+        assertEquals(false, hit(95f, 50f, 50))
+        assertEquals(false, hit(10f, 9f, 50))
+        assertEquals(false, hit(0f, 50f, 100))
+        assertEquals(false, hit(50f, 99f, 100))
+    }
+
+    @Test
+    fun `margin exclusion values clamp and snap to five percent`() {
+        assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(-1))
+        assertEquals(0, normalizedReaderMarginTapZoneExclusionPercent(2))
+        assertEquals(5, normalizedReaderMarginTapZoneExclusionPercent(3))
+        assertEquals(100, normalizedReaderMarginTapZoneExclusionPercent(100))
+        assertEquals(100, normalizedReaderMarginTapZoneExclusionPercent(101))
+    }
+
+    @Test
     fun `vertical thirds layout uses equal top, middle, and bottom regions`() {
         val regions = readerTapZoneRegions(
             layout = ReaderTapZoneLayout.VERTICAL_THIRDS,

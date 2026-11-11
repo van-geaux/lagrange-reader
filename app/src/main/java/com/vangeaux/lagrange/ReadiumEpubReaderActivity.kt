@@ -2368,6 +2368,10 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var lastCanonicalPosition: EpubReaderPosition? = null
     private val passiveRecoveryGuard = EpubPassiveRecoveryGuard()
     private var pageSwipeActive = false
+    private var readerMarginTouchActive = false
+    private var readerMarginTouchDownX = 0f
+    private var readerMarginTouchDownY = 0f
+    private var readerMarginPageSwipeStarted = false
     private var lastPositionWriteMillis = 0L
     private val positionWriterSessionId = UUID.randomUUID().toString()
     private var positionWriterLease: EpubReaderWriterLease? = null
@@ -2807,6 +2811,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             id = readerContainerId
             blockHorizontalSwipe = continuousScrollBlocksHorizontalSwipe(epubLayoutMode)
             setBackgroundColor(readerContentBackgroundColor(readerPreferences))
+            setOnTouchListener { _, event -> handleReaderMarginTouch(event) }
         }
         readerViewport.addView(
             readerContainer,
@@ -5618,6 +5623,125 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         if (bookmarkGeometryTraceActive) {
             logBookmarkGeometry("padding-applied", navigator?.currentLocator?.value)
         }
+    }
+
+    private fun handleReaderMarginTouch(event: MotionEvent): Boolean {
+        if (!::readerContainer.isInitialized) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (
+                    !isReaderMarginTouchInteractive(
+                        x = event.x,
+                        y = event.y,
+                        width = readerContainer.width.toFloat(),
+                        height = readerContainer.height.toFloat(),
+                        leftPadding = readerContainer.paddingLeft.toFloat(),
+                        topPadding = readerContainer.paddingTop.toFloat(),
+                        rightPadding = readerContainer.paddingRight.toFloat(),
+                        bottomPadding = readerContainer.paddingBottom.toFloat(),
+                        exclusionPercent = readerPreferences.marginTapZoneExclusionPercent
+                    )
+                ) return false
+                readerMarginTouchActive = true
+                readerMarginTouchDownX = event.x
+                readerMarginTouchDownY = event.y
+                readerMarginPageSwipeStarted = false
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!readerMarginTouchActive) return false
+                val deltaX = event.x - readerMarginTouchDownX
+                val deltaY = event.y - readerMarginTouchDownY
+                if (
+                    !readerMarginPageSwipeStarted &&
+                    epubLayoutMode == ReaderLayoutMode.PAGINATED &&
+                    kotlin.math.abs(deltaX) > ViewConfiguration.get(this).scaledTouchSlop &&
+                    kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY)
+                ) {
+                    readerMarginPageSwipeStarted = true
+                    pageSwipeActive = true
+                    expectPageOrChapterReaderMovement()
+                    endForegroundSync()
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!readerMarginTouchActive) return false
+                val deltaX = event.x - readerMarginTouchDownX
+                val deltaY = event.y - readerMarginTouchDownY
+                val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+                if (readerMarginPageSwipeStarted) {
+                    pageSwipeActive = false
+                    if (
+                        kotlin.math.abs(deltaX) > ViewConfiguration.get(this).scaledPagingTouchSlop &&
+                        kotlin.math.abs(deltaX) > kotlin.math.abs(deltaY)
+                    ) {
+                        turnPageFromReaderMargin(if (deltaX > 0f) {
+                            ReaderTapZoneAction.PREVIOUS
+                        } else {
+                            ReaderTapZoneAction.NEXT
+                        })
+                    } else {
+                        cancelExpectedReaderMovement()
+                    }
+                } else if (
+                    kotlin.math.abs(deltaX) <= touchSlop &&
+                    kotlin.math.abs(deltaY) <= touchSlop
+                ) {
+                    handleReaderMarginTap(event)
+                }
+                clearReaderMarginGesture()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (readerMarginPageSwipeStarted) {
+                    pageSwipeActive = false
+                    cancelExpectedReaderMovement()
+                }
+                clearReaderMarginGesture()
+                return true
+            }
+            else -> return readerMarginTouchActive
+        }
+    }
+
+    private fun handleReaderMarginTap(event: MotionEvent) {
+        val publicationView = navigator?.publicationView ?: return
+        val width = publicationView.width.toFloat().takeIf { it > 0f } ?: return
+        val height = publicationView.height.toFloat().takeIf { it > 0f } ?: return
+        val action = readerTapZoneAction(
+            x = (event.x - readerContainer.paddingLeft).coerceIn(0f, width),
+            y = (event.y - readerContainer.paddingTop).coerceIn(0f, height),
+            width = width,
+            height = height,
+            layout = readerPreferences.tapZoneLayout,
+            readingDirection = readingDirection,
+            invertMode = readerPreferences.tapZoneInvertMode
+        )
+        if (action == ReaderTapZoneAction.MENU) {
+            toggleChrome()
+        } else {
+            turnPageFromReaderMargin(action)
+        }
+    }
+
+    private fun turnPageFromReaderMargin(action: ReaderTapZoneAction) {
+        expectPageOrChapterReaderMovement()
+        endForegroundSync()
+        val moved = when (action) {
+            ReaderTapZoneAction.PREVIOUS -> navigator?.goBackward(true) == true
+            ReaderTapZoneAction.NEXT -> navigator?.goForward(true) == true
+            ReaderTapZoneAction.MENU -> {
+                toggleChrome()
+                true
+            }
+        }
+        if (!moved) cancelExpectedReaderMovement()
+    }
+
+    private fun clearReaderMarginGesture() {
+        readerMarginTouchActive = false
+        readerMarginPageSwipeStarted = false
     }
 
     private fun syncProgressFooter() {
