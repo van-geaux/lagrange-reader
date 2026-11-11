@@ -12,6 +12,7 @@ This document contains current project direction only. Historical work orders an
 - Download location selection now supports writable internal shared-storage folders and mounted SD-card folders through persisted Android system-picker access. New downloads use the selected folder's managed `Lagrange Reader/account-*` directory, while existing downloads remain in place; the user confirmed the selected-folder flow works.
 - Multiple named accounts can now be saved for the same provider and normalized server URL, with profile-scoped local books, downloads, browser snapshots, and account state.
 - Audiobook playback now prefers the provider's `medium=audio` cover endpoint, falls back to the generic cover, and preserves the square audiobook-cover presentation in compact and full players ([#311](https://github.com/van-geaux/lagrange-reader/issues/311)).
+- Issue [#411](https://github.com/van-geaux/lagrange-reader/issues/411) is complete: custom audiobook notification refreshes call `NotificationManager.notify` after Media3's superclass update instead of calling `ServiceCompat.startForeground`. Focused instrumentation covered the notification-ID/object dispatch seam, and the user confirmed the fixed APK worked on Samsung SM-S931B for the reported backgrounded outgoing-WhatsApp-call scenario; this is not a claim that all call or audio-focus states were revalidated.
 - MOBI, AZW, AZW3, and FB2 remain explicitly unsupported. Native AppAuth/Custom Tabs remains deferred until upstream mobile-redirect support is deployed.
 
 ## Active validation and follow-up
