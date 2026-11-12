@@ -4912,10 +4912,19 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             selected = languageTag,
             label = { tag -> languageLabels[tag] ?: tag },
             onSelect = { tag ->
+                val changed = tag != languageTag
                 AppLocale.writeTag(context, tag)
                 languageTag = tag
                 openDialog = null
-                context.findActivity()?.recreate()
+                if (changed) {
+                    // Let the AlertDialog window finish dismissing before recreating the
+                    // activity. Recreating while it is still attached can leave a ghost
+                    // dialog window whose touch region swallows or leaks taps.
+                    val activity = context.findActivity()
+                    activity?.window?.decorView?.postDelayed({
+                        if (!activity.isFinishing && !activity.isDestroyed) activity.recreate()
+                    }, 250L)
+                }
             },
             onDismiss = { openDialog = null }
         )
