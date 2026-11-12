@@ -61,6 +61,10 @@
 
     <!-- EPUB 阅读器：图片图库 -->
     <string name="epub_image_open_failed">无法打开此 EPUB 图片。</string>
+    <string name="epub_image_link_confirmation_title">要打开链接页面吗？</string>
+    <string name="epub_image_link_confirmation_message">此图片链接到书中的其他页面。</string>
+    <string name="epub_image_link_open">打开页面</string>
+    <string name="epub_image_link_stay">留在此处</string>
     <string name="epub_image_loading">正在查找 EPUB 图片…</string>
     <string name="epub_image_gallery_item_cd">EPUB 图库中的第 %1$d 张图片</string>
     <string name="epub_image_export_title">%1$s - 图片 %2$d</string>
