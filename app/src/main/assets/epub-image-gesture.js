@@ -8,6 +8,8 @@
     let startX = 0;
     let startY = 0;
     let suppressNextClick = false;
+    let pendingImageLinkAnchor = null;
+    let allowPendingImageLinkClick = false;
     const movementLimit = 12;
     const minimumScale = 1;
     const maximumScale = 4;
@@ -195,11 +197,48 @@
         if (scale <= minimumScale) resetZoom();
     }, { capture: true, passive: false });
     document.addEventListener("click", (event) => {
-        if (!suppressNextClick || !imageFor(event)) return;
-        suppressNextClick = false;
+        if (allowPendingImageLinkClick) {
+            allowPendingImageLinkClick = false;
+            return;
+        }
+        const image = imageFor(event);
+        if (!image) return;
+        if (suppressNextClick) {
+            suppressNextClick = false;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        const anchor = image.closest("a[href]");
+        if (!anchor) return;
+        let destination;
+        let documentUrl;
+        try {
+            destination = new URL(anchor.href || anchor.getAttribute("href"), document.baseURI);
+            documentUrl = new URL(document.baseURI);
+        } catch (_) {
+            return;
+        }
+        if (destination.origin !== documentUrl.origin ||
+            destination.protocol !== "https:" ||
+            !destination.pathname.startsWith("/publication/")) return;
         event.preventDefault();
         event.stopImmediatePropagation();
+        pendingImageLinkAnchor = anchor;
+        window.__bookorbitImageLink = JSON.stringify({ gesture: "image_link" });
     }, true);
+    window.__bookorbitResumeImageLinkClick = () => {
+        const anchor = pendingImageLinkAnchor;
+        if (!anchor) return false;
+        pendingImageLinkAnchor = null;
+        allowPendingImageLinkClick = true;
+        anchor.click();
+        return true;
+    };
+    window.__bookorbitCancelImageLinkClick = () => {
+        pendingImageLinkAnchor = null;
+        allowPendingImageLinkClick = false;
+    };
     window.__bookorbitImageZoomTestApi = {
         isImageOnlyDocument,
         clampScale,
