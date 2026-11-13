@@ -316,4 +316,96 @@ class AndroidAutoMediaLibraryTest {
 
         assertEquals(listOf("1", "2"), results.map { it.id })
     }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    @Test
+    fun singleItemPlayer_preservesPreviousNextOutsideAuto_andUses30sControlsInAuto() {
+        var autoConnected = false
+        var posMs = 100_000L
+        val stubPlayer = java.lang.reflect.Proxy.newProxyInstance(
+            androidx.media3.common.Player::class.java.classLoader,
+            arrayOf(androidx.media3.common.Player::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "isCommandAvailable" -> false // Simulate single-item player that omits prev/next
+                "getCurrentPosition", "getContentPosition", "getContentBufferedPosition", "getBufferedPosition" -> posMs
+                "getDuration", "getContentDuration" -> 600_000L
+                "getCurrentMediaItemIndex", "getCurrentPeriodIndex" -> 0
+                "getMediaItemCount" -> 1
+                "getCurrentTimeline" -> androidx.media3.common.Timeline.EMPTY
+                "getMediaMetadata", "getPlaylistMetadata" -> androidx.media3.common.MediaMetadata.EMPTY
+                "getPlaybackParameters" -> androidx.media3.common.PlaybackParameters.DEFAULT
+                "seekTo" -> {
+                    posMs = if (args != null && args.size == 1 && args[0] is Long) {
+                        args[0] as Long
+                    } else if (args != null && args.size >= 2 && args[1] is Long) {
+                        args[1] as Long
+                    } else {
+                        posMs
+                    }
+                    null
+                }
+                else -> when (method.returnType) {
+                    java.lang.Boolean.TYPE -> false
+                    java.lang.Integer.TYPE -> 0
+                    java.lang.Long.TYPE -> 0L
+                    java.lang.Float.TYPE -> 1.0f
+                    java.lang.Double.TYPE -> 0.0
+                    else -> null
+                }
+            }
+        } as androidx.media3.common.Player
+
+        val wrapper = LagrangeLibrarySessionPlayer(
+            delegate = stubPlayer,
+            isAutoConnectedProvider = { autoConnected }
+        )
+
+        // 1. Outside Auto (Phone / Bluetooth on single-item book):
+        //    Previous/Next commands are preserved even when the underlying player omits them,
+        //    and transport skip actions jump -10s / +30s.
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_BACK))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_FORWARD))
+        assertTrue(wrapper.hasPreviousMediaItem())
+        assertTrue(wrapper.hasNextMediaItem())
+
+        wrapper.seekToPrevious()
+        assertEquals(90_000L, posMs) // -10s on phone/Bluetooth
+        wrapper.seekToNext()
+        assertEquals(120_000L, posMs) // +30s on phone/Bluetooth
+
+        // 2. Connected to Android Auto:
+        //    Previous/Next commands are stripped so circular -30s/+30s buttons take the primary slots,
+        //    while hardware vehicle skip buttons jump -30s / +30s.
+        autoConnected = true
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS))
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM))
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT))
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_BACK))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_FORWARD))
+
+        wrapper.seekToPrevious()
+        assertEquals(90_000L, posMs) // -30s on vehicle skip back
+        wrapper.seekToNext()
+        assertEquals(120_000L, posMs) // +30s on vehicle skip forward
+        wrapper.seekToPreviousMediaItem()
+        assertEquals(90_000L, posMs) // -30s on vehicle media-item skip back
+        wrapper.seekToNextMediaItem()
+        assertEquals(120_000L, posMs) // +30s on vehicle media-item skip forward
+        wrapper.seekBackAuto()
+        assertEquals(90_000L, posMs) // -30s on explicit Auto seek-back command
+
+        // 3. Confirm distinct session commands and 10s vs 30s increments for Phone vs Android Auto
+        assertEquals(10_000L, AUDIO_SEEK_BACK_INCREMENT_MS)
+        assertEquals(30_000L, ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
+        assertEquals(30_000L, AUDIO_SEEK_FORWARD_INCREMENT_MS)
+        assertEquals(AUDIO_SEEK_BACK_SESSION_ACTION, audiobookSeekBackSessionCommand.customAction)
+        assertEquals(AUDIO_SEEK_BACK_30_SESSION_ACTION, audiobookAutoSeekBackSessionCommand.customAction)
+        assertEquals(AUDIO_SEEK_FORWARD_SESSION_ACTION, audiobookSeekForwardSessionCommand.customAction)
+    }
 }

@@ -1795,7 +1795,21 @@ internal fun audiobookAutoMediaButtonPreferences(
     hasChapters: Boolean = true,
     currentSpeed: Float = 1.0f
 ): List<CommandButton> = buildList {
-    // Steering wheel and primary transport controls jump -30s / +30s.
+    // Primary transport slots flanking Play/Pause: Circular -30s and +30s icons.
+    add(
+        CommandButton.Builder(CommandButton.ICON_SKIP_BACK_30)
+            .setSessionCommand(audiobookAutoSeekBackSessionCommand)
+            .setDisplayName("Replay 30 seconds") // i18n-ignore: Android Auto accessibility label
+            .setEnabled(true)
+            .build()
+    )
+    add(
+        CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_30)
+            .setSessionCommand(audiobookSeekForwardSessionCommand)
+            .setDisplayName("Forward 30 seconds") // i18n-ignore: Android Auto accessibility label
+            .setEnabled(true)
+            .build()
+    )
     // Secondary custom buttons expose Previous Chapter, Next Chapter, and Cycle Playback Speed.
     if (hasChapters) {
         add(
@@ -1819,11 +1833,67 @@ internal fun audiobookAutoMediaButtonPreferences(
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+internal fun audiobookAutoPlayerCommands(
+    commands: Player.Commands
+): Player.Commands = audiobookExternalPlayerCommands(commands).buildUpon()
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+    .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+    .remove(Player.COMMAND_SEEK_TO_NEXT)
+    .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+    .build()
+
+internal fun androidAutoSessionExtras(): Bundle = Bundle().apply {
+    putBoolean("android.media.browse.SLOT_RESERVATION_SKIP_TO_PREV", false)
+    putBoolean("android.media.browse.SLOT_RESERVATION_SKIP_TO_NEXT", false)
+    putBoolean("androidx.media.MediaSessionCompat.Extras.KEY_SLOT_RESERVATION_SKIP_TO_PREV", false)
+    putBoolean("androidx.media.MediaSessionCompat.Extras.KEY_SLOT_RESERVATION_SKIP_TO_NEXT", false)
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+internal fun handleAndroidAutoMediaButtonEvent(
+    session: MediaSession,
+    controllerInfo: MediaSession.ControllerInfo,
+    intent: android.content.Intent
+): Boolean {
+    val isAuto = session.isAutoCompanionController(controllerInfo) ||
+        session.isAutomotiveController(controllerInfo) ||
+        controllerInfo.packageName in KNOWN_AUTOMOTIVE_PACKAGES ||
+        session.connectedControllers.any {
+            session.isAutoCompanionController(it) ||
+                session.isAutomotiveController(it) ||
+                it.packageName in KNOWN_AUTOMOTIVE_PACKAGES
+        }
+    if (!isAuto) return false
+    val keyEvent = if (android.os.Build.VERSION.SDK_INT >= 33) {
+        intent.getParcelableExtra(android.content.Intent.EXTRA_KEY_EVENT, android.view.KeyEvent::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        intent.getParcelableExtra(android.content.Intent.EXTRA_KEY_EVENT)
+    } ?: return false
+    if (keyEvent.action != android.view.KeyEvent.ACTION_DOWN) return false
+    return when (keyEvent.keyCode) {
+        android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+        android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
+            val player = session.player
+            if (player is LagrangeLibrarySessionPlayer) player.seekBackAuto() else player.seekBack()
+            true
+        }
+        android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+        android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+            session.player.seekForward()
+            true
+        }
+        else -> false
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal class LagrangeLibrarySessionPlayer(
     delegate: Player,
     private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null,
     private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
-    private val scaleBySpeedProvider: (() -> Boolean)? = null
+    private val scaleBySpeedProvider: (() -> Boolean)? = null,
+    private val isAutoConnectedProvider: (() -> Boolean)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
@@ -1887,6 +1957,7 @@ internal class LagrangeLibrarySessionPlayer(
         )
         for (listener in sessionListeners) {
             runCatching {
+                listener.onAvailableCommandsChanged(availableCommands)
                 listener.onTimelineChanged(timeline, Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE)
                 listener.onMediaMetadataChanged(metadata)
                 listener.onPositionDiscontinuity(
@@ -1933,25 +2004,33 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
 
+    private fun isAutoConnected(): Boolean = isAutoConnectedProvider?.invoke() ?: false
+
     override fun isCommandAvailable(command: Int): Boolean {
         if (
-            command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
-            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
-            command == Player.COMMAND_SEEK_BACK ||
-            command == Player.COMMAND_SEEK_FORWARD ||
             command == Player.COMMAND_SEEK_TO_PREVIOUS ||
             command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
             command == Player.COMMAND_SEEK_TO_NEXT ||
             command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+        ) {
+            return !isAutoConnected()
+        }
+        if (
+            command == Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_TO_MEDIA_ITEM ||
+            command == Player.COMMAND_SEEK_BACK ||
+            command == Player.COMMAND_SEEK_FORWARD
         ) {
             return true
         }
         return super.isCommandAvailable(command)
     }
 
-
-
     override fun seekBack() {
+        seekRelativeRawMs(-AUDIO_SEEK_BACK_INCREMENT_MS)
+    }
+
+    fun seekBackAuto() {
         seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
     }
 
@@ -2182,10 +2261,23 @@ internal class LagrangeLibrarySessionPlayer(
 
     override fun getAvailableCommands(): Player.Commands =
         super.getAvailableCommands().buildUpon()
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-            .add(Player.COMMAND_SEEK_TO_NEXT)
-            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_BACK)
+            .add(Player.COMMAND_SEEK_FORWARD)
+            .apply {
+                if (isAutoConnected()) {
+                    remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    remove(Player.COMMAND_SEEK_TO_NEXT)
+                    remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                } else {
+                    add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    add(Player.COMMAND_SEEK_TO_NEXT)
+                    add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                }
+            }
             .build()
 
     override fun hasPreviousMediaItem(): Boolean = true
@@ -2193,7 +2285,7 @@ internal class LagrangeLibrarySessionPlayer(
     override fun hasNextMediaItem(): Boolean = true
 
     override fun seekToPreviousMediaItem() {
-        seekBack()
+        if (isAutoConnected()) seekBackAuto() else seekBack()
     }
 
     override fun seekToNextMediaItem() {
@@ -2201,7 +2293,7 @@ internal class LagrangeLibrarySessionPlayer(
     }
 
     override fun seekToPrevious() {
-        seekBack()
+        if (isAutoConnected()) seekBackAuto() else seekBack()
     }
 
     override fun seekToNext() {
@@ -2316,6 +2408,11 @@ internal fun handleAudiobookCustomCommand(
             session.player.seekBack()
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
+        customCommand == audiobookAutoSeekBackSessionCommand -> {
+            val player = session.player
+            if (player is LagrangeLibrarySessionPlayer) player.seekBackAuto() else player.seekBack()
+            Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
         customCommand == audiobookSeekForwardSessionCommand -> {
             session.player.seekForward()
             Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -2351,7 +2448,7 @@ internal fun handleAudiobookCustomCommand(
     }
 }
 
-private val KNOWN_AUTOMOTIVE_PACKAGES = setOf(
+internal val KNOWN_AUTOMOTIVE_PACKAGES = setOf(
     "com.google.android.projection.gearhead",
     "com.google.android.googlequicksearchbox",
     "com.android.car.media",
@@ -2729,6 +2826,16 @@ internal fun ReadiumAudioPlaybackService.activeSessionHasChapters(): Boolean {
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+internal fun ReadiumAudioPlaybackService.hasConnectedAndroidAutoController(): Boolean {
+    val session = mediaLibrarySession ?: return false
+    return session.connectedControllers.any { controller ->
+        session.isAutoCompanionController(controller) ||
+            session.isAutomotiveController(controller) ||
+            controller.packageName in KNOWN_AUTOMOTIVE_PACKAGES
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.skipActiveChapter(direction: Int): Boolean {
     val current = activeSession() ?: return false
     val chapters = current.book.audioChapters
@@ -2754,19 +2861,35 @@ internal fun ReadiumAudioPlaybackService.applyAndroidAutoPlaybackSpeed(speed: Fl
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal fun ReadiumAudioPlaybackService.refreshAndroidAutoCustomLayout(
-    speedOverride: Float? = null
+    speedOverride: Float? = null,
+    hasChaptersOverride: Boolean? = null
 ) {
     AndroidAutoStrings.attach(this)
     val session = mediaLibrarySession ?: return
     val currentSpeed = speedOverride
         ?: activeSession()?.player?.playbackParameters?.speed?.takeIf { it > 0f }
         ?: AppPreferencesStore(applicationContext).readAudioPlaybackSpeed()
-    session.setCustomLayout(
+    val hasChapters = hasChaptersOverride ?: activeSessionHasChapters()
+    val autoConnected = hasConnectedAndroidAutoController()
+    val activeLayout = if (autoConnected) {
         audiobookAutoMediaButtonPreferences(
-            hasChapters = activeSessionHasChapters(),
+            hasChapters = hasChapters,
             currentSpeed = currentSpeed
         )
-    )
+    } else {
+        audiobookMediaButtonPreferences(applicationContext)
+    }
+    val sessionCommands = audiobookAvailableSessionCommands()
+    val activePlayerCommands = if (autoConnected) {
+        audiobookAutoPlayerCommands(session.player.availableCommands)
+    } else {
+        audiobookExternalPlayerCommands(session.player.availableCommands)
+    }
+
+    session.setCustomLayout(activeLayout)
+    session.connectedControllers.forEach { controller ->
+        session.setAvailableCommands(controller, sessionCommands, activePlayerCommands)
+    }
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -2920,5 +3043,5 @@ internal suspend fun ReadiumAudioPlaybackService.currentSessionMediaItemsWithPos
     }
     val currentIndex = player.currentMediaItemIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
     val currentPos = (librarySessionPlayer?.currentPosition ?: player.currentPosition).coerceAtLeast(0L)
-    MediaItemsWithStartPosition(items, currentIndex, currentPos)
+    MediaItemsWithStartPosition(items, currentIndex, currentPos) // i18n-ignore: AA accessibility label
 }
