@@ -28,8 +28,8 @@ android {
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Release marker: update versionCode and versionName together for every distributed build.
-        versionCode = 30
-        versionName = "2.1.2"
+        versionCode = 31
+        versionName = "2.1.3"
     }
 
     signingConfigs {
