@@ -32,6 +32,8 @@
         const target = event.target;
         return target instanceof Element ? target.closest("img, svg") : null;
     };
+    const isFootnoteLink = (anchor) =>
+        (anchor.getAttribute("epub:type") || "").split(/\s+/).includes("noteref");
     const visibleImageElements = () => Array.from(document.querySelectorAll("img, svg"))
         .filter((element) => {
             const rect = element.getBoundingClientRect();
@@ -225,7 +227,10 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         pendingImageLinkAnchor = anchor;
-        window.__bookorbitImageLink = JSON.stringify({ gesture: "image_link" });
+        window.__bookorbitImageLink = JSON.stringify({
+            gesture: "image_link",
+            footnote: isFootnoteLink(anchor)
+        });
     }, true);
     window.__bookorbitResumeImageLinkClick = () => {
         const anchor = pendingImageLinkAnchor;

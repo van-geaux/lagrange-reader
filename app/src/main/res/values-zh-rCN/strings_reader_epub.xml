@@ -98,6 +98,8 @@
     <string name="epub_highlight_delete">删除高亮</string>
     <string name="epub_highlight_save_failed">无法保存高亮。</string>
     <string name="epub_note_title">笔记</string>
+    <string name="epub_footnote_title">脚注</string>
+    <string name="epub_note_unavailable">脚注内容不可用。</string>
     <string name="epub_note_save">保存</string>
 
     <!-- EPUB 语音朗读控件 -->
