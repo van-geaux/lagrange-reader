@@ -750,6 +750,66 @@ internal fun unscaleAudioTimeMs(
     return (scaledMs.toDouble() * validSpeed.toDouble()).toLong().coerceAtLeast(0L)
 }
 
+internal fun formatAndroidAutoPlaybackSpeedLabel(speed: Float): String {
+    val validSpeed = speed.takeIf { it.isFinite() && it > 0f } ?: 1.0f
+    val hundredths = kotlin.math.round(validSpeed * 100f).toInt()
+    return if (hundredths % 10 == 0) {
+        String.format(Locale.US, "%.1fx", hundredths / 100.0)
+    } else {
+        String.format(Locale.US, "%.2fx", hundredths / 100.0)
+    }
+}
+
+internal fun formatAndroidAutoWallClockEta(
+    etaEpochMillis: Long,
+    context: Context? = null,
+    locale: Locale = Locale.getDefault(),
+    timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()
+): String {
+    val date = java.util.Date(etaEpochMillis)
+    val formatter = if (context != null) {
+        android.text.format.DateFormat.getTimeFormat(context)
+    } else {
+        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, locale)
+    }
+    formatter.timeZone = timeZone
+    return formatter.format(date)
+}
+
+internal fun formatAndroidAutoChapterEtaSubtitle(
+    author: String?,
+    rawRemainingMs: Long,
+    speed: Float,
+    nowEpochMillis: Long = System.currentTimeMillis(),
+    context: Context? = null,
+    locale: Locale = Locale.getDefault(),
+    timeZone: java.util.TimeZone = java.util.TimeZone.getDefault()
+): String {
+    val cleanAuthor = author?.trim()?.takeIf { it.isNotEmpty() }
+    if (rawRemainingMs <= 0L) {
+        return cleanAuthor.orEmpty()
+    }
+    val scaledRemainingMs = scaleAudioTimeMs(
+        rawMs = rawRemainingMs,
+        speed = speed,
+        scaleBySpeed = true
+    )
+    val etaEpochMillis = nowEpochMillis + scaledRemainingMs
+    val timeLabel = formatAndroidAutoWallClockEta(
+        etaEpochMillis = etaEpochMillis,
+        context = context,
+        locale = locale,
+        timeZone = timeZone
+    )
+    val speedLabel = formatAndroidAutoPlaybackSpeedLabel(speed)
+    val etaSuffix = "Ends at $timeLabel ($speedLabel)" // i18n-ignore: Android Auto ETA subtext
+    return if (cleanAuthor != null) {
+        "$cleanAuthor - $etaSuffix"
+    } else {
+        etaSuffix
+    }
+}
+
 internal fun buildAndroidAutoChapterSpecs(
     book: BookSummary,
     currentPositionMs: Long = book.progressPositionMs ?: 0L,
@@ -1893,20 +1953,101 @@ internal class LagrangeLibrarySessionPlayer(
     private val fallbackMetadataProvider: (() -> androidx.media3.common.MediaMetadata?)? = null,
     private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
     private val scaleBySpeedProvider: (() -> Boolean)? = null,
-    private val isAutoConnectedProvider: (() -> Boolean)? = null
+    private val isAutoConnectedProvider: (() -> Boolean)? = null,
+    private val contextProvider: (() -> Context?)? = null
 ) : ForwardingPlayer(delegate) {
     @Volatile
     private var suppressNextSetMediaItems = false
+    @Volatile
+    private var isNotifyingMetadataChange = false
+    @Volatile
+    private var lastDispatchedTimelineMediaIds: List<String> = emptyList()
     private val sessionListeners = java.util.concurrent.CopyOnWriteArraySet<Player.Listener>()
+    private val forwardedListeners = ConcurrentHashMap<Player.Listener, Player.Listener>()
+
+    private fun currentTimelineMediaIds(timeline: Timeline = super.getCurrentTimeline()): List<String> {
+        if (timeline.isEmpty) return emptyList()
+        val window = Timeline.Window()
+        return (0 until timeline.windowCount).map { idx ->
+            timeline.getWindow(idx, window).mediaItem.mediaId
+        }
+    }
+
+    private val delegateStateListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            notifyMetadataAndPositionChanged()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            notifyMetadataAndPositionChanged()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (!isNotifyingMetadataChange && reason != Player.DISCONTINUITY_REASON_INTERNAL) {
+                notifyMetadataAndPositionChanged()
+            }
+        }
+    }
+
+    init {
+        lastDispatchedTimelineMediaIds = currentTimelineMediaIds()
+        delegate.addListener(delegateStateListener)
+    }
 
     override fun addListener(listener: Player.Listener) {
         sessionListeners.add(listener)
-        super.addListener(listener)
+        val filteringListener = object : Player.Listener by listener {
+            private var suppressedLastTimelineEvent = false
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                val newIds = currentTimelineMediaIds(timeline)
+                if (
+                    reason == Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE &&
+                    newIds.isNotEmpty() &&
+                    newIds == lastDispatchedTimelineMediaIds
+                ) {
+                    // Suppress redundant source-duration/buffering timeline updates so
+                    // Android Auto does not rebuild the Queue and reset scroll position.
+                    suppressedLastTimelineEvent = true
+                    return
+                }
+                suppressedLastTimelineEvent = false
+                lastDispatchedTimelineMediaIds = newIds
+                listener.onTimelineChanged(currentTimeline, reason)
+            }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (suppressedLastTimelineEvent && events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                    suppressedLastTimelineEvent = false
+                    val flagBuilder = androidx.media3.common.FlagSet.Builder()
+                    for (i in 0 until events.size()) {
+                        val event = events.get(i)
+                        if (event != Player.EVENT_TIMELINE_CHANGED) {
+                            flagBuilder.add(event)
+                        }
+                    }
+                    val filteredFlags = flagBuilder.build()
+                    if (filteredFlags.size() > 0) {
+                        listener.onEvents(this@LagrangeLibrarySessionPlayer, Player.Events(filteredFlags))
+                    }
+                    return
+                }
+                suppressedLastTimelineEvent = false
+                listener.onEvents(this@LagrangeLibrarySessionPlayer, events)
+            }
+        }
+        forwardedListeners[listener] = filteringListener
+        super.addListener(filteringListener)
     }
 
     override fun removeListener(listener: Player.Listener) {
         sessionListeners.remove(listener)
-        super.removeListener(listener)
+        val removed = forwardedListeners.remove(listener) ?: listener
+        super.removeListener(removed)
     }
 
     fun armPrePreparedPlaylistGuard() {
@@ -1939,34 +2080,117 @@ internal class LagrangeLibrarySessionPlayer(
         notifyTimelineAndMetadataChanged()
     }
 
+    fun notifyMetadataAndPositionChanged() {
+        if (isNotifyingMetadataChange) return
+        isNotifyingMetadataChange = true
+        try {
+            val metadata = mediaMetadata
+            val pos = currentPosition
+            val idx = currentMediaItemIndex
+            val posInfo = Player.PositionInfo(
+                null,
+                idx,
+                currentMediaItem,
+                null,
+                idx,
+                pos,
+                pos,
+                C.INDEX_UNSET,
+                C.INDEX_UNSET
+            )
+            for (listener in sessionListeners) {
+                runCatching { listener.onAvailableCommandsChanged(availableCommands) }
+                runCatching {
+                    listener.onMediaMetadataChanged(metadata)
+                    listener.onPositionDiscontinuity(
+                        posInfo,
+                        posInfo,
+                        Player.DISCONTINUITY_REASON_INTERNAL
+                    )
+                }
+            }
+        } finally {
+            isNotifyingMetadataChange = false
+        }
+    }
+
     fun notifyTimelineAndMetadataChanged() {
-        val timeline = currentTimeline
-        val metadata = mediaMetadata
-        val pos = currentPosition
-        val idx = currentMediaItemIndex
-        val posInfo = Player.PositionInfo(
-            null,
-            idx,
-            currentMediaItem,
-            null,
-            idx,
-            pos,
-            pos,
-            C.INDEX_UNSET,
-            C.INDEX_UNSET
-        )
-        for (listener in sessionListeners) {
-            runCatching {
-                listener.onAvailableCommandsChanged(availableCommands)
-                listener.onTimelineChanged(timeline, Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE)
-                listener.onMediaMetadataChanged(metadata)
-                listener.onPositionDiscontinuity(
-                    posInfo,
-                    posInfo,
-                    Player.DISCONTINUITY_REASON_INTERNAL
-                )
+        if (isNotifyingMetadataChange) return
+        isNotifyingMetadataChange = true
+        try {
+            lastDispatchedTimelineMediaIds = currentTimelineMediaIds()
+            val timeline = currentTimeline
+            val metadata = mediaMetadata
+            val pos = currentPosition
+            val idx = currentMediaItemIndex
+            val posInfo = Player.PositionInfo(
+                null,
+                idx,
+                currentMediaItem,
+                null,
+                idx,
+                pos,
+                pos,
+                C.INDEX_UNSET,
+                C.INDEX_UNSET
+            )
+            for (listener in sessionListeners) {
+                runCatching { listener.onAvailableCommandsChanged(availableCommands) }
+                runCatching {
+                    listener.onTimelineChanged(timeline, Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE)
+                    listener.onMediaMetadataChanged(metadata)
+                    listener.onPositionDiscontinuity(
+                        posInfo,
+                        posInfo,
+                        Player.DISCONTINUITY_REASON_INTERNAL
+                    )
+                }
+            }
+        } finally {
+            isNotifyingMetadataChange = false
+        }
+    }
+
+    private fun rawActiveChapterRemainingMs(): Long? {
+        val active = sessionProvider?.invoke()
+        if (active != null) {
+            val chapters = active.book.audioChapters
+            val absPos = active.absolutePositionMs().coerceAtLeast(0L)
+            val totalMs = active.totalDurationMs().takeIf { it > 0L }
+            if (chapters.isNotEmpty()) {
+                val ordered = chapters.sortedBy { it.startMs }
+                val chapterEndMs = audiobookChapterEndMs(ordered, absPos)
+                    ?: totalMs
+                if (chapterEndMs != null && chapterEndMs > absPos) {
+                    return (chapterEndMs - absPos).coerceAtLeast(0L)
+                }
             }
         }
+        val bounds = rawActiveBookOrTrackBounds()
+        if (bounds != null && bounds.second > bounds.first) {
+            return (bounds.second - bounds.first).coerceAtLeast(0L)
+        }
+        val rawDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
+        val rawPos = super.getCurrentPosition().coerceAtLeast(0L)
+        if (rawDur != null && rawDur > rawPos) {
+            return (rawDur - rawPos).coerceAtLeast(0L)
+        }
+        return null
+    }
+
+    private fun shouldFormatAndroidAutoEtaSubtitle(): Boolean =
+        isScaled() && (isAutoConnectedProvider?.invoke() ?: true)
+
+    private fun resolveSubtitleOrArtist(baseAuthor: String?): String? {
+        if (!shouldFormatAndroidAutoEtaSubtitle()) return baseAuthor
+        val rawRemainingMs = rawActiveChapterRemainingMs() ?: return baseAuthor
+        if (rawRemainingMs <= 0L) return baseAuthor
+        return formatAndroidAutoChapterEtaSubtitle(
+            author = baseAuthor,
+            rawRemainingMs = rawRemainingMs,
+            speed = actualSpeed(),
+            context = contextProvider?.invoke()
+        ).takeIf { it.isNotBlank() } ?: baseAuthor
     }
 
     private fun rawActiveBookOrTrackBounds(): Pair<Long, Long>? {
@@ -1994,13 +2218,13 @@ internal class LagrangeLibrarySessionPlayer(
             val targetMs = (active.absolutePositionMs() + deltaMs).coerceAtLeast(0L)
             val clampedMs = if (totalMs > 0L) targetMs.coerceAtMost(totalMs) else targetMs
             active.seekToAbsolutePosition(clampedMs)
-            notifyTimelineAndMetadataChanged()
+            notifyMetadataAndPositionChanged()
             return
         }
         val rawDur = super.getDuration().takeIf { it != C.TIME_UNSET && it > 0L }
         val targetMs = (super.getCurrentPosition().coerceAtLeast(0L) + deltaMs).coerceAtLeast(0L)
         super.seekTo(if (rawDur != null) targetMs.coerceAtMost(rawDur) else targetMs)
-        notifyTimelineAndMetadataChanged()
+        notifyMetadataAndPositionChanged()
     }
 
 
@@ -2156,20 +2380,29 @@ internal class LagrangeLibrarySessionPlayer(
                 unscaledTargetMs
             }
             active.seekToAbsolutePosition(clampedTargetMs)
+            notifyMetadataAndPositionChanged()
             return
         }
         super.seekTo(unscaledTargetMs)
+        notifyMetadataAndPositionChanged()
+    }
+
+    override fun seekToDefaultPosition(mediaItemIndex: Int) {
+        if (mediaItemIndex == currentMediaItemIndex) {
+            seekTo(0L)
+            return
+        }
+        super.seekTo(mediaItemIndex, 0L)
+        notifyMetadataAndPositionChanged()
     }
 
     override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
         if (positionMs == C.TIME_UNSET) {
-            // Vehicle head units sometimes send seekTo(nextIndex, C.TIME_UNSET) for Next/Prev track buttons
-            if (mediaItemIndex > currentMediaItemIndex) {
-                seekRelativeRawMs(AUDIO_SEEK_FORWARD_INCREMENT_MS)
-            } else if (mediaItemIndex < currentMediaItemIndex) {
-                seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
+            if (mediaItemIndex != currentMediaItemIndex && mediaItemIndex in 0 until mediaItemCount) {
+                super.seekTo(mediaItemIndex, 0L)
+                notifyMetadataAndPositionChanged()
             } else {
-                seekRelativeRawMs(-ANDROID_AUTO_SEEK_BACK_INCREMENT_MS)
+                seekTo(0L)
             }
             return
         }
@@ -2179,6 +2412,7 @@ internal class LagrangeLibrarySessionPlayer(
         }
         val unscaledTargetMs = unscaleAudioTimeMs(positionMs.coerceAtLeast(0L), actualSpeed(), isScaled())
         super.seekTo(mediaItemIndex, unscaledTargetMs)
+        notifyMetadataAndPositionChanged()
     }
 
     override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
@@ -2243,8 +2477,14 @@ internal class LagrangeLibrarySessionPlayer(
         if (!rawTitle.isNullOrBlank()) {
             builder.setTitle(rawTitle.sanitizeAudiobookTitle())
         }
-        if (base.artist.isNullOrBlank() && !fallback?.artist.isNullOrBlank()) {
-            builder.setArtist(fallback?.artist)
+        val rawAuthor = base.artist?.toString()?.takeIf { it.isNotBlank() }
+            ?: fallback?.artist?.toString()?.takeIf { it.isNotBlank() }
+        val effectiveArtist = resolveSubtitleOrArtist(rawAuthor)
+        if (!effectiveArtist.isNullOrBlank()) {
+            builder.setArtist(effectiveArtist)
+            if (shouldFormatAndroidAutoEtaSubtitle()) {
+                builder.setSubtitle(effectiveArtist)
+            }
         }
         if (base.artworkUri == null && fallback?.artworkUri != null) {
             builder.setArtworkUri(fallback.artworkUri)
@@ -2314,7 +2554,7 @@ internal class LagrangeLibrarySessionPlayer(
                     else -> 0L
                 }
                 active.seekToAbsolutePosition(targetMs)
-                notifyTimelineAndMetadataChanged()
+                notifyMetadataAndPositionChanged()
                 return
             }
             if (active.audioFiles.size > 1 || super.getMediaItemCount() > 1) {
@@ -2327,7 +2567,7 @@ internal class LagrangeLibrarySessionPlayer(
                 } else {
                     super.seekTo(0, 0L)
                 }
-                notifyTimelineAndMetadataChanged()
+                notifyMetadataAndPositionChanged()
                 return
             }
         }
@@ -2343,7 +2583,7 @@ internal class LagrangeLibrarySessionPlayer(
                 val nextChapter = chapters.firstOrNull { it.startMs > absPos + 1_500L }
                 if (nextChapter != null) {
                     active.seekToAbsolutePosition(nextChapter.startMs)
-                    notifyTimelineAndMetadataChanged()
+                    notifyMetadataAndPositionChanged()
                 }
                 return
             }
@@ -2351,7 +2591,7 @@ internal class LagrangeLibrarySessionPlayer(
                 val nextItemIdx = super.getCurrentMediaItemIndex() + 1
                 if (nextItemIdx < super.getMediaItemCount()) {
                     super.seekTo(nextItemIdx, 0L)
-                    notifyTimelineAndMetadataChanged()
+                    notifyMetadataAndPositionChanged()
                 }
                 return
             }
