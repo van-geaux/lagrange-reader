@@ -4,8 +4,8 @@ This document contains current project direction only. Historical work orders an
 
 ## Current status
 
-- Release: Lagrange 2.1.2 was published as [`v2.1.2`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.2). See [`release-notes/v2.1.2.md`](release-notes/v2.1.2.md).
-- Version marker: `versionName 2.1.2`, `versionCode 30` in `app/build.gradle.kts`.
+- Release: Lagrange 2.1.3 was published as [`v2.1.3`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3). See [`release-notes/v2.1.3.md`](release-notes/v2.1.3.md).
+- Version marker: `versionName 2.1.3`, `versionCode 31` in `app/build.gradle.kts`.
 - Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit, Komga, and Kavita provider modules are the current integration surfaces; additional providers require a focused contract and validation plan.
 - Current release capabilities include EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, immersive reader controls, audiobook speed/progress controls, grouped physical-file downloads, and client-side offline CBR/CB7 extraction.
 - Series and library bulk-download selection now use context-specific `Download series`/`Download library` actions, `Continue` confirmation actions, reachable bounded sheets, and expected aggregate download-size feedback ([#375](https://github.com/van-geaux/lagrange-reader/issues/375)); the user confirmed the final behavior.
@@ -23,6 +23,7 @@ This document contains current project direction only. Historical work orders an
 4. [ ] Decide the next user-directed implementation item before opening new feature work.
 5. [ ] Consider Android e-ink validation for [#25](https://github.com/van-geaux/lagrange-reader/issues/25) only when a suitable device is available; no minSdk change is currently recommended.
 6. [ ] Treat broader offline archive extraction and optional device matrices as separately scoped follow-up.
+7. [ ] Carry issue [#378](https://github.com/van-geaux/lagrange-reader/issues/378), BookOrbit PDF progress from the web reader not always appearing on reopen, into the next release; deferred from 2.1.3 by the project owner.
 
 ## Decision and documentation rules
 
