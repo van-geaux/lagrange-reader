@@ -4,9 +4,9 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Current release
 
-- [ ] Publish Lagrange 2.1.3 as [`v2.1.3`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3), with combined and ABI-specific APK assets.
+- [x] Lagrange 2.1.3 is published as [`v2.1.3`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3), with combined and ABI-specific APK assets.
 - [x] `app/build.gradle.kts` records `versionName 2.1.3` and `versionCode 31`.
-- [ ] Complete the release workflow and verify the signed combined and ABI-specific APK assets.
+- [x] Release workflow [run 43405471491](https://github.com/van-geaux/lagrange-reader/actions/runs/43405471491) succeeded and published the signed combined and ABI-specific APK assets.
 
 ## Current implementation status
 
