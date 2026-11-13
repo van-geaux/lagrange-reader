@@ -63,6 +63,12 @@ The callback request contains `code`, `codeVerifier`, `redirectUri`, `nonce`, an
 
 The explicit client requests `offline_access`, generates PKCE S256 and nonce values, validates the exact server HTTPS callback `${APP_URL}/oauth2-callback` and server-issued state, then posts the callback fields above. Native AppAuth is separate and requires the deployed server's exact native redirect configuration and provider registration.
 
+### App Attest compatibility
+
+BookOrbit [v3.8.0](https://github.com/bookorbit/bookorbit/releases/tag/v3.8.0) (released 2026-11-11) applies App Attest to selected first-party mobile routes. Commit [`2ddae7c`](https://github.com/bookorbit/bookorbit/commit/2ddae7c385c3e1a819f5a54db0d938c713c66f3d) removes the App Attest guard from `GET`, `POST`, and `DELETE /api/v1/books/files/{fileId}/progress`, while retaining normal authenticated-user access. The release adds Android Key Attestation for routes that remain guarded ([`5e4b4b6`](https://github.com/bookorbit/bookorbit/commit/5e4b4b6d0abbc40e0c194a37706eb1a2d0b74f0e)); see the [release's guarded-route inventory](https://github.com/bookorbit/bookorbit/blob/v3.8.0/server/test/app-attest-enforcement.e2e-spec.ts#L19-L79) and [Android attestation policy](https://github.com/bookorbit/bookorbit/blob/v3.8.0/server/src/modules/app-attest/app-attest.policy.ts).
+
+Lagrange does not implement App Attest or Android Key Attestation. BookOrbit's current production Android attestation policy accepts the official `app.bookorbit.reader` package and its listed signing-certificate digests, not Lagrange's `com.vangeaux.lagrange` application ID. Comparing BookOrbit v3.8.0's guarded-route inventory with Lagrange's current BookOrbit requests found no direct overlap: the per-file progress routes are exempt, and other Lagrange-used routes are not in that guarded set. This is a source-based compatibility assessment, not a live-server test. Reassess if BookOrbit changes its guarded routes or third-party attestation policy.
+
 ## Libraries
 
 ### List libraries
@@ -269,7 +275,7 @@ Content-Type: application/json
 {"sort":[],"pagination":{"page":0,"size":100}}
 ```
 
-The query endpoint returns the same paginated book response as the older GET endpoint. BookOrbit 3.7.0 requires Apple App Attest for that GET endpoint, so it is not suitable for the Android client. The client follows the paginated book response, groups the returned books by their Series identity, and derives the Series catalog locally. No authoritative Series-aware Smart Scope endpoint was verified, so the Android client does not claim that the server supplies a Series catalog for a scope. Each successful scoped-books page is cached separately per configured server, Smart Scope ID, and page. Offline catalog and Series-detail views can reconstruct their content from the cached scoped book pages; cached content is best-effort and refreshes when online. A non-authentication request failure can fall back to the relevant cached response. Authentication failures remain errors.
+The query endpoint returns the same paginated book response as the older GET endpoint. Lagrange uses this POST query route; it does not use the separate GET route, which BookOrbit v3.8.0 lists among App Attest-guarded routes. See [App Attest compatibility](#app-attest-compatibility) for the current server/client boundary. The client follows the paginated book response, groups the returned books by their Series identity, and derives the Series catalog locally. No authoritative Series-aware Smart Scope endpoint was verified, so the Android client does not claim that the server supplies a Series catalog for a scope. Each successful scoped-books page is cached separately per configured server, Smart Scope ID, and page. Offline catalog and Series-detail views can reconstruct their content from the cached scoped book pages; cached content is best-effort and refreshes when online. A non-authentication request failure can fall back to the relevant cached response. Authentication failures remain errors.
 
 ### Series catalog filters
 
