@@ -99,7 +99,8 @@ data class AppPreferences(
 )
 
 internal class AppPreferencesStore(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(
         APP_PREFERENCES_FILE,
         Context.MODE_PRIVATE
     )
@@ -170,7 +171,41 @@ internal class AppPreferencesStore(context: Context) {
         ),
         lockedBookFilters = stringMapFromStorage(preferences.getString(LOCKED_BOOK_FILTERS_KEY, null)),
         lockedSeriesFilters = stringMapFromStorage(preferences.getString(LOCKED_SERIES_FILTERS_KEY, null))
-    )
+    ).let { value ->
+        // Legacy unscoped profiles can only be assigned once, when exactly one server profile
+        // exists. If ownership is ambiguous, persist a block marker and never retry after one
+        // profile is later removed.
+        val hasLegacy = value.hasLegacyReaderPreferences()
+        val migrationBlocked = preferences.getBoolean(LEGACY_READER_MIGRATION_BLOCKED_KEY, false)
+        val profiles = if (hasLegacy && !migrationBlocked) {
+            ServerProfileStore(appContext).readAll()
+        } else {
+            emptyList()
+        }
+        when (legacyReaderMigrationAction(hasLegacy, profiles.size, migrationBlocked)) {
+            LegacyReaderMigrationAction.NONE -> value
+            LegacyReaderMigrationAction.BLOCK -> {
+                preferences.edit()
+                    .putBoolean(LEGACY_READER_MIGRATION_BLOCKED_KEY, true)
+                    .commit()
+                value
+            }
+            LegacyReaderMigrationAction.MIGRATE -> {
+                val migrated = value.migrateLegacyReaderPreferences(profiles.single().id)
+                // Persist immediately: otherwise a second profile could be added before the
+                // migrated map is saved, leaving the original ambiguous state behind.
+                if (migrated.libraryReaderPreferences != value.libraryReaderPreferences) {
+                    preferences.edit()
+                        .putString(
+                            LIBRARY_READER_PREFERENCES_KEY,
+                            libraryReaderPreferencesStorageValue(migrated.libraryReaderPreferences)
+                        )
+                        .commit()
+                }
+                migrated
+            }
+        }
+    }
 
     fun save(value: AppPreferences) {
         preferences.edit()
@@ -422,6 +457,7 @@ internal class AppPreferencesStore(context: Context) {
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
+        const val LEGACY_READER_MIGRATION_BLOCKED_KEY = "legacy_reader_migration_blocked"
         const val LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY = "library_browse_options_expanded"
         const val LOCKED_BOOK_FILTERS_KEY = "locked_book_filters"
         const val LOCKED_SERIES_FILTERS_KEY = "locked_series_filters"
