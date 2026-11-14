@@ -146,6 +146,17 @@
     <string name="settings_reading_config_eyebrow">阅读配置</string>
     <string name="settings_library_reader_profile">书库阅读器配置</string>
     <string name="settings_library_reader_profile_summary">阅读方向、排版、页边距和格式布局按书库独立保存。</string>
+    <string name="settings_reader_group_navigation">导航</string>
+    <string name="settings_reader_group_tap_zones">点击区域</string>
+    <string name="settings_reader_group_display">阅读器显示</string>
+    <string name="settings_reader_group_appearance">外观</string>
+    <string name="settings_reader_group_typography">排版</string>
+    <string name="settings_reader_group_page_layout">页面布局和页边距</string>
+    <string name="settings_reader_group_epub_options">EPUB 选项</string>
+    <string name="settings_reader_group_pdf_options">PDF 选项</string>
+    <string name="settings_reader_group_comic_options">漫画选项</string>
+    <string name="settings_reader_group_expand">展开 %1$s</string>
+    <string name="settings_reader_group_collapse">收起 %1$s</string>
     <string name="settings_reading_direction">阅读方向</string>
     <string name="settings_prefer_server_progress">重新打开时优先使用服务器进度</string>
     <string name="settings_prefer_server_progress_summary">重新打开时使用较新的服务器进度。当 BookOrbit 未提供精确的 EPUB 定位时，服务器进度可能不够精确。</string>

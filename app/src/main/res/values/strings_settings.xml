@@ -146,6 +146,17 @@
     <string name="settings_reading_config_eyebrow">Reading configuration</string>
     <string name="settings_library_reader_profile">Library reader profile</string>
     <string name="settings_library_reader_profile_summary">Direction, typography, margins, and format layouts are saved independently for each library.</string>
+    <string name="settings_reader_group_navigation">Navigation</string>
+    <string name="settings_reader_group_tap_zones">Tap zones</string>
+    <string name="settings_reader_group_display">Reader display</string>
+    <string name="settings_reader_group_appearance">Appearance</string>
+    <string name="settings_reader_group_typography">Typography</string>
+    <string name="settings_reader_group_page_layout">Page layout and margins</string>
+    <string name="settings_reader_group_epub_options">EPUB options</string>
+    <string name="settings_reader_group_pdf_options">PDF options</string>
+    <string name="settings_reader_group_comic_options">Comic options</string>
+    <string name="settings_reader_group_expand">Expand %1$s</string>
+    <string name="settings_reader_group_collapse">Collapse %1$s</string>
     <string name="settings_reading_direction">Reading direction</string>
     <string name="settings_prefer_server_progress">Prefer server progress when reopening</string>
     <string name="settings_prefer_server_progress_summary">Use newer server progress when reopening. Server progress can be approximate when BookOrbit does not provide an exact EPUB locator.</string>
