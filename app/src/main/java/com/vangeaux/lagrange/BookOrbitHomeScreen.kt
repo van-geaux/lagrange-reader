@@ -130,6 +130,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -181,6 +182,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
@@ -5831,20 +5833,35 @@ private fun CollapsibleReaderSettingsGroup(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    OutlinedButton(
-        onClick = { expanded = !expanded },
-        modifier = Modifier.fillMaxWidth().testTag(testTag),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     ) {
-        Text(title, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
-        Icon(
-            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-            contentDescription = stringResource(
-                if (expanded) R.string.settings_reader_group_collapse
-                else R.string.settings_reader_group_expand,
-                title
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .testTag(testTag)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
-        )
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = stringResource(
+                    if (expanded) R.string.settings_reader_group_collapse
+                    else R.string.settings_reader_group_expand,
+                    title
+                )
+            )
+        }
     }
     if (expanded) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
@@ -6435,10 +6452,6 @@ private fun ReaderTapZoneSettings(
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     testTagPrefix: String
 ) {
-    Text(
-        stringResource(R.string.settings_tap_zones),
-        style = MaterialTheme.typography.titleMedium
-    )
     ReaderChoiceDropdown(
         selectedLabel = stringResource(value.tapZoneLayout.displayNameRes),
         testTag = "$testTagPrefix-layout-dropdown",

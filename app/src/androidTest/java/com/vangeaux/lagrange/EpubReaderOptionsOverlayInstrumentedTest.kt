@@ -448,6 +448,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             .assertCountEquals(0)
 
         expandReaderSettingsSection("tap-zones")
+        composeRule.onAllNodesWithText("Tap zones").assertCountEquals(1)
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
             .performScrollTo()
             .performClick()
