@@ -333,6 +333,7 @@ class AndroidAutoMediaLibraryTest {
                 "getCurrentMediaItemIndex", "getCurrentPeriodIndex" -> 0
                 "getMediaItemCount" -> 1
                 "getCurrentTimeline" -> androidx.media3.common.Timeline.EMPTY
+                "getAvailableCommands" -> androidx.media3.common.Player.Commands.EMPTY
                 "getMediaMetadata", "getPlaylistMetadata" -> androidx.media3.common.MediaMetadata.EMPTY
                 "getPlaybackParameters" -> androidx.media3.common.PlaybackParameters.DEFAULT
                 "seekTo" -> {
@@ -407,5 +408,138 @@ class AndroidAutoMediaLibraryTest {
         assertEquals(AUDIO_SEEK_BACK_SESSION_ACTION, audiobookSeekBackSessionCommand.customAction)
         assertEquals(AUDIO_SEEK_BACK_30_SESSION_ACTION, audiobookAutoSeekBackSessionCommand.customAction)
         assertEquals(AUDIO_SEEK_FORWARD_SESSION_ACTION, audiobookSeekForwardSessionCommand.customAction)
+    }
+
+    @Test
+    fun formatAndroidAutoPlaybackSpeedLabelFormatsPresetsAndFineSteps() {
+        assertEquals("0.8x", formatAndroidAutoPlaybackSpeedLabel(0.8f))
+        assertEquals("1.0x", formatAndroidAutoPlaybackSpeedLabel(1.0f))
+        assertEquals("1.2x", formatAndroidAutoPlaybackSpeedLabel(1.2f))
+        assertEquals("1.5x", formatAndroidAutoPlaybackSpeedLabel(1.5f))
+        assertEquals("1.8x", formatAndroidAutoPlaybackSpeedLabel(1.8f))
+        assertEquals("2.0x", formatAndroidAutoPlaybackSpeedLabel(2.0f))
+        assertEquals("1.25x", formatAndroidAutoPlaybackSpeedLabel(1.25f))
+    }
+
+    @Test
+    fun formatAndroidAutoChapterEtaSubtitleScalesRemainingTimeByPlaybackSpeed() {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        // Base time: 18:43:00 UTC (6:43 PM)
+        val baseCalendar = java.util.Calendar.getInstance(utc, java.util.Locale.US).apply {
+            set(2026, java.util.Calendar.OCTOBER, 31, 18, 43, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val nowMillis = baseCalendar.timeInMillis
+        // 30 minutes raw remaining at 1.5x speed -> 20 minutes real-world remaining -> 7:03 PM
+        val rawRemainingMs = 30L * 60_000L
+
+        val subtitle = formatAndroidAutoChapterEtaSubtitle(
+            author = "J.R.R. Tolkien",
+            rawRemainingMs = rawRemainingMs,
+            speed = 1.5f,
+            nowEpochMillis = nowMillis,
+            context = null,
+            locale = java.util.Locale.US,
+            timeZone = utc
+        )
+
+        assertTrue("Expected author prefix in: $subtitle", subtitle.startsWith("J.R.R. Tolkien - Ends at "))
+        assertTrue("Expected 7:03 in: $subtitle", subtitle.contains("7:03"))
+        assertTrue("Expected (1.5x) suffix in: $subtitle", subtitle.endsWith("(1.5x)"))
+    }
+
+    @Test
+    fun formatAndroidAutoChapterEtaSubtitleFallsBackWhenRemainingIsZero() {
+        assertEquals(
+            "J.R.R. Tolkien",
+            formatAndroidAutoChapterEtaSubtitle(
+                author = "J.R.R. Tolkien",
+                rawRemainingMs = 0L,
+                speed = 1.25f
+            )
+        )
+    }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    @Test
+    fun sessionPlayer_scalesElapsedAndTotalDurationWhenPreferenceEnabled_andAvoidsTimelineResetOnSeek() {
+        var scaleEnabled = false
+        var posMs = 300_000L // 5 min raw elapsed
+        val rawDurMs = 1_800_000L // 30 min raw total track/chapter
+        var timelineChangedCount = 0
+        var metadataChangedCount = 0
+
+        val stubPlayer = java.lang.reflect.Proxy.newProxyInstance(
+            androidx.media3.common.Player::class.java.classLoader,
+            arrayOf(androidx.media3.common.Player::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "getCurrentPosition", "getContentPosition", "getContentBufferedPosition", "getBufferedPosition" -> posMs
+                "getDuration", "getContentDuration" -> rawDurMs
+                "getCurrentMediaItemIndex", "getCurrentPeriodIndex" -> 0
+                "getMediaItemCount" -> 1
+                "getCurrentTimeline" -> androidx.media3.common.Timeline.EMPTY
+                "getAvailableCommands" -> androidx.media3.common.Player.Commands.EMPTY
+                "getMediaMetadata", "getPlaylistMetadata" -> androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle("Chapter 1")
+                    .setArtist("Matt Dinniman")
+                    .build()
+                "getPlaybackParameters" -> androidx.media3.common.PlaybackParameters(1.5f)
+                "seekTo" -> {
+                    posMs = if (args != null && args.size == 1 && args[0] is Long) {
+                        args[0] as Long
+                    } else if (args != null && args.size >= 2 && args[1] is Long) {
+                        args[1] as Long
+                    } else {
+                        posMs
+                    }
+                    null
+                }
+                else -> when (method.returnType) {
+                    java.lang.Boolean.TYPE -> false
+                    java.lang.Integer.TYPE -> 0
+                    java.lang.Long.TYPE -> 0L
+                    java.lang.Float.TYPE -> 1.0f
+                    java.lang.Double.TYPE -> 0.0
+                    else -> null
+                }
+            }
+        } as androidx.media3.common.Player
+
+        val wrapper = LagrangeLibrarySessionPlayer(
+            delegate = stubPlayer,
+            scaleBySpeedProvider = { scaleEnabled },
+            isAutoConnectedProvider = { true }
+        )
+
+        val listener = java.lang.reflect.Proxy.newProxyInstance(
+            androidx.media3.common.Player.Listener::class.java.classLoader,
+            arrayOf(androidx.media3.common.Player.Listener::class.java)
+        ) { _, method, _ ->
+            when (method.name) {
+                "onTimelineChanged" -> timelineChangedCount++
+                "onMediaMetadataChanged" -> metadataChangedCount++
+            }
+            null
+        } as androidx.media3.common.Player.Listener
+        wrapper.addListener(listener)
+
+        // 1. Preference disabled: unscaled elapsed (5m) and total duration (30m), plain author subtitle
+        assertEquals(300_000L, wrapper.currentPosition)
+        assertEquals(1_800_000L, wrapper.duration)
+        assertEquals("Matt Dinniman", wrapper.mediaMetadata.artist.toString())
+
+        // 2. Preference enabled at 1.5x speed: both elapsed (5m -> 3m20s) and total duration (30m -> 20m) scale,
+        //    and artist/subtitle includes "Ends at ... (1.5x)"
+        scaleEnabled = true
+        assertEquals(200_000L, wrapper.currentPosition)
+        assertEquals(1_200_000L, wrapper.duration)
+        assertTrue(wrapper.mediaMetadata.artist.toString().contains("Matt Dinniman - Ends at "))
+        assertTrue(wrapper.mediaMetadata.artist.toString().endsWith("(1.5x)"))
+
+        // 3. Seeking updates metadata & position WITHOUT firing onTimelineChanged (preventing AA Queue scroll reset)
+        wrapper.seekForward()
+        assertEquals(0, timelineChangedCount)
+        assertTrue(metadataChangedCount > 0)
     }
 }

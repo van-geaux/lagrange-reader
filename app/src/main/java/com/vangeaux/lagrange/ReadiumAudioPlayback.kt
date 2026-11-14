@@ -494,13 +494,13 @@ internal class AudiobookMediaSessionCallback(
     override fun onPostConnect(session: MediaSession, controller: MediaSession.ControllerInfo) {
         super.onPostConnect(session, controller)
         serviceProvider()?.refreshAndroidAutoCustomLayout()
-        serviceProvider()?.librarySessionPlayer?.notifyTimelineAndMetadataChanged()
+        serviceProvider()?.librarySessionPlayer?.notifyMetadataAndPositionChanged()
     }
 
     override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
         super.onDisconnected(session, controller)
         serviceProvider()?.refreshAndroidAutoCustomLayout()
-        serviceProvider()?.librarySessionPlayer?.notifyTimelineAndMetadataChanged()
+        serviceProvider()?.librarySessionPlayer?.notifyMetadataAndPositionChanged()
     }
 
     override fun onMediaButtonEvent(
@@ -1299,7 +1299,8 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
             scaleBySpeedProvider = {
                 AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
             },
-            isAutoConnectedProvider = ::hasConnectedAndroidAutoController
+            isAutoConnectedProvider = ::hasConnectedAndroidAutoController,
+            contextProvider = ::getApplicationContext
         ).also {
             librarySessionPlayer = it
         }
@@ -1354,7 +1355,8 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                     scaleBySpeedProvider = {
                         AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
                     },
-                    isAutoConnectedProvider = ::hasConnectedAndroidAutoController
+                    isAutoConnectedProvider = ::hasConnectedAndroidAutoController,
+                    contextProvider = ::getApplicationContext
                 )
                 wrappedPlayer.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
