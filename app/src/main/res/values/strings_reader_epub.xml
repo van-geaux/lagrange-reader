@@ -98,6 +98,8 @@
     <string name="epub_highlight_delete">Delete highlight</string>
     <string name="epub_highlight_save_failed">The highlight could not be saved.</string>
     <string name="epub_note_title">Note</string>
+    <string name="epub_footnote_title">Footnote</string>
+    <string name="epub_note_unavailable">Footnote content unavailable.</string>
     <string name="epub_note_save">Save</string>
 
     <!-- EPUB text-to-speech controls -->

@@ -21,6 +21,7 @@ import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.text.Html
 import android.text.InputFilter
 import android.util.Log
 import android.view.ActionMode
@@ -118,6 +119,7 @@ import org.readium.navigator.media.tts.android.AndroidTtsEngine
 import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
+import org.readium.r2.navigator.HyperlinkNavigator
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.Selection
 import org.readium.r2.navigator.VisualNavigator
@@ -1685,6 +1687,15 @@ internal fun readiumEpubImageLayoutScript(): String = """
       return 'installed';
     })();
 """.trimIndent()
+
+/** Readium passes the sanitized note HTML for EPUB noteref links as a FootnoteContext. */
+@OptIn(ExperimentalReadiumApi::class)
+internal fun isEpubFootnoteContext(context: HyperlinkNavigator.LinkContext?): Boolean =
+    context is HyperlinkNavigator.FootnoteContext
+
+@OptIn(ExperimentalReadiumApi::class)
+internal fun epubFootnoteNoteContent(context: HyperlinkNavigator.LinkContext?): String? =
+    (context as? HyperlinkNavigator.FootnoteContext)?.noteContent
 
 private const val EPUB_IMAGE_GESTURE_ASSET = "epub-image-gesture.js"
 private const val EPUB_IMAGE_GESTURE_PROBE_SCRIPT =
@@ -3347,6 +3358,20 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 }
             }
 
+            @OptIn(ExperimentalReadiumApi::class)
+            override fun shouldFollowInternalLink(
+                link: Link,
+                context: HyperlinkNavigator.LinkContext?
+            ): Boolean {
+                if (!isEpubFootnoteContext(context)) return true
+                lastFootnoteNoteContentForTest = epubFootnoteNoteContent(context)
+                // A FootnoteContext always means an in-place note. Never fall through to
+                // navigation, even if the note HTML is blank; otherwise an image-link wrapper
+                // could bypass the #417 confirmation and navigate anyway.
+                showEpubFootnoteDialog(epubFootnoteNoteContent(context).orEmpty())
+                return false
+            }
+
             override fun onExternalLinkActivated(url: AbsoluteUrl) = Unit
         }
         val navigatorFactory = EpubNavigatorFactory(openedPublication)
@@ -4539,6 +4564,12 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun handleEpubImageLinkClick(fragment: EpubNavigatorFragment, event: String) {
         val payload = runCatching { JSONObject(event) }.getOrNull() ?: return
         if (payload.optString("gesture") != "image_link") return
+        // Footnote links should show their note directly; the confirmation prompt is only for
+        // ordinary image links, where a tap may have been intended to zoom/pan the image.
+        if (payload.optBoolean("footnote", false)) {
+            lifecycleScope.launch { fragment.evaluateJavascript(EPUB_IMAGE_LINK_RESUME_SCRIPT) }
+            return
+        }
         var confirmed = false
         val dialog = AlertDialog.Builder(this)
             .setTitle(getString(R.string.epub_image_link_confirmation_title))
@@ -4984,6 +5015,20 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             showHighlightActionsDialog(annotation)
             return true
         }
+    }
+
+    private fun showEpubFootnoteDialog(noteContent: String) {
+        if (isFinishing || isDestroyed) return
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.epub_footnote_title))
+            .setMessage(
+                Html.fromHtml(
+                    noteContent.ifBlank { getString(R.string.epub_note_unavailable) },
+                    Html.FROM_HTML_MODE_LEGACY
+                )
+            )
+            .setPositiveButton(getString(R.string.common_close), null)
+            .show()
     }
 
     private fun showHighlightActionsDialog(annotation: BookAnnotation) {
@@ -5615,6 +5660,13 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         fallbackContentLanguage = epubNavigatorLanguage(language)
         ttsServiceBinder?.setLanguage(ttsOwnerToken, epubTtsLanguage(language))
         applyReaderPreferences(readerPreferences)
+    }
+
+    internal var lastFootnoteNoteContentForTest: String? = null
+        private set
+
+    internal fun resetFootnoteNoteContentForTest() {
+        lastFootnoteNoteContentForTest = null
     }
 
     internal fun setBookLanguageForTest(languageTag: String?) = setBookLanguage(languageTag)

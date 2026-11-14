@@ -121,10 +121,32 @@ const interceptedImageClick = clickEvent(linkedImage);
 internalLinkHarness.listeners.get('click')(interceptedImageClick);
 assert.equal(interceptedImageClick.prevented, true, 'internal linked-image click must wait for confirmation');
 assert.equal(interceptedImageClick.stopped, true);
-assert.deepEqual(JSON.parse(internalLinkHarness.window.__bookorbitImageLink), { gesture: 'image_link' });
+assert.deepEqual(JSON.parse(internalLinkHarness.window.__bookorbitImageLink), { gesture: 'image_link', footnote: false });
 assert.equal(internalAnchor.clicks, 0, 'link must not open before confirmation');
 assert.equal(internalLinkHarness.window.__bookorbitResumeImageLinkClick(), true);
 assert.equal(internalAnchor.clicks, 1, 'confirmed action must resume the original image link');
+
+const footnoteImage = new FakeElement('img');
+const footnoteHarness = loadGestureScript({ images: [footnoteImage] });
+const footnoteAnchor = {
+    href: 'https://readium/publication/OPS/ch1.xhtml#note-1',
+    getAttribute: (name) => name === 'epub:type' ? 'noteref' : 'ch1.xhtml#note-1',
+    clicks: 0,
+    click() {
+        this.clicks += 1;
+        const resumedEvent = clickEvent(footnoteImage);
+        footnoteHarness.listeners.get('click')(resumedEvent);
+        assert.equal(resumedEvent.prevented, false, 'footnote image link must resume directly');
+    }
+};
+footnoteImage.anchor = footnoteAnchor;
+const footnoteClick = clickEvent(footnoteImage);
+footnoteHarness.listeners.get('click')(footnoteClick);
+assert.equal(footnoteClick.prevented, true, 'footnote image link must be intercepted once');
+assert.deepEqual(JSON.parse(footnoteHarness.window.__bookorbitImageLink), { gesture: 'image_link', footnote: true });
+assert.equal(footnoteAnchor.clicks, 0, 'footnote image link waits for native handoff');
+assert.equal(footnoteHarness.window.__bookorbitResumeImageLinkClick(), true);
+assert.equal(footnoteAnchor.clicks, 1, 'footnote image link opens without confirmation');
 
 const cancelledImage = new FakeElement('img');
 const cancelledHarness = loadGestureScript({ images: [cancelledImage] });
