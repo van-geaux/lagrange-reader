@@ -2752,6 +2752,8 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("options-reading-library").performScrollTo().performClick()
         composeRule.onNodeWithText("Manga").performClick()
         composeRule.onAllNodesWithTag("options-reading-direction-dropdown").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("options-reading-tap-zone-layout-dropdown")
+            .assertCountEquals(0)
         composeRule.onNodeWithTag("options-reading-section-navigation").performClick()
         composeRule.onNodeWithTag("options-reading-direction-dropdown")
             .performScrollTo()
@@ -2760,6 +2762,12 @@ class BookOrbitAppInstrumentedTest {
             .performScrollTo()
             .performClick()
         composeRule.onNodeWithTag("options-reading-epub-layout-continuous")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("options-reading-tap-zone-layout-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("options-reading-tap-zone-layout-kindle")
             .performScrollTo()
             .performClick()
 
@@ -2775,6 +2783,10 @@ class BookOrbitAppInstrumentedTest {
             assertEquals(
                 ReaderLayoutMode.CONTINUOUS,
                 preferences.value.readerPreferencesFor("manga").epubLayoutMode
+            )
+            assertEquals(
+                ReaderTapZoneLayout.KINDLE,
+                preferences.value.readerPreferencesFor("manga").tapZoneLayout
             )
             assertEquals(
                 ReaderLayoutMode.PAGINATED,

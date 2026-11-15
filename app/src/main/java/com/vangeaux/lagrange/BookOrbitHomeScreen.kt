@@ -6030,7 +6030,7 @@ private fun LibraryReaderConfiguration(
         }
         if (selectedLibrary != null) {
             CollapsibleReaderSettingsGroup(
-                title = stringResource(R.string.settings_reader_group_navigation),
+                title = stringResource(R.string.settings_reader_group_navigation_and_tap_zones),
                 testTag = "options-reading-section-navigation"
             ) {
             AppPreferenceSwitchRow(
@@ -6100,11 +6100,6 @@ private fun LibraryReaderConfiguration(
                     onPreferencesChange(selectedLibrary.id, value.copy(comicLayoutMode = mode))
                 }
             )
-            }
-            CollapsibleReaderSettingsGroup(
-                title = stringResource(R.string.settings_reader_group_tap_zones),
-                testTag = "options-reading-section-tap-zones"
-            ) {
             ReaderTapZoneSettings(
                 value = value,
                 onPreferencesChange = { next ->
@@ -6611,9 +6606,6 @@ private fun ReaderAppearanceSettings(
     }
 
     if (showBackgroundTheme) {
-        if (showOptionsTheme) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
-        }
         Text(
             stringResource(R.string.sheet_reading_background),
             style = MaterialTheme.typography.titleMedium
@@ -6732,7 +6724,7 @@ internal fun ReaderConfigurationControls(
     onApplyToAllLibraries: (() -> Unit)? = null
 ) {
     CollapsibleReaderSettingsGroup(
-        title = stringResource(R.string.settings_reader_group_navigation),
+        title = stringResource(R.string.settings_reader_group_navigation_and_tap_zones),
         testTag = "$testTagPrefix-section-navigation"
     ) {
     AppPreferenceSwitchRow(
@@ -6787,11 +6779,6 @@ internal fun ReaderConfigurationControls(
             onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) }
         )
     }
-    }
-    CollapsibleReaderSettingsGroup(
-        title = stringResource(R.string.settings_reader_group_tap_zones),
-        testTag = "$testTagPrefix-section-tap-zones"
-    ) {
     ReaderTapZoneSettings(
         value = value,
         onPreferencesChange = onPreferencesChange,

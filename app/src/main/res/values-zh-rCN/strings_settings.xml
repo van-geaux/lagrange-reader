@@ -146,8 +146,7 @@
     <string name="settings_reading_config_eyebrow">阅读配置</string>
     <string name="settings_library_reader_profile">书库阅读器配置</string>
     <string name="settings_library_reader_profile_summary">阅读方向、排版、页边距和格式布局按书库独立保存。</string>
-    <string name="settings_reader_group_navigation">导航</string>
-    <string name="settings_reader_group_tap_zones">点击区域</string>
+    <string name="settings_reader_group_navigation_and_tap_zones">导航和点击区域</string>
     <string name="settings_reader_group_display">阅读器显示</string>
     <string name="settings_reader_group_appearance">外观</string>
     <string name="settings_reader_group_typography">排版</string>

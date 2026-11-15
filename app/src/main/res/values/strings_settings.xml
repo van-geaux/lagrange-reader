@@ -146,8 +146,7 @@
     <string name="settings_reading_config_eyebrow">Reading configuration</string>
     <string name="settings_library_reader_profile">Library reader profile</string>
     <string name="settings_library_reader_profile_summary">Direction, typography, margins, and format layouts are saved independently for each library.</string>
-    <string name="settings_reader_group_navigation">Navigation</string>
-    <string name="settings_reader_group_tap_zones">Tap zones</string>
+    <string name="settings_reader_group_navigation_and_tap_zones">Navigation &amp; tap zones</string>
     <string name="settings_reader_group_display">Reader display</string>
     <string name="settings_reader_group_appearance">Appearance</string>
     <string name="settings_reader_group_typography">Typography</string>

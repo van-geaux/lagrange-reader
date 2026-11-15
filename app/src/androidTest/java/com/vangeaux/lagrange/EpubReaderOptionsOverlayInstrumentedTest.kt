@@ -125,18 +125,27 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         }
 
         listOf(
-            "navigation" to "reader-options-reading-direction-dropdown",
-            "tap-zones" to "reader-options-reading-tap-zone-layout-dropdown",
-            "display" to "reader-options-reading-show-header",
-            "appearance" to "reader-options-reading-theme-dropdown",
-            "typography" to "reader-options-reading-font-family-dropdown",
-            "page-layout" to "reader-options-reading-margin-top",
-            "epub" to "reader-options-reading-epub-two-page-spread"
-        ).forEach { (section, hiddenControl) ->
+            "navigation" to listOf(
+                "reader-options-reading-direction-dropdown",
+                "reader-options-reading-tap-zone-layout-dropdown",
+                "reader-options-reading-tap-zone-invert-dropdown",
+                "reader-options-reading-tap-zone-tutorial-after-changes",
+                "reader-options-reading-epub-layout-paginated"
+            ),
+            "display" to listOf("reader-options-reading-show-header"),
+            "appearance" to listOf("reader-options-reading-theme-dropdown"),
+            "typography" to listOf("reader-options-reading-font-family-dropdown"),
+            "page-layout" to listOf("reader-options-reading-margin-top"),
+            "epub" to listOf("reader-options-reading-epub-two-page-spread")
+        ).forEach { (section, hiddenControls) ->
             composeRule.onNodeWithTag("reader-options-reading-section-$section")
                 .assertIsDisplayed()
-            composeRule.onAllNodesWithTag(hiddenControl).assertCountEquals(0)
+            hiddenControls.forEach { hiddenControl ->
+                composeRule.onAllNodesWithTag(hiddenControl).assertCountEquals(0)
+            }
         }
+        composeRule.onAllNodesWithTag("reader-options-reading-section-tap-zones")
+            .assertCountEquals(0)
 
         expandReaderSettingsSection("navigation")
         composeRule.onNodeWithTag("reader-options-reading-direction-dropdown")
@@ -154,11 +163,24 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.runOnIdle {
             assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
         }
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
+        }
         composeRule.onNodeWithTag("reader-options-reading-section-navigation")
             .performClick()
         composeRule.onAllNodesWithTag("reader-options-reading-direction-dropdown")
             .assertCountEquals(0)
         composeRule.onAllNodesWithTag("reader-options-reading-epub-layout-continuous")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-tap-zone-layout-dropdown")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-tap-zone-invert-dropdown")
             .assertCountEquals(0)
 
         expandReaderSettingsSection("appearance")
@@ -478,8 +500,8 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onAllNodesWithTag("reader-options-reading-font-decrease")
             .assertCountEquals(0)
 
-        expandReaderSettingsSection("tap-zones")
-        composeRule.onAllNodesWithText("Tap zones").assertCountEquals(1)
+        expandReaderSettingsSection("navigation")
+        composeRule.onAllNodesWithText("Navigation & tap zones").assertCountEquals(1)
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
             .performScrollTo()
             .performClick()
