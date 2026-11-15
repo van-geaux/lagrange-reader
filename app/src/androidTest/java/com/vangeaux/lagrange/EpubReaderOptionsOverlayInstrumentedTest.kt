@@ -39,6 +39,12 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private fun expandReaderSettingsSection(section: String) {
+        composeRule.onNodeWithTag("reader-options-reading-section-$section")
+            .performScrollTo()
+            .performClick()
+    }
+
     @Test
     fun readiumPreferencesEnableUserCssOverridesForLineSpacing() {
         val preferences = readiumPreferences(
@@ -86,7 +92,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
     }
 
     @Test
-    fun readerOptionChoicesWrapWhenTheAvailableWidthIsNarrow() {
+    fun readerThemeDropdownsFitWhenAvailableWidthIsNarrow() {
         composeRule.setContent {
             Box(modifier = Modifier.size(width = 180.dp, height = 1200.dp)) {
                 ReaderConfigurationControls(
@@ -97,18 +103,108 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             }
         }
 
-        val lightBounds = composeRule
-            .onNodeWithTag("reader-options-reading-theme-light")
-            .fetchSemanticsNode()
-            .boundsInRoot
-        val darkBounds = composeRule
-            .onNodeWithTag("reader-options-reading-theme-dark")
-            .fetchSemanticsNode()
-            .boundsInRoot
-
-        assertTrue("Theme choices should wrap onto another row", darkBounds.top > lightBounds.top)
+        expandReaderSettingsSection("appearance")
+        composeRule.onNodeWithTag("reader-options-reading-theme-dropdown").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-reading-background-theme-dropdown")
+            .assertIsDisplayed()
         composeRule.onAllNodesWithText("PDF layout").assertCountEquals(0)
         composeRule.onAllNodesWithText("CBR/CBZ layout").assertCountEquals(0)
+    }
+
+    @Test
+    fun readerSettingsGroupsStartCollapsedAndRevealDropdownChoices() {
+        val profile = mutableStateOf(LibraryReaderPreferences())
+        composeRule.setContent {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                ReaderConfigurationControls(
+                    value = profile.value,
+                    onPreferencesChange = { profile.value = it },
+                    format = ReaderConfigurationFormat.EPUB
+                )
+            }
+        }
+
+        listOf(
+            "navigation" to listOf(
+                "reader-options-reading-direction-dropdown",
+                "reader-options-reading-tap-zone-layout-dropdown",
+                "reader-options-reading-tap-zone-invert-dropdown",
+                "reader-options-reading-tap-zone-tutorial-after-changes",
+                "reader-options-reading-epub-layout-paginated"
+            ),
+            "display" to listOf("reader-options-reading-show-header"),
+            "appearance" to listOf("reader-options-reading-theme-dropdown"),
+            "typography" to listOf("reader-options-reading-font-family-dropdown"),
+            "page-layout" to listOf("reader-options-reading-margin-top"),
+            "epub" to listOf("reader-options-reading-epub-two-page-spread")
+        ).forEach { (section, hiddenControls) ->
+            composeRule.onNodeWithTag("reader-options-reading-section-$section")
+                .assertIsDisplayed()
+            hiddenControls.forEach { hiddenControl ->
+                composeRule.onAllNodesWithTag(hiddenControl).assertCountEquals(0)
+            }
+        }
+        composeRule.onAllNodesWithTag("reader-options-reading-section-tap-zones")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithText("Tap-zone layout").assertCountEquals(0)
+
+        expandReaderSettingsSection("navigation")
+        composeRule.onNodeWithText("Tap-zone layout").assertIsDisplayed()
+        composeRule.onNodeWithTag("reader-options-reading-direction-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-direction-right_to_left")
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(LibraryReadingDirection.RIGHT_TO_LEFT, profile.value.readingDirection)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-epub-layout-continuous")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.epubLayoutMode)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReaderTapZoneLayout.KINDLE, profile.value.tapZoneLayout)
+        }
+        composeRule.onNodeWithTag("reader-options-reading-section-navigation")
+            .performClick()
+        composeRule.onAllNodesWithTag("reader-options-reading-direction-dropdown")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-epub-layout-continuous")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-tap-zone-layout-dropdown")
+            .assertCountEquals(0)
+        composeRule.onAllNodesWithTag("reader-options-reading-tap-zone-invert-dropdown")
+            .assertCountEquals(0)
+
+        expandReaderSettingsSection("appearance")
+        composeRule.onNodeWithTag("reader-options-reading-theme-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-theme-dark")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-background-theme-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-background-theme-sepia")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-background-theme-custom")
+            .assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(EpubReaderTheme.Dark, profile.value.theme)
+            assertEquals(EpubReaderTheme.Sepia, profile.value.backgroundTheme)
+            assertFalse(profile.value.useCustomBackground)
+        }
     }
 
     @Test
@@ -161,15 +257,16 @@ class EpubReaderOptionsOverlayInstrumentedTest {
 
     @Test
     fun comicOptionsDoNotDuplicateTheOuterPageSlider() {
+        val profile = mutableStateOf(LibraryReaderPreferences())
         composeRule.setContent {
             ComicReaderOptionsBottomSheet(
                 title = "Test Comic",
                 currentPage = 2,
                 pageCount = 5,
-                preferences = LibraryReaderPreferences(),
+                preferences = profile.value,
                 onContinueReading = {},
                 onCloseBook = {},
-                onPreferencesChange = {}
+                onPreferencesChange = { profile.value = it }
             )
         }
 
@@ -179,8 +276,32 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onAllNodesWithContentDescription("Comic reading position").assertCountEquals(0)
         composeRule.onNodeWithText("Reading configuration").assertIsDisplayed()
         composeRule.onAllNodesWithText("Library reader profile").assertCountEquals(0)
+        composeRule.onNodeWithTag("reader-options-reading-section-navigation").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-comic-layout-paginated")
+            .assertCountEquals(0)
+        composeRule.onNodeWithTag("reader-options-reading-section-page-layout")
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-comic-page-gap")
+            .assertCountEquals(0)
+        composeRule.onNodeWithTag("reader-options-reading-section-comic")
+            .assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-comic-spread-cover-alone")
+            .assertCountEquals(0)
+
+        expandReaderSettingsSection("navigation")
         composeRule.onNodeWithText("CBR/CBZ layout").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("reader-options-reading-comic-layout-continuous")
+            .performScrollTo()
+            .performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReaderLayoutMode.CONTINUOUS, profile.value.comicLayoutMode)
+        }
+        expandReaderSettingsSection("page-layout")
+        composeRule.onNodeWithTag("reader-options-reading-comic-page-gap")
+            .performScrollTo()
+            .assertIsDisplayed()
+        expandReaderSettingsSection("comic")
+        composeRule.onNodeWithTag("reader-options-reading-comic-spread-cover-alone")
             .performScrollTo()
             .assertIsDisplayed()
         composeRule.onAllNodesWithText("Fonts").assertCountEquals(0)
@@ -213,6 +334,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
+        expandReaderSettingsSection("typography")
         composeRule.onNodeWithText("Fonts")
             .performScrollTo()
             .assertIsDisplayed()
@@ -271,6 +393,7 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
+        expandReaderSettingsSection("typography")
         composeRule.onNodeWithText("Text alignment").performScrollTo().assertIsDisplayed()
         composeRule.runOnIdle {
             assertFalse(profile.value.preferServerProgressOnReopen)
@@ -284,12 +407,22 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         composeRule.onNodeWithText("Auto hyphenates justified text only", substring = true)
             .performScrollTo()
             .assertIsDisplayed()
-        composeRule.onNodeWithTag("reader-options-reading-text-align-justify").performScrollTo().performClick()
+        composeRule.onNodeWithTag("reader-options-reading-text-align-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-text-align-justify")
+            .performScrollTo()
+            .performClick()
         composeRule.runOnIdle {
             assertEquals(EpubTextAlignment.JUSTIFY, profile.value.textAlignment)
             assertEquals(EpubHyphenation.AUTO, profile.value.hyphenation)
         }
-        composeRule.onNodeWithTag("reader-options-reading-hyphenation-off").performScrollTo().performClick()
+        composeRule.onNodeWithTag("reader-options-reading-hyphenation-dropdown")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-hyphenation-off")
+            .performScrollTo()
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(EpubTextAlignment.JUSTIFY, profile.value.textAlignment)
@@ -364,16 +497,24 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             )
         }
 
-        composeRule.onAllNodesWithTag("reader-options-reading-theme-oledblack")
+        composeRule.onAllNodesWithTag("reader-options-reading-theme-dropdown")
             .assertCountEquals(0)
         composeRule.onAllNodesWithTag("reader-options-reading-font-decrease")
             .assertCountEquals(0)
 
+        expandReaderSettingsSection("navigation")
+        composeRule.onAllNodesWithText("Navigation & tap zones").assertCountEquals(1)
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-tutorial-after-changes")
             .performScrollTo()
             .performClick()
 
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-dropdown")
+            .performScrollTo()
+            .performClick()
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-layout-kindle")
+            .performScrollTo()
+            .performClick()
+        composeRule.onNodeWithTag("reader-options-reading-tap-zone-invert-dropdown")
             .performScrollTo()
             .performClick()
         composeRule.onNodeWithTag("reader-options-reading-tap-zone-invert-both")
@@ -406,18 +547,36 @@ class EpubReaderOptionsOverlayInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithTag("reader-options-reading-section-navigation").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-pdf-layout-paginated")
+            .assertCountEquals(0)
+        composeRule.onNodeWithTag("reader-options-reading-section-page-layout").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-pdf-page-gap")
+            .assertCountEquals(0)
+        composeRule.onNodeWithTag("reader-options-reading-section-pdf").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("reader-options-reading-pdf-join-facing-pages")
+            .assertCountEquals(0)
+        expandReaderSettingsSection("pdf")
         composeRule.onNodeWithTag("reader-options-reading-pdf-join-facing-pages")
             .performScrollTo()
             .assertIsDisplayed()
             .assertIsNotEnabled()
 
+        expandReaderSettingsSection("navigation")
         composeRule.onNodeWithTag("reader-options-reading-pdf-layout-paginated")
             .performScrollTo()
             .performClick()
+        composeRule.runOnIdle {
+            assertEquals(ReaderLayoutMode.PAGINATED, profile.value.pdfLayoutMode)
+        }
         composeRule.onNodeWithTag("reader-options-reading-pdf-join-facing-pages")
             .performScrollTo()
             .assertIsDisplayed()
             .performClick()
+        expandReaderSettingsSection("page-layout")
+        composeRule.onNodeWithTag("reader-options-reading-pdf-page-gap")
+            .performScrollTo()
+            .assertIsDisplayed()
 
         composeRule.runOnIdle {
             assertEquals(ReaderLayoutMode.PAGINATED, profile.value.pdfLayoutMode)
