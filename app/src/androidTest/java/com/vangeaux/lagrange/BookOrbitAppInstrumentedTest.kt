@@ -2759,6 +2759,9 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onNodeWithTag("options-reading-direction-right_to_left")
             .performScrollTo()
             .performClick()
+        composeRule.onNodeWithTag("options-reading-epub-layout-continuous")
+            .performScrollTo()
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(
@@ -2768,6 +2771,14 @@ class BookOrbitAppInstrumentedTest {
             assertEquals(
                 LibraryReadingDirection.LEFT_TO_RIGHT,
                 preferences.value.readerPreferencesFor("novels").readingDirection
+            )
+            assertEquals(
+                ReaderLayoutMode.CONTINUOUS,
+                preferences.value.readerPreferencesFor("manga").epubLayoutMode
+            )
+            assertEquals(
+                ReaderLayoutMode.PAGINATED,
+                preferences.value.readerPreferencesFor("novels").epubLayoutMode
             )
         }
     }

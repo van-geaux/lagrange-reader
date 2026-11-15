@@ -130,6 +130,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -6073,6 +6076,30 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
+            ReaderLayoutModeSettings(
+                formatLabel = "EPUB",
+                layoutMode = value.epubLayoutMode,
+                testTagPrefix = "options-reading-epub",
+                onLayoutModeChange = { mode ->
+                    onPreferencesChange(selectedLibrary.id, value.copy(epubLayoutMode = mode))
+                }
+            )
+            ReaderLayoutModeSettings(
+                formatLabel = "PDF",
+                layoutMode = value.pdfLayoutMode,
+                testTagPrefix = "options-reading-pdf",
+                onLayoutModeChange = { mode ->
+                    onPreferencesChange(selectedLibrary.id, value.copy(pdfLayoutMode = mode))
+                }
+            )
+            ReaderLayoutModeSettings(
+                formatLabel = "CBR/CBZ",
+                layoutMode = value.comicLayoutMode,
+                testTagPrefix = "options-reading-comic",
+                onLayoutModeChange = { mode ->
+                    onPreferencesChange(selectedLibrary.id, value.copy(comicLayoutMode = mode))
+                }
+            )
             }
             CollapsibleReaderSettingsGroup(
                 title = stringResource(R.string.settings_reader_group_tap_zones),
@@ -6208,18 +6235,6 @@ private fun LibraryReaderConfiguration(
                 title = stringResource(R.string.settings_reader_group_page_layout),
                 testTag = "options-reading-section-page-layout"
             ) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            ReaderLayoutModeSettings(
-                formatLabel = "EPUB",
-                layoutMode = value.epubLayoutMode,
-                testTagPrefix = "options-reading-epub",
-                onLayoutModeChange = { layoutMode ->
-                    onPreferencesChange(
-                        selectedLibrary.id,
-                        value.copy(epubLayoutMode = layoutMode)
-                    )
-                }
-            )
             ReaderPageMarginsSettings(
                 padding = value.padding,
                 marginTapZoneExclusionPercent =
@@ -6235,21 +6250,27 @@ private fun LibraryReaderConfiguration(
                     )
                 }
             )
-            ReaderFormatLayoutSettings(
-                formatLabel = "PDF",
+            ReaderPageGapSettings(
                 layoutMode = value.pdfLayoutMode,
                 pageGapDp = value.pdfPageGapDp,
                 testTagPrefix = "options-reading-pdf",
-                onLayoutModeChange = { onPreferencesChange(selectedLibrary.id, value.copy(pdfLayoutMode = it)) },
-                onPageGapChange = { onPreferencesChange(selectedLibrary.id, value.copy(pdfPageGapDp = it)) }
+                onPageGapChange = { pageGapDp ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(pdfPageGapDp = pageGapDp)
+                    )
+                }
             )
-            ReaderFormatLayoutSettings(
-                formatLabel = "CBR/CBZ",
+            ReaderPageGapSettings(
                 layoutMode = value.comicLayoutMode,
                 pageGapDp = value.comicPageGapDp,
                 testTagPrefix = "options-reading-comic",
-                onLayoutModeChange = { onPreferencesChange(selectedLibrary.id, value.copy(comicLayoutMode = it)) },
-                onPageGapChange = { onPreferencesChange(selectedLibrary.id, value.copy(comicPageGapDp = it)) }
+                onPageGapChange = { pageGapDp ->
+                    onPreferencesChange(
+                        selectedLibrary.id,
+                        value.copy(comicPageGapDp = pageGapDp)
+                    )
+                }
             )
             }
             CollapsibleReaderSettingsGroup(
@@ -6364,24 +6385,12 @@ private fun EpubTypesettingSettings(
 }
 
 @Composable
-private fun ReaderFormatLayoutSettings(
-    formatLabel: String,
+private fun ReaderPageGapSettings(
     layoutMode: ReaderLayoutMode,
     pageGapDp: Float,
     testTagPrefix: String,
-    onLayoutModeChange: (ReaderLayoutMode) -> Unit,
-    onPageGapChange: (Float) -> Unit,
-    joinFacingPages: Boolean? = null,
-    onJoinFacingPagesChange: ((Boolean) -> Unit)? = null,
-    invertColors: Boolean? = null,
-    onInvertColorsChange: ((Boolean) -> Unit)? = null
+    onPageGapChange: (Float) -> Unit
 ) {
-    ReaderLayoutModeSettings(
-        formatLabel = formatLabel,
-        layoutMode = layoutMode,
-        testTagPrefix = testTagPrefix,
-        onLayoutModeChange = onLayoutModeChange
-    )
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             stringResource(R.string.settings_continuous_page_gap, pageGapDp.toInt()),
@@ -6401,28 +6410,9 @@ private fun ReaderFormatLayoutSettings(
             modifier = Modifier.testTag("$testTagPrefix-page-gap")
         )
     }
-    if (joinFacingPages != null && onJoinFacingPagesChange != null) {
-        AppPreferenceSwitchRow(
-            title = stringResource(R.string.settings_remove_page_gap),
-            summary = stringResource(R.string.settings_remove_page_gap_summary),
-            checked = joinFacingPages,
-            enabled = layoutMode == ReaderLayoutMode.PAGINATED,
-            testTag = "$testTagPrefix-join-facing-pages",
-            onCheckedChange = onJoinFacingPagesChange
-        )
-    }
-    if (invertColors != null && onInvertColorsChange != null) {
-        AppPreferenceSwitchRow(
-            title = stringResource(R.string.settings_invert_pdf_colors),
-            summary = stringResource(R.string.settings_invert_pdf_colors_summary),
-            checked = invertColors,
-            testTag = "$testTagPrefix-invert-colors",
-            onCheckedChange = onInvertColorsChange
-        )
-    }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReaderLayoutModeSettings(
     formatLabel: String,
@@ -6434,15 +6424,19 @@ private fun ReaderLayoutModeSettings(
         stringResource(R.string.settings_format_layout, formatLabel),
         style = MaterialTheme.typography.titleMedium
     )
-    ReaderChoiceDropdown(
-        selectedLabel = stringResource(layoutMode.displayNameRes),
-        testTag = "$testTagPrefix-layout-dropdown",
-        options = ReaderLayoutMode.values().map { it to stringResource(it.displayNameRes) },
-        optionTestTag = { mode ->
-            "$testTagPrefix-layout-${mode.name.lowercase()}"
-        },
-        onSelected = onLayoutModeChange
-    )
+    val modes = ReaderLayoutMode.values()
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        modes.forEachIndexed { index, mode ->
+            SegmentedButton(
+                selected = layoutMode == mode,
+                onClick = { onLayoutModeChange(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                modifier = Modifier.testTag("$testTagPrefix-layout-${mode.name.lowercase()}")
+            ) {
+                Text(stringResource(mode.displayNameRes), maxLines = 1)
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -6476,40 +6470,25 @@ private fun ReaderTapZoneSettings(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReaderThemeChips(
+private fun ReaderThemeDropdown(
     selected: EpubReaderTheme,
     presetSelected: Boolean,
     testTagPrefix: String,
     onSelected: (EpubReaderTheme) -> Unit,
-    showCustom: Boolean = false,
-    customSelected: Boolean = false,
-    onCustomSelected: () -> Unit = {}
+    selectedLabelOverride: String? = null
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        EPUB_THEME_OPTIONS.forEach { theme ->
-            FilterChip(
-                selected = presetSelected && selected == theme,
-                onClick = { onSelected(theme) },
-                label = { Text(stringResource(theme.labelRes)) },
-                modifier = Modifier.testTag(
-                    "$testTagPrefix-${theme.name.lowercase()}"
-                )
-            )
-        }
-        if (showCustom) {
-            FilterChip(
-                selected = customSelected,
-                onClick = onCustomSelected,
-                label = { Text(stringResource(R.string.sheet_custom_background_custom)) },
-                modifier = Modifier.testTag("$testTagPrefix-custom")
-            )
-        }
-    }
+    ReaderChoiceDropdown(
+        selectedLabel = if (presetSelected) {
+            stringResource(selected.labelRes)
+        } else {
+            selectedLabelOverride ?: stringResource(selected.labelRes)
+        },
+        testTag = "$testTagPrefix-dropdown",
+        options = EPUB_THEME_OPTIONS.map { it to stringResource(it.labelRes) },
+        optionTestTag = { theme -> "$testTagPrefix-${theme.name.lowercase()}" },
+        onSelected = onSelected
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -6623,7 +6602,7 @@ private fun ReaderAppearanceSettings(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
-        ReaderThemeChips(
+        ReaderThemeDropdown(
             selected = value.theme,
             presetSelected = true,
             testTagPrefix = "$testTagPrefix-theme",
@@ -6644,7 +6623,7 @@ private fun ReaderAppearanceSettings(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline
         )
-        ReaderThemeChips(
+        ReaderThemeDropdown(
             selected = value.backgroundTheme,
             presetSelected = !value.useCustomBackground,
             testTagPrefix = "$testTagPrefix-background-theme",
@@ -6656,17 +6635,24 @@ private fun ReaderAppearanceSettings(
                     )
                 )
             },
-            showCustom = true,
-            customSelected = value.useCustomBackground,
-            onCustomSelected = {
-                when {
-                    value.customBackgroundColor == null ->
-                        customBackgroundDialogVisible = true
-                    !value.useCustomBackground ->
-                        onPreferencesChange(value.copy(useCustomBackground = true))
-                }
-            }
+            selectedLabelOverride = stringResource(R.string.sheet_custom_background_custom)
         )
+        if (!value.useCustomBackground) {
+            TextButton(
+                onClick = {
+                    when {
+                        value.customBackgroundColor == null ->
+                            customBackgroundDialogVisible = true
+                        else ->
+                            onPreferencesChange(value.copy(useCustomBackground = true))
+                    }
+                },
+                modifier = Modifier.testTag("$testTagPrefix-background-theme-custom")
+            ) {
+                Text(stringResource(R.string.sheet_custom_background_custom))
+            }
+        }
+
         if (value.useCustomBackground) {
             AppPreferenceSelectionRow(
                 title = stringResource(R.string.sheet_custom_background),
@@ -6781,6 +6767,26 @@ internal fun ReaderConfigurationControls(
         },
         onSelected = { onPreferencesChange(value.copy(readingDirection = it)) }
     )
+    when (format) {
+        ReaderConfigurationFormat.EPUB -> ReaderLayoutModeSettings(
+            formatLabel = "EPUB",
+            layoutMode = value.epubLayoutMode,
+            testTagPrefix = "$testTagPrefix-epub",
+            onLayoutModeChange = { onPreferencesChange(value.copy(epubLayoutMode = it)) }
+        )
+        ReaderConfigurationFormat.PDF -> ReaderLayoutModeSettings(
+            formatLabel = "PDF",
+            layoutMode = value.pdfLayoutMode,
+            testTagPrefix = "$testTagPrefix-pdf",
+            onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) }
+        )
+        ReaderConfigurationFormat.COMIC -> ReaderLayoutModeSettings(
+            formatLabel = "CBR/CBZ",
+            layoutMode = value.comicLayoutMode,
+            testTagPrefix = "$testTagPrefix-comic",
+            onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) }
+        )
+    }
     }
     CollapsibleReaderSettingsGroup(
         title = stringResource(R.string.settings_reader_group_tap_zones),
@@ -7027,12 +7033,6 @@ internal fun ReaderConfigurationControls(
             title = stringResource(R.string.settings_reader_group_page_layout),
             testTag = "$testTagPrefix-section-page-layout"
         ) {
-            ReaderLayoutModeSettings(
-                formatLabel = "EPUB",
-                layoutMode = value.epubLayoutMode,
-                testTagPrefix = "$testTagPrefix-epub",
-                onLayoutModeChange = { onPreferencesChange(value.copy(epubLayoutMode = it)) }
-            )
             ReaderPageMarginsSettings(
                 padding = value.padding,
                 marginTapZoneExclusionPercent = value.marginTapZoneExclusionPercent,
@@ -7061,12 +7061,10 @@ internal fun ReaderConfigurationControls(
             title = stringResource(R.string.settings_reader_group_page_layout),
             testTag = "$testTagPrefix-section-page-layout"
         ) {
-            ReaderFormatLayoutSettings(
-                formatLabel = "PDF",
+            ReaderPageGapSettings(
                 layoutMode = value.pdfLayoutMode,
                 pageGapDp = value.pdfPageGapDp,
                 testTagPrefix = "$testTagPrefix-pdf",
-                onLayoutModeChange = { onPreferencesChange(value.copy(pdfLayoutMode = it)) },
                 onPageGapChange = { onPreferencesChange(value.copy(pdfPageGapDp = it)) }
             )
         }
@@ -7096,12 +7094,10 @@ internal fun ReaderConfigurationControls(
             title = stringResource(R.string.settings_reader_group_page_layout),
             testTag = "$testTagPrefix-section-page-layout"
         ) {
-            ReaderFormatLayoutSettings(
-                formatLabel = "CBR/CBZ",
+            ReaderPageGapSettings(
                 layoutMode = value.comicLayoutMode,
                 pageGapDp = value.comicPageGapDp,
                 testTagPrefix = "$testTagPrefix-comic",
-                onLayoutModeChange = { onPreferencesChange(value.copy(comicLayoutMode = it)) },
                 onPageGapChange = { onPreferencesChange(value.copy(comicPageGapDp = it)) }
             )
         }
