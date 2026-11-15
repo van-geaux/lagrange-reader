@@ -146,8 +146,10 @@ class EpubReaderOptionsOverlayInstrumentedTest {
         }
         composeRule.onAllNodesWithTag("reader-options-reading-section-tap-zones")
             .assertCountEquals(0)
+        composeRule.onAllNodesWithText("Tap-zone layout").assertCountEquals(0)
 
         expandReaderSettingsSection("navigation")
+        composeRule.onNodeWithText("Tap-zone layout").assertIsDisplayed()
         composeRule.onNodeWithTag("reader-options-reading-direction-dropdown")
             .performScrollTo()
             .performClick()

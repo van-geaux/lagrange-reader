@@ -2755,6 +2755,7 @@ class BookOrbitAppInstrumentedTest {
         composeRule.onAllNodesWithTag("options-reading-tap-zone-layout-dropdown")
             .assertCountEquals(0)
         composeRule.onNodeWithTag("options-reading-section-navigation").performClick()
+        composeRule.onNodeWithText("Tap-zone layout").assertIsDisplayed()
         composeRule.onNodeWithTag("options-reading-direction-dropdown")
             .performScrollTo()
             .performClick()

@@ -6441,6 +6441,10 @@ private fun ReaderTapZoneSettings(
     onPreferencesChange: (LibraryReaderPreferences) -> Unit,
     testTagPrefix: String
 ) {
+    Text(
+        stringResource(R.string.settings_tap_zone_layout),
+        style = MaterialTheme.typography.titleMedium
+    )
     ReaderChoiceDropdown(
         selectedLabel = stringResource(value.tapZoneLayout.displayNameRes),
         testTag = "$testTagPrefix-layout-dropdown",
