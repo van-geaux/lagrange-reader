@@ -507,6 +507,17 @@ class AppCoordinator internal constructor(
         serverProfileStore?.remove(profileId)
     }
 
+    fun forgetSavedLoginCredentials() {
+        savedLoginCredentialsStore?.clearAll()
+        autoLoginAttemptedProfileId = null
+    }
+
+    fun setRememberLoginCredentials(remember: Boolean) {
+        if (remember) return
+        activeLoginProfileId()?.let { profileId -> savedLoginCredentialsStore?.clear(profileId) }
+        autoLoginAttemptedProfileId = null
+    }
+
     fun setAudioPlaybackOpener(opener: (suspend (ReaderState, Boolean) -> Boolean)?) {
         audioPlaybackOpener = opener
     }

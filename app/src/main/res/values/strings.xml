@@ -95,6 +95,12 @@
 
     <!-- Settings: app language -->
     <string name="settings_language">Language</string>
+    <string name="settings_forget_saved_passwords">Forget saved server passwords</string>
+    <string name="settings_forget_saved_passwords_summary">Remove remembered usernames and passwords from this device. You will need to sign in again after switching servers.</string>
+    <string name="settings_forget_saved_passwords_confirm_title">Forget saved passwords?</string>
+    <string name="settings_forget_saved_passwords_confirm_message">This removes all saved server passwords from this device. It does not sign you out of the current server.</string>
+    <string name="settings_forget_saved_passwords_confirm">Forget</string>
+    <string name="settings_forget_saved_passwords_done">Saved server passwords cleared.</string>
     <string name="settings_language_summary">App display language</string>
     <string name="language_system">System default</string>
     <string name="language_english">English</string>

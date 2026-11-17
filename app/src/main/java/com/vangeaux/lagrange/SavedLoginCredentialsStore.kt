@@ -36,6 +36,8 @@ internal interface SavedLoginCredentialsRepository {
     fun write(profileId: String, credentials: SavedLoginCredentials): Boolean
 
     fun clear(profileId: String)
+
+    fun clearAll()
 }
 
 /**
@@ -81,8 +83,16 @@ internal class SavedLoginCredentialsStore(context: Context) : SavedLoginCredenti
         preferences.edit().remove(key(profileId)).apply()
     }
 
+    override fun clearAll() {
+        preferences.edit().apply {
+            preferences.all.keys
+                .filter { it.startsWith(CREDENTIAL_KEY_PREFIX) }
+                .forEach(::remove)
+        }.apply()
+    }
+
     private fun key(profileId: String): String =
-        "credentials_${Base64.encodeToString(
+        "${CREDENTIAL_KEY_PREFIX}${Base64.encodeToString(
             profileId.toByteArray(Charsets.UTF_8),
             Base64.NO_WRAP or Base64.URL_SAFE
         )}"
@@ -109,6 +119,7 @@ internal class SavedLoginCredentialsStore(context: Context) : SavedLoginCredenti
 
     private companion object {
         const val PREFERENCES_NAME = "saved_login_credentials"
+        const val CREDENTIAL_KEY_PREFIX = "credentials_"
         const val KEY_ALIAS = "lagrange_saved_login_credentials"
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"

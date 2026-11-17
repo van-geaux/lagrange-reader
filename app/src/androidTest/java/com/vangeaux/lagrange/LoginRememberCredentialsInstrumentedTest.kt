@@ -17,6 +17,7 @@ class LoginRememberCredentialsInstrumentedTest {
     @Test
     fun savedCredentialsPrefillLoginAndCheckboxControlsRememberFlag() {
         var submitted: Triple<String, String, Boolean>? = null
+        var rememberChanged: Boolean? = null
         composeRule.setContent {
             MaterialTheme {
                 LoginScreen(
@@ -29,6 +30,7 @@ class LoginRememberCredentialsInstrumentedTest {
                     savedUsername = "reader",
                     savedPassword = "secret",
                     rememberCredentials = true,
+                    onRememberCredentialsChange = { rememberChanged = it },
                     onSwitchServer = {},
                     onNewServer = {},
                     onSubmit = { username, password, remember ->
@@ -43,6 +45,7 @@ class LoginRememberCredentialsInstrumentedTest {
         composeRule.onNodeWithTag("login-remember-password").assertIsOn()
         composeRule.onNodeWithTag("login-remember-password").performClick()
         composeRule.onNodeWithTag("login-remember-password").assertIsOff()
+        assertEquals(false, rememberChanged)
         composeRule.onNodeWithTag("login-submit").performClick()
 
         assertEquals(Triple("reader", "secret", false), submitted)

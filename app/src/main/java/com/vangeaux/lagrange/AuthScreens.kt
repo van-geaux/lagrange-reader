@@ -308,6 +308,7 @@ internal fun LoginScreen(
     savedUsername: String? = null,
     savedPassword: String? = null,
     rememberCredentials: Boolean = false,
+    onRememberCredentialsChange: (Boolean) -> Unit = {},
     onSwitchServer: (String) -> Unit,
     onNewServer: () -> Unit,
     onSubmit: (String, String, Boolean) -> Unit,
@@ -502,6 +503,7 @@ internal fun LoginScreen(
                             onCheckedChange = {
                                 rememberPassword = it
                                 validationMessageRes = null
+                                onRememberCredentialsChange(it)
                             },
                             enabled = !isSubmitting,
                             modifier = Modifier.testTag("login-remember-password")

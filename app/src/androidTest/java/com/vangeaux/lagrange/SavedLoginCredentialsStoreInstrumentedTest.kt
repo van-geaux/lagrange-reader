@@ -40,6 +40,9 @@ class SavedLoginCredentialsStoreInstrumentedTest {
 
             store.clear(profileId)
             assertNull(store.read(profileId))
+            assertTrue(store.write(profileId, credentials))
+            store.clearAll()
+            assertNull(store.read(profileId))
         } finally {
             store.clear(profileId)
         }

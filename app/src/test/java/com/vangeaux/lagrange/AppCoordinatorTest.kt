@@ -4343,6 +4343,38 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `forget saved credentials clears every stored profile`() {
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["profile-a"] = SavedLoginCredentials("reader-a", "secret-a")
+            values["profile-b"] = SavedLoginCredentials("reader-b", "secret-b")
+        }
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            savedLoginCredentialsStore = credentials
+        )
+
+        coordinator.forgetSavedLoginCredentials()
+
+        assertTrue(credentials.values.isEmpty())
+    }
+
+    @Test
+    fun `unchecking remember immediately clears the active profile password`() {
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["profile-a"] = SavedLoginCredentials("reader", "secret")
+        }
+        val coordinator = AppCoordinator(
+            repository = FakeBookOrbitDataSource(),
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "profile-a" }
+        )
+
+        coordinator.setRememberLoginCredentials(false)
+
+        assertNull(credentials.values["profile-a"])
+    }
+
+    @Test
     fun `network failure keeps saved credentials and prefills login`() = runTest {
         val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
         val replacement = FakeBookOrbitDataSource(
@@ -4385,6 +4417,10 @@ private class FakeSavedLoginCredentialsStore : SavedLoginCredentialsRepository {
 
     override fun clear(profileId: String) {
         values.remove(profileId)
+    }
+
+    override fun clearAll() {
+        values.clear()
     }
 }
 

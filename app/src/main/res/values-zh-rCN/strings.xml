@@ -95,6 +95,12 @@
 
     <!-- 设置：应用语言 -->
     <string name="settings_language">语言</string>
+    <string name="settings_forget_saved_passwords">清除已保存的服务器密码</string>
+    <string name="settings_forget_saved_passwords_summary">从本机移除已保存的账号和密码；切换服务器后需要重新登录。</string>
+    <string name="settings_forget_saved_passwords_confirm_title">清除已保存的密码？</string>
+    <string name="settings_forget_saved_passwords_confirm_message">这会移除本机保存的所有服务器密码，但不会退出当前服务器。</string>
+    <string name="settings_forget_saved_passwords_confirm">清除</string>
+    <string name="settings_forget_saved_passwords_done">已清除保存的服务器密码。</string>
     <string name="settings_language_summary">应用显示语言</string>
     <string name="language_system">跟随系统</string>
     <string name="language_english">English</string>

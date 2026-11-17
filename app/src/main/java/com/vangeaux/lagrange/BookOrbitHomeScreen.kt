@@ -1236,6 +1236,7 @@ internal fun NativeLibraryBrowserScreen(
     onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
     onCancelOfflineCacheUpdate: suspend () -> Unit = {},
     onClearOfflineCache: suspend () -> Unit = {},
+    onForgetSavedLoginCredentials: () -> Unit = {},
     bookDetailRequest: AudioBookDetailRequest? = null,
     onBookDetailRequestConsumed: (Long) -> Unit = {},
     bottomOverlay: (@Composable () -> Unit)? = null
@@ -2308,6 +2309,7 @@ internal fun NativeLibraryBrowserScreen(
                     onStartOfflineCacheUpdate = onStartOfflineCacheUpdate,
                     onCancelOfflineCacheUpdate = onCancelOfflineCacheUpdate,
                     onClearOfflineCache = onClearOfflineCache,
+                    onForgetSavedLoginCredentials = onForgetSavedLoginCredentials,
                     modifier = Modifier.padding(padding)
                 )
                 destination == BrowserDestination.ABOUT -> AboutScreen(
@@ -4014,6 +4016,7 @@ internal fun OptionsScreen(
     onStartOfflineCacheUpdate: suspend () -> Boolean = { false },
     onCancelOfflineCacheUpdate: suspend () -> Unit = {},
     onClearOfflineCache: suspend () -> Unit = {},
+    onForgetSavedLoginCredentials: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var openDialog by rememberSaveable { mutableStateOf<OptionsDialog?>(null) }
@@ -4035,6 +4038,7 @@ internal fun OptionsScreen(
     var offlineCacheRefreshKey by rememberSaveable { mutableIntStateOf(0) }
     var automaticDownloadRefreshKey by rememberSaveable { mutableIntStateOf(0) }
     var showClearDownloadedBooks by remember { mutableStateOf(false) }
+    var showForgetSavedPasswords by remember { mutableStateOf(false) }
     var isClearingDownloadedBooks by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -4299,6 +4303,31 @@ internal fun OptionsScreen(
                 testTag = "options-language",
                 onClick = { openDialog = OptionsDialog.LANGUAGE }
             )
+        }
+        if (selectedCategory == OptionsCategory.GENERAL) item(key = "forget-saved-passwords") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 8.dp)
+            ) {
+                TextButton(
+                    onClick = { showForgetSavedPasswords = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("options-forget-saved-passwords")
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_forget_saved_passwords),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.settings_forget_saved_passwords_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
         }
         if (selectedCategory == OptionsCategory.APPEARANCE) item(key = "theme") {
             AppPreferenceSelectionRow(
@@ -4975,6 +5004,34 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             }
         )
         null -> Unit
+    }
+
+    if (showForgetSavedPasswords) {
+        AlertDialog(
+            onDismissRequest = { showForgetSavedPasswords = false },
+            title = { Text(stringResource(R.string.settings_forget_saved_passwords_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_forget_saved_passwords_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showForgetSavedPasswords = false
+                        onForgetSavedLoginCredentials()
+                        Toast.makeText(
+                            context,
+                            R.string.settings_forget_saved_passwords_done,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_forget_saved_passwords_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgetSavedPasswords = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
     }
 
     if (showClearDownloadedBooks) {
