@@ -4195,6 +4195,203 @@ class AppCoordinatorTest {
         assertSame(expected, actual)
         assertEquals(1, repository.loadHomeShelvesCalls)
     }
+
+    @Test
+    fun `remembered login stores credentials for the active profile`() = runTest {
+        val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
+        val credentials = FakeSavedLoginCredentialsStore()
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "profile-a" }
+        )
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        coordinator.submitLogin("reader", "secret", rememberPassword = true)
+        advanceUntilIdle()
+
+        assertEquals(
+            SavedLoginCredentials(username = "reader", password = "secret"),
+            credentials.values["profile-a"]
+        )
+    }
+
+    @Test
+    fun `successful unchecked login clears an existing remembered password`() = runTest {
+        val repository = FakeBookOrbitDataSource(sessionState = SessionState.Unauthenticated)
+        val credentials = FakeSavedLoginCredentialsStore()
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "profile-a" }
+        )
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        credentials.values["profile-a"] = SavedLoginCredentials("reader", "old")
+        coordinator.submitLogin("reader", "secret", rememberPassword = false)
+        advanceUntilIdle()
+
+        assertNull(credentials.values["profile-a"])
+    }
+
+    @Test
+    fun `switching to a profile with saved credentials signs in automatically`() = runTest {
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacement = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated
+        )
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["target-profile"] = SavedLoginCredentials("reader", "secret")
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacement },
+            providerSessionModuleResolver = { FakeProviderSessionModule() },
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "target-profile" }
+        )
+
+        coordinator.changeServer("https://replacement.example.test")
+        advanceUntilIdle()
+
+        assertEquals(listOf("reader" to "secret"), replacement.loginCalls)
+        assertTrue("screen=${coordinator.screen.value}", coordinator.screen.value is AppScreen.Browser)
+        assertNotNull(credentials.values["target-profile"])
+    }
+
+    @Test
+    fun `invalid saved credentials clear the secret and show username prefilled`() = runTest {
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacement = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated,
+            loginError = InvalidCredentialsException()
+        )
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["target-profile"] = SavedLoginCredentials("reader", "wrong")
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacement },
+            providerSessionModuleResolver = { FakeProviderSessionModule() },
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "target-profile" }
+        )
+
+        coordinator.changeServer("https://replacement.example.test")
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals("reader", login.savedUsername)
+        assertNull(login.savedPassword)
+        assertFalse(login.rememberCredentials)
+        assertNull(credentials.values["target-profile"])
+    }
+
+    @Test
+    fun `saved credentials are not retried after an automatic login failure`() = runTest {
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacement = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated,
+            loginError = InvalidCredentialsException()
+        )
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["target-profile"] = SavedLoginCredentials("reader", "wrong")
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacement },
+            providerSessionModuleResolver = { FakeProviderSessionModule() },
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "target-profile" }
+        )
+
+        coordinator.changeServer("https://replacement.example.test")
+        advanceUntilIdle()
+        assertEquals(1, replacement.loginCalls.size)
+
+        coordinator.bootstrap()
+        advanceUntilIdle()
+        assertEquals(1, replacement.loginCalls.size)
+        assertTrue(coordinator.screen.value is AppScreen.Login)
+    }
+
+    @Test
+    fun `removing a server profile clears its saved credentials`() {
+        val repository = FakeBookOrbitDataSource()
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["profile-a"] = SavedLoginCredentials("reader", "secret")
+        }
+        val coordinator = AppCoordinator(
+            repository = repository,
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "profile-a" }
+        )
+
+        coordinator.removeServerProfile("profile-a")
+
+        assertNull(credentials.values["profile-a"])
+    }
+
+    @Test
+    fun `network failure keeps saved credentials and prefills login`() = runTest {
+        val currentRepository = FakeBookOrbitDataSource(serverUrl = serverUrl)
+        val replacement = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated,
+            loginError = IOException("offline")
+        )
+        val credentials = FakeSavedLoginCredentialsStore().apply {
+            values["target-profile"] = SavedLoginCredentials("reader", "secret")
+        }
+        val coordinator = AppCoordinator(
+            repository = currentRepository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            repositoryResolver = { _, _, _ -> replacement },
+            providerSessionModuleResolver = { FakeProviderSessionModule() },
+            savedLoginCredentialsStore = credentials,
+            activeProfileIdProvider = { "target-profile" }
+        )
+
+        coordinator.changeServer("https://replacement.example.test")
+        advanceUntilIdle()
+
+        val login = coordinator.screen.value as AppScreen.Login
+        assertEquals("reader", login.savedUsername)
+        assertEquals("secret", login.savedPassword)
+        assertTrue(login.rememberCredentials)
+        assertNotNull(credentials.values["target-profile"])
+    }
+}
+
+private class FakeSavedLoginCredentialsStore : SavedLoginCredentialsRepository {
+    val values = mutableMapOf<String, SavedLoginCredentials>()
+
+    override fun read(profileId: String): SavedLoginCredentials? = values[profileId]
+
+    override fun write(profileId: String, credentials: SavedLoginCredentials): Boolean {
+        values[profileId] = credentials
+        return true
+    }
+
+    override fun clear(profileId: String) {
+        values.remove(profileId)
+    }
+}
+
+private class FakeProviderSessionModule : ProviderSessionModule {
+    override suspend fun saveCurrentProfileSession(): Boolean = true
+
+    override suspend fun restoreCurrentProfileSession(): Boolean = false
 }
 
 private class FakeBookOrbitDataSource(

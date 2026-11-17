@@ -66,6 +66,10 @@
     <string name="login_hide_password">Hide</string>
     <string name="login_enter_username">Enter your username.</string>
     <string name="login_enter_password">Enter your password.</string>
+    <string name="login_remember_credentials">Remember username and password</string>
+    <string name="login_remember_credentials_summary">Stored securely on this device for this server.</string>
+    <string name="login_using_saved_credentials">Signing in with saved credentials…</string>
+    <string name="login_saved_credentials_failed">The saved password was rejected. Enter it again.</string>
     <string name="login_open_server_sign_in">Open server sign-in</string>
     <string name="login_sign_in_with_sso">Sign in with SSO</string>
     <string name="login_choose_server">Choose a configured server or add a new one.</string>

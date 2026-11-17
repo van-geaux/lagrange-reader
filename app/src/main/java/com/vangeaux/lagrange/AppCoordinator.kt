@@ -141,6 +141,8 @@ class AppCoordinator internal constructor(
     , private val providerSessionModuleResolver: ((BookOrbitDataSource) -> ProviderSessionModule)? = null
     , private val bookOrbitOidcModuleResolver: ((BookOrbitDataSource) -> BookOrbitOidcModule?)? = null
     , private val uiContext: Context? = null
+    , private val savedLoginCredentialsStore: SavedLoginCredentialsRepository? = null
+    , private val activeProfileIdProvider: (() -> String?)? = null
 ) {
     private fun uiText(id: Int, fallback: String, vararg args: Any): String =
         uiContext?.getString(id, *args) ?: fallback
@@ -480,6 +482,7 @@ class AppCoordinator internal constructor(
     private var readingShelfOrder = emptyList<ReadingActivityKey>()
     private var readingActivityServerUrl: String? = null
     private var pendingPostLoginDestination: PostLoginDestination? = null
+    private var autoLoginAttemptedProfileId: String? = null
     private var allowCachedLoginFallback = true
     private var acceptAudioProgress = true
     private var audioPlaybackOpener: (suspend (ReaderState, Boolean) -> Boolean)? = null
@@ -499,6 +502,8 @@ class AppCoordinator internal constructor(
     }
 
     fun removeServerProfile(profileId: String) {
+        savedLoginCredentialsStore?.clear(profileId)
+        if (autoLoginAttemptedProfileId == profileId) autoLoginAttemptedProfileId = null
         serverProfileStore?.remove(profileId)
     }
 
@@ -696,6 +701,7 @@ class AppCoordinator internal constructor(
                 }
                 SessionState.Unauthenticated -> {
                     allowCachedLoginFallback = false
+                    if (trySavedCredentialLogin(PostLoginDestination.Browser)) return@launch
                     showLogin(
                         message = uiText(
                             R.string.error_session_saved_expired,
@@ -779,6 +785,7 @@ class AppCoordinator internal constructor(
         targetProfileId: String? = null
     ) {
         scope.launch {
+            autoLoginAttemptedProfileId = null
             val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             val oldProviderId = serverProfileStore?.active()?.providerId ?: PROVIDER_BOOKORBIT
             if (oldServerUrl.isNotBlank() &&
@@ -864,6 +871,7 @@ class AppCoordinator internal constructor(
                 }
                 SessionState.Unauthenticated -> {
                     if (restoredProfileSession) loginModule()?.clearSession() ?: repository.clearSession()
+                    if (trySavedCredentialLogin(PostLoginDestination.Browser)) return@launch
                     showLogin(
                         message = uiText(
                             R.string.error_server_changed_sign_in,
@@ -989,7 +997,117 @@ class AppCoordinator internal constructor(
         }
     }
 
+    private fun activeLoginProfileId(): String? =
+        activeProfileIdProvider?.invoke() ?: serverProfileStore?.active()?.id
+
+    private fun currentSavedLoginCredentials(): SavedLoginCredentials? =
+        activeLoginProfileId()?.let { profileId -> savedLoginCredentialsStore?.read(profileId) }
+
+    private fun updateSavedLoginCredentials(
+        username: String,
+        password: String,
+        rememberPassword: Boolean
+    ) {
+        val profileId = activeLoginProfileId() ?: return
+        if (!rememberPassword) {
+            savedLoginCredentialsStore?.clear(profileId)
+            return
+        }
+        if (username.isBlank() || password.isBlank()) return
+        runCatching {
+            val written = savedLoginCredentialsStore?.write(
+                profileId,
+                SavedLoginCredentials(username = username.trim(), password = password)
+            )
+            if (written == false) {
+                Log.w("AppCoordinator", "Saved login credentials were not persisted")
+            }
+        }.onFailure { error ->
+            Log.w("AppCoordinator", "Unable to save login credentials", error)
+        }
+    }
+
+    /**
+     * Attempts a saved-credential sign-in once per profile. The helper returns false only when
+     * there is no saved credential to try; once an attempt is made it always handles the result
+     * (successful resume or a prefilled login screen).
+     */
+    private suspend fun trySavedCredentialLogin(destination: PostLoginDestination): Boolean {
+        val profileId = activeLoginProfileId() ?: return false
+        val store = savedLoginCredentialsStore ?: return false
+        if (autoLoginAttemptedProfileId == profileId) return false
+        val credentials = store.read(profileId) ?: return false
+        autoLoginAttemptedProfileId = profileId
+        pendingPostLoginDestination = destination
+        _screen.value = AppScreen.Startup(
+            uiText(R.string.login_using_saved_credentials, "Signing in with saved credentials...")
+        )
+        return try {
+            loginModule()?.login(credentials.username, credentials.password)
+                ?: repository.login(
+                    username = credentials.username,
+                    password = credentials.password
+                )
+            providerSessionModule()?.saveCurrentProfileSession()
+            if ((loginModule()?.getSessionState() ?: repository.getSessionState()) ==
+                SessionState.Authenticated
+            ) {
+                allowCachedLoginFallback = true
+                resumeAfterLogin()
+            } else {
+                store.clear(profileId)
+                loginModule()?.clearSession() ?: repository.clearSession()
+                showLogin(
+                    message = uiText(
+                        R.string.login_saved_credentials_failed,
+                        "The saved password was rejected. Enter it again."
+                    ),
+                    destination = destination,
+                    savedUsernameOverride = credentials.username,
+                    savedPasswordOverride = ""
+                )
+            }
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: InvalidCredentialsException) {
+            store.clear(profileId)
+            runCatching { loginModule()?.clearSession() ?: repository.clearSession() }
+            showLogin(
+                message = uiText(
+                    R.string.login_saved_credentials_failed,
+                    "The saved password was rejected. Enter it again."
+                ),
+                destination = destination,
+                savedUsernameOverride = credentials.username
+            )
+            true
+        } catch (error: Throwable) {
+            runCatching { loginModule()?.clearSession() ?: repository.clearSession() }
+            showLogin(
+                message = userMessage(
+                    error,
+                    uiText(R.string.error_unable_sign_in, "Unable to sign in.")
+                ),
+                destination = destination
+            )
+            true
+        }
+    }
+
     fun submitLogin(username: String, password: String) {
+        submitLoginInternal(username, password, rememberPassword = null)
+    }
+
+    fun submitLogin(username: String, password: String, rememberPassword: Boolean) {
+        submitLoginInternal(username, password, rememberPassword)
+    }
+
+    private fun submitLoginInternal(
+        username: String,
+        password: String,
+        rememberPassword: Boolean?
+    ) {
         scope.launch {
             val current = _screen.value as? AppScreen.Login ?: return@launch
             if (loginSubmitInFlight) {
@@ -1002,6 +1120,10 @@ class AppCoordinator internal constructor(
                 providerSessionModule()?.saveCurrentProfileSession()
                 when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
                     SessionState.Authenticated -> {
+                        rememberPassword?.let { remember ->
+                            updateSavedLoginCredentials(username, password, remember)
+                        }
+                        autoLoginAttemptedProfileId = null
                         allowCachedLoginFallback = true
                         resumeAfterLogin()
                     }
@@ -1198,6 +1320,8 @@ class AppCoordinator internal constructor(
             resetTransientState(clearBrowserState = true)
             allowCachedLoginFallback = false
             loginModule()?.clearSession() ?: repository.clearSession()
+            activeLoginProfileId()?.let { profileId -> savedLoginCredentialsStore?.clear(profileId) }
+            autoLoginAttemptedProfileId = null
             showLogin(
                 message = uiText(
                     R.string.error_signed_out,
@@ -3247,13 +3371,24 @@ class AppCoordinator internal constructor(
         }
     }
 
-    private suspend fun showLogin(message: String, destination: PostLoginDestination) {
+    private suspend fun showLogin(
+        message: String,
+        destination: PostLoginDestination,
+        savedUsernameOverride: String? = null,
+        savedPasswordOverride: String? = null
+    ) {
         pendingPostLoginDestination = destination
         val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
+        val savedCredentials = currentSavedLoginCredentials()
+        val savedUsername = savedUsernameOverride ?: savedCredentials?.username
+        val savedPassword = savedPasswordOverride ?: savedCredentials?.password
         _screen.value = AppScreen.Login(
             serverUrl = serverUrl,
             providerId = providerIdForLogin(serverUrl, serverProfileStore?.readAll().orEmpty()),
-            message = message
+            message = message,
+            savedUsername = savedUsername,
+            savedPassword = savedPassword,
+            rememberCredentials = savedUsername != null && !savedPassword.isNullOrBlank()
         )
     }
 

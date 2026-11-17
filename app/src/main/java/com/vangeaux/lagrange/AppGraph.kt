@@ -114,6 +114,7 @@ class AppGraph private constructor(
                 , providerSessionModuleResolver = ::resolveProviderSessionModule
                 , bookOrbitOidcModuleResolver = ::resolveProviderBookOrbitOidcModule
                 , uiContext = uiContext
+                , savedLoginCredentialsStore = SavedLoginCredentialsStore(context)
             ).also {
                 it.setSessionHistoryStore(sessionHistoryStore)
                 it.setEpubTtsPlaybackCloser {
