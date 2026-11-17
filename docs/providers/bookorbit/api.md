@@ -86,7 +86,7 @@ Unauthenticated behavior:
 Authenticated behavior:
 
 - Returns an array of library objects
-- The current client uses `id` and `name`
+- The client uses `id`, `name`, and `coverAspectRatio` (`1/1` for square, `2/3` for portrait; absent or unknown values default to portrait). Dashboard books inherit the setting from their `libraryId`.
 
 ### Query library books
 
@@ -165,6 +165,7 @@ Important notes:
 - A registered file or book may expose availability as `missing` through a boolean or one of the status/state/availability fields. The Android client treats that as server availability metadata, keeps the server-returned book visible, and does not treat it as a reading status.
 - Cover metadata may arrive as `hasCover`, `coverUrl`, `cover.path`, or `coverImage.path`; when a cover is indicated without a direct URL, the client falls back to `/api/v1/books/{id}/cover`.
 - Library responses may include `seriesCount` (or an equivalent `totalSeries`/`seriesTotal` field); the Android client uses it for the full Browse header while book pages are loaded incrementally.
+- Series catalog `coverBookIds` identifies representative book thumbnails. The client uses the representative book's library cover aspect where the book is available; for other series images it uses the aspect only when known matching books agree, otherwise retaining the portrait default.
 
 ### Book detail files
 
