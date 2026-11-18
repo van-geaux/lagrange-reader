@@ -182,6 +182,14 @@ Still reader-options-only (pre-existing divergence, tracked as a follow-up):
 The tap-zone tutorial toggle is a reader-session behavior rather than a stored profile field and
 remains specific to the reader surface.
 
+## v5 storage and migration
+
+Reader appearance profiles are now keyed by the stable server and account identity instead of the local server-profile UUID. The effective identity is the canonical server URL plus the authenticated account scope plus the library ID, with the provider ID carried in the encoded key for integrity. A v5 key is stored in `app_preferences.library_reader_preferences` inside the versioned JSON envelope, while the individual `LibraryReaderPreferences` payload remains unchanged. Keys are encoded with length-prefixed URL-safe fields, so IPv6 hosts, account scopes, and library IDs cannot introduce delimiter ambiguity.
+
+The active server profile, provider, display name, selected library, and authenticated account scope are still read from `server_profiles.xml` and `authenticated_account_scopes.xml`. `server_profiles.xml` remains the runtime source of the current server and profile identity; it is not replaced by the reader-preference key. Reader appearance resolution only needs an active profile and a non-blank account scope, and it falls back to the local reader owner when no server is configured.
+
+On upgrade, the v4 store is migrated only for profiles still present in `server_profiles.xml`. Existing profile-scoped keys are copied to their v5 owner keys, with the existing v5 value taking precedence. The raw v4 JSON is backed up before the v5 value is committed. Profiles that no longer exist are not migrated and their old keys remain read-only historical data; they are not deleted and cannot influence another server or account. If a profile has no authenticated account scope at migration time, its old settings are left untouched rather than assigned by guesswork, and a later read can migrate it after login. The runtime write path always writes v5 keys.
+
 ## Compatibility
 
 - Works on the app's minimum API 26+; custom colors are EPUB-only (PDF/comic readers are unchanged).

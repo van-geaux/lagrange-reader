@@ -755,4 +755,140 @@ class LibraryReaderPreferencesTest {
             )
         )
     }
+
+    @Test
+    fun `v5 key round trips owner and library without delimiter ambiguity`() {
+        val owner = ReaderPreferenceOwner(
+            providerId = "bookorbit",
+            serverUrl = "http://[::1]:2000",
+            accountScope = "account:with:colons"
+        )
+        val key = readerPreferencesStorageKey(owner, "6")
+
+        assertFalse(key.contains("::"))
+        val (decodedOwner, libraryId) = readerPreferenceKeyParts(key)!!
+        assertEquals(owner, decodedOwner)
+        assertEquals("6", libraryId)
+    }
+
+    @Test
+    fun `local owner uses an isolated v5 key`() {
+        val key = readerPreferencesStorageKey(LocalReaderPreferenceOwner, "local-library")
+        val (owner, libraryId) = readerPreferenceKeyParts(key)!!
+
+        assertEquals(LocalReaderPreferenceOwner, owner)
+        assertEquals("local-library", libraryId)
+    }
+
+    @Test
+    fun `v5 storage round trip preserves owner key`() {
+        val owner = ReaderPreferenceOwner("bookorbit", "http://server:2000", "account-a")
+        val settings = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val raw = libraryReaderPreferencesStorageValue(
+            mapOf(readerPreferencesStorageKey(owner, "6") to settings)
+        )
+
+        val storage = readerPreferencesStorageFromStorage(raw)
+
+        assertEquals(5, storage.version)
+        assertEquals(
+            settings.normalized(),
+            storage.preferences.getValue(readerPreferencesStorageKey(owner, "6"))
+        )
+    }
+
+    @Test
+    fun `configured profile migration maps v4 keys to v5 owner keys`() {
+        val profile = ServerProfile(
+            id = "profile-a",
+            serverUrl = "http://server:2000",
+            providerId = "bookorbit"
+        )
+        val owner = readerPreferenceOwner(profile, "account-a")!!
+        val settings = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val values = mapOf(
+            readerPreferencesStorageKey("profile-a", "6") to settings,
+            readerPreferencesStorageKey("profile-orphan", "9") to settings
+        )
+
+        val migrated = migrateConfiguredReaderPreferences(
+            values = values,
+            profiles = listOf(profile),
+            accountScopeOf = { id -> if (id == "profile-a") "account-a" else "account-a" }
+        )
+
+        assertEquals(
+            settings.normalized(),
+            migrated.getValue(readerPreferencesStorageKey(owner, "6"))
+        )
+        assertFalse(migrated.keys.any { it.contains("profile-orphan") })
+    }
+
+    @Test
+    fun `configured profile migration handles URL shaped profile ids`() {
+        val profileId = "http://[::1]:2000"
+        val profile = ServerProfile(id = profileId, serverUrl = profileId)
+        val owner = readerPreferenceOwner(profile, "account-a")!!
+        val settings = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val migrated = migrateConfiguredReaderPreferences(
+            values = mapOf(readerPreferencesStorageKey(profileId, "6") to settings),
+            profiles = listOf(profile),
+            accountScopeOf = { "account-a" }
+        )
+
+        assertEquals(settings.normalized(), migrated.getValue(readerPreferencesStorageKey(owner, "6")))
+    }
+
+    @Test
+    fun `configured profile migration skips profiles without account scope`() {
+        val profile = ServerProfile(id = "profile-a", serverUrl = "http://server:2000")
+        val values = mapOf(
+            readerPreferencesStorageKey("profile-a", "6") to LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        )
+
+        val migrated = migrateConfiguredReaderPreferences(
+            values = values,
+            profiles = listOf(profile),
+            accountScopeOf = { null }
+        )
+
+        assertTrue(migrated.isEmpty())
+    }
+
+    @Test
+    fun `existing v5 entry wins over v4 migration source`() {
+        val profile = ServerProfile(id = "profile-a", serverUrl = "http://server:2000")
+        val owner = readerPreferenceOwner(profile, "account-a")!!
+        val current = LibraryReaderPreferences(theme = EpubReaderTheme.Light)
+        val old = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val v5Key = readerPreferencesStorageKey(owner, "6")
+        val values = mapOf(
+            v5Key to current,
+            readerPreferencesStorageKey("profile-a", "6") to old
+        )
+
+        val migrated = migrateConfiguredReaderPreferences(
+            values = values,
+            profiles = listOf(profile),
+            accountScopeOf = { "account-a" }
+        )
+
+        assertEquals(current.normalized(), migrated.getValue(v5Key))
+    }
+
+    @Test
+    fun `apply all libraries only updates the matching v5 owner`() {
+        val owner = ReaderPreferenceOwner("bookorbit", "http://server:2000", "account-a")
+        val other = ReaderPreferenceOwner("komga", "http://other:25600", "account-b")
+        val settings = LibraryReaderPreferences(theme = EpubReaderTheme.Dark)
+        val updated = AppPreferences()
+            .withReaderPreferences(owner, "6", settings)
+            .withReaderPreferences(owner, "7", LibraryReaderPreferences(theme = EpubReaderTheme.Light))
+            .withReaderPreferences(other, "6", settings)
+            .withReaderPreferencesForAllLibraries(owner, "6", settings)
+
+        assertEquals(settings.normalized(), updated.readerPreferencesFor(owner, "7"))
+        assertEquals(settings.normalized(), updated.readerPreferencesFor(owner, "__default__"))
+        assertEquals(settings.normalized(), updated.readerPreferencesFor(other, "6"))
+    }
 }

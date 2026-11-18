@@ -57,6 +57,41 @@ internal fun resolveEpubReaderScope(context: Context, serverUrl: String? = null)
     )
 }
 
+/** Stable reader appearance owner for the active server/account, or the local owner. */
+internal fun resolveReaderPreferenceOwner(
+    context: Context,
+    serverUrl: String? = null
+): ReaderPreferenceOwner? {
+    val requestedServer = serverUrl?.takeIf(String::isNotBlank)
+    val active = ServerProfileStore(context.applicationContext).active()
+    if (active == null) {
+        return if (requestedServer == null) LocalReaderPreferenceOwner else null
+    }
+    if (requestedServer != null && !serverUrlsMatch(active.serverUrl, requestedServer)) {
+        return null
+    }
+    val accountScope = AuthenticatedAccountScopeStore(context.applicationContext)
+        .read(active.id)
+        ?.takeIf(String::isNotBlank)
+        ?: return null
+    return readerPreferenceOwner(active, accountScope)
+}
+
+/** Stable reader appearance owner for an explicit configured profile. */
+internal fun resolveReaderPreferenceOwnerForProfile(
+    context: Context,
+    profileId: String?
+): ReaderPreferenceOwner? {
+    val profileStore = ServerProfileStore(context.applicationContext)
+    val id = profileId?.takeIf(String::isNotBlank) ?: profileStore.activeId() ?: return null
+    val profile = profileStore.readAll().firstOrNull { it.id == id } ?: return null
+    val accountScope = AuthenticatedAccountScopeStore(context.applicationContext)
+        .read(profile.id)
+        ?.takeIf(String::isNotBlank)
+        ?: return null
+    return readerPreferenceOwner(profile, accountScope)
+}
+
 internal fun epubPublicationFingerprint(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
     file.inputStream().buffered().use { input ->
