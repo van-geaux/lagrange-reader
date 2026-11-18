@@ -75,7 +75,7 @@ This document contains current interaction contracts, design rules, and unresolv
 - Prefer reusable Compose components and theme tokens over screen-local spacing and styling.
 - Keep action rows stable at narrow widths; move optional actions into More rather than wrapping required actions.
 - Wrap reader-option choice groups onto additional rows when the available width is insufficient; do not require horizontal swiping to discover the complete set of choices.
-- Preserve current cover aspect ratios and bottom alignment for portrait and square covers.
+- Preserve per-library cover aspect ratios and bottom alignment for portrait and square covers in book and series shelves and grids. When a series cover's library cannot be determined unambiguously, retain its existing portrait default.
 - Keep reader controls, tutorial regions, orientation behavior, keep-awake behavior, and Preview isolation consistent across supported formats.
 - Treat unavailable media as an explicit state rather than a generic empty or local-download failure.
 

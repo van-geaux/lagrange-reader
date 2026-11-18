@@ -1444,7 +1444,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 downloads = downloads,
                 serverBase = serverUrl,
                 isLocalOnlyOverride = false
-            )
+            ).withCoverAspectRatios(libraryCoverAspectRatios)
         }.getOrDefault(emptyList())
         HomeShelfData(
             booksBySection = mapOf(HomeSection.ON_DECK to onDeck)
@@ -1741,6 +1741,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                     null
                 )
                 val parsed = BookOrbitPayloadParser.parseLibraryBooksPage("", payload, downloads, serverUrl)
+                    .withCoverAspectRatios(libraryCoverAspectRatios)
                 parsed.copy(
                     isComplete = parsed.total?.let {
                         (page + 1) * (parsed.size ?: parsed.items.size) >= it
@@ -1750,7 +1751,12 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 if (error is CancellationException || error is AuthenticationRequiredException) throw error
                 try {
                     browserSnapshotStore.readCollectionBooksPage(serverUrl, collectionId, page)
-                        ?.let { return@withContext it.copy(items = it.items.withCurrentDownloads(downloads)) }
+                        ?.let {
+                            return@withContext it.copy(
+                                items = it.items.withCoverAspectRatios(libraryCoverAspectRatios)
+                                    .withCurrentDownloads(downloads)
+                            )
+                        }
                 } catch (cacheError: Exception) {
                     if (cacheError is CancellationException) throw cacheError
                     error.addSuppressed(cacheError)
@@ -1782,7 +1788,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 val parsed = BookOrbitPayloadParser.parseSmartScopeBooksPage(scopeId, payload, downloads, serverBase)
                 catalogSnapshotStore.saveScopedBooks(serverUrl, scopeId, page, payload)
                 LibraryBooksPage(
-                    items = parsed.books,
+                    items = parsed.books.withCoverAspectRatios(libraryCoverAspectRatios),
                     total = parsed.total,
                     page = parsed.page ?: page,
                     size = parsed.size,
@@ -1794,7 +1800,7 @@ class BookOrbitRepository(private val context: Context) : BookOrbitDataSource, P
                 try {
                     val cached = catalogSnapshotStore.readScopedBookPages(serverUrl, scopeId)
                     cachedSmartScopeBooksPage(scopeId, page, cached, downloads, serverBase)
-                        ?.let { return@withContext it }
+                        ?.let { return@withContext it.withCoverAspectRatios(libraryCoverAspectRatios) }
                 } catch (cacheError: Exception) {
                     if (cacheError is CancellationException) throw cacheError
                     error.addSuppressed(cacheError)
@@ -5152,6 +5158,7 @@ internal object BookOrbitPayloadParser {
                             fallbackPath = representativeThumbnailPath,
                             keys = arrayOf("coverUrl", "cover", "coverImage")
                         ) ?: representativeThumbnailPath?.let { "$serverBase$it" },
+                        coverBookId = coverBookId,
                         lastAddedAtMillis = info.numberValue("lastAddedAtMillis", "lastAddedAt")?.toLong(),
                         availableFormats = normalizedAvailableFormats(
                             buildList {

@@ -266,6 +266,9 @@ internal fun aggregateBooksToSeriesCatalog(books: List<BookSummary>): SeriesCata
                 ),
                 genres = grouped.flatMap { it.genres }.distinct().sorted(),
                 coverUrl = grouped.firstNotNullOfOrNull { it.coverUrl },
+                coverBookId = grouped.firstOrNull { it.coverUrl != null }?.id,
+                coverAspectRatio = grouped.firstOrNull { it.coverUrl != null }?.coverAspectRatio
+                    ?: grouped.first().coverAspectRatio,
                 lastAddedAtMillis = grouped.mapNotNull { it.addedAtMillis }.maxOrNull()
             )
         }
@@ -295,6 +298,24 @@ internal fun enrichSeriesAvailableFormats(
                 matchingBooks.flatMap { book -> downloadedFormatLabels(book).map { it to MediaKind.UNKNOWN } }
         )
     )
+}
+
+internal fun enrichSeriesCoverAspects(
+    series: List<SeriesSummary>,
+    books: List<BookSummary>
+): List<SeriesSummary> {
+    val booksById = books.groupBy { it.id }
+    val booksBySeriesId = books.filter { !it.seriesId.isNullOrBlank() }.groupBy { it.seriesId }
+    val booksBySeriesName = books.filter { !it.seriesName.isNullOrBlank() }
+        .groupBy { it.seriesName!!.trim().lowercase() }
+    return series.map { item ->
+        val coverBooks = item.coverBookId?.let { booksById[it] }.orEmpty()
+        val matchingBooks = booksBySeriesId[item.id]
+            ?: booksBySeriesName[item.name.trim().lowercase()].orEmpty()
+        val candidates = coverBooks.ifEmpty { matchingBooks }
+        val ratio = candidates.map { it.coverAspectRatio }.distinct().singleOrNull()
+        if (ratio == null || ratio == item.coverAspectRatio) item else item.copy(coverAspectRatio = ratio)
+    }
 }
 
 internal fun filterAndSortSeriesCatalog(

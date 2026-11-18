@@ -738,6 +738,37 @@ class HomeShelfTest {
     }
 
     @Test
+    fun `series covers use the representative book library even in mixed library series`() {
+        val books = listOf(
+            BookSummary("epubs", "1", "f1", "One", seriesId = "s", seriesName = "Saga", addedAtMillis = 1L),
+            BookSummary("audio", "2", "f2", "Two", seriesId = "s", seriesName = "Saga", addedAtMillis = 2L,
+                coverAspectRatio = CoverAspectRatio.SQUARE),
+            BookSummary("audio", "3", "f3", "Three", seriesId = "other", seriesName = "Other", addedAtMillis = 3L,
+                coverAspectRatio = CoverAspectRatio.SQUARE)
+        )
+        val series = listOf(
+            SeriesSummary("s", "Saga", coverBookId = "2"),
+            SeriesSummary("other", "Other"),
+            SeriesSummary("s", "Saga"),
+            SeriesSummary("missing", "Missing")
+        )
+
+        assertEquals(
+            listOf(CoverAspectRatio.SQUARE, CoverAspectRatio.SQUARE, CoverAspectRatio.PORTRAIT, CoverAspectRatio.PORTRAIT),
+            enrichSeriesCoverAspects(series, books).map { it.coverAspectRatio }
+        )
+        assertEquals(
+            CoverAspectRatio.SQUARE,
+            homeSeriesShelfItems(series.take(1), books).single().second.coverAspectRatio
+        )
+        assertEquals(
+            CoverAspectRatio.SQUARE,
+            homeSeriesSummaries(books.filter { it.seriesId == "other" }, useUpdatedAt = false)
+                .single().coverAspectRatio
+        )
+    }
+
+    @Test
     fun `local format display keeps all formats and marks the downloaded format`() {
         val book = BookSummary(
             "lib", "book", "file", "Book",

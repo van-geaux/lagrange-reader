@@ -3089,7 +3089,9 @@ private fun SeriesCatalogScreen(
             if (reduceMotion) gridState.scrollToItem(index) else gridState.animateScrollToItem(index)
         }
     }
-    val displayItems = remember(items, books) { enrichSeriesAvailableFormats(items, books) }
+    val displayItems = remember(items, books) {
+        enrichSeriesCoverAspects(enrichSeriesAvailableFormats(items, books), books)
+    }
     val jumpTargets = remember(jumpIndexItems, filter.sort, filter.direction, isLoading) {
         if (!isLoading && filter.sort == SeriesSortOption.NAME) {
             buildSeriesJumpTargets(jumpIndexItems, filter.direction)
@@ -3180,11 +3182,11 @@ private fun SeriesCatalogScreen(
                     modifier = Modifier.padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CatalogImage(
+                    SeriesCatalogCover(
                         url = series.coverUrl,
                         label = stringResource(R.string.browse_cover_for, series.name),
                         loader = imageLoader,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                        aspectRatio = series.coverAspectRatio
                     )
                     AvailableFormatsLabel(
                         series.availableFormats,
@@ -7760,6 +7762,27 @@ private fun CatalogImage(
     }
 }
 
+@Composable
+internal fun SeriesCatalogCover(
+    url: String?,
+    label: String,
+    loader: suspend (String) -> ByteArray?,
+    aspectRatio: CoverAspectRatio
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth().aspectRatio(BOOK_CARD_COVER_SLOT_ASPECT_RATIO),
+        contentAlignment = BOOK_CARD_COVER_ALIGNMENT
+    ) {
+        CatalogImage(
+            url = url,
+            label = label,
+            loader = loader,
+            modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio.widthToHeight)
+                .testTag("series-cover-$label")
+        )
+    }
+}
+
 internal fun catalogImageCacheKey(url: String): String = url
 
 private suspend fun loadCatalogBitmap(
@@ -8352,7 +8375,7 @@ internal val BOOK_CARD_COVER_SLOT_ASPECT_RATIO = CoverAspectRatio.PORTRAIT.width
 internal val BOOK_CARD_COVER_ALIGNMENT: Alignment = Alignment.BottomCenter
 
 @Composable
-private fun BookCardCoverSlot(
+internal fun BookCardCoverSlot(
     book: BookSummary,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     overlay: @Composable BoxScope.() -> Unit = {}
@@ -8417,6 +8440,7 @@ private fun BookCover(book: BookSummary, coverLoader: suspend (BookSummary) -> B
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(book.coverAspectRatio.widthToHeight)
+            .testTag("book-cover-${book.id}")
             .clip(MaterialTheme.shapes.small)
             .background(Brush.linearGradient(colors))
             .semantics { contentDescription = coverDescription },
@@ -9323,7 +9347,9 @@ private fun HomeSeriesSectionScreen(
     } else {
         authoritativeSeries ?: fallbackSeries
     }
-    val displaySeries = remember(series, books) { enrichSeriesAvailableFormats(series, books) }
+    val displaySeries = remember(series, books) {
+        enrichSeriesCoverAspects(enrichSeriesAvailableFormats(series, books), books)
+    }
     val gridState = rememberLazyGridState()
     LazyVerticalGrid(
         state = gridState,
@@ -9354,11 +9380,11 @@ private fun HomeSeriesSectionScreen(
                     modifier = Modifier.padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CatalogImage(
+                    SeriesCatalogCover(
                         url = item.coverUrl,
                         label = stringResource(R.string.browse_cover_for, item.name),
                         loader = imageLoader,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.72f)
+                        aspectRatio = item.coverAspectRatio
                     )
                     AvailableFormatsLabel(
                         item.availableFormats,
@@ -14296,6 +14322,8 @@ internal fun homeSeriesSummaries(
             bookCount = members.size,
             readCount = members.count { it.isRead || it.readStatus in setOf(BookReadStatus.READ, BookReadStatus.SKIMMED) },
             coverUrl = representative.coverUrl,
+            coverBookId = representative.id,
+            coverAspectRatio = representative.coverAspectRatio,
             lastAddedAtMillis = timestamp,
             availableFormats = normalizedAvailableFormats(
                 members.flatMap { book ->
@@ -14354,7 +14382,7 @@ internal fun homeSeriesShelfItems(
     limit: Int = Int.MAX_VALUE,
     preferBookOrbitImportSequence: Boolean = false
 ): List<Pair<String, BookSummary>> = homeSeriesPreview(
-    enrichSeriesAvailableFormats(series, books),
+    enrichSeriesCoverAspects(enrichSeriesAvailableFormats(series, books), books),
     books = books,
     limit = limit,
     preferBookOrbitImportSequence = preferBookOrbitImportSequence
@@ -14419,7 +14447,8 @@ private fun SeriesSummary.asShelfBook(): BookSummary = BookSummary(
     seriesId = id,
     seriesName = name,
     author = authors.joinToString().takeIf { it.isNotBlank() },
-    availableFormats = availableFormats
+    availableFormats = availableFormats,
+    coverAspectRatio = coverAspectRatio
 )
 
 internal fun recentSeries(

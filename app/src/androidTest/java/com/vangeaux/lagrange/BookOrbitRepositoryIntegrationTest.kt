@@ -113,6 +113,37 @@ class BookOrbitRepositoryIntegrationTest {
     }
 
     @Test
+    fun onDeckShelfUsesEachBooksLibraryCoverAspect() = runBlocking {
+        server.enqueue(jsonResponse("""[{"id":"audio","name":"Audio","coverAspectRatio":"1/1"},{"id":"epubs","name":"Books","coverAspectRatio":"2/3"}]"""))
+        repository.loadLibraries()
+        server.enqueue(jsonResponse("""{"books":[{"id":"1","libraryId":"audio","title":"Audio"},{"id":"2","libraryId":"epubs","title":"Book"},{"id":"3","libraryId":"unknown","title":"Unknown"}]}"""))
+
+        val books = repository.loadHomeShelves().booksBySection.getValue(HomeSection.ON_DECK)
+
+        assertEquals(
+            listOf(CoverAspectRatio.SQUARE, CoverAspectRatio.PORTRAIT, CoverAspectRatio.PORTRAIT),
+            books.map { it.coverAspectRatio }
+        )
+    }
+
+    @Test
+    fun collectionAndSmartScopeBooksRetainLibraryCoverAspectOnlineAndCached() = runBlocking {
+        server.enqueue(jsonResponse("""[{"id":"audio","name":"Audio","coverAspectRatio":"1/1"}]"""))
+        repository.loadLibraries()
+        val payload = """{"items":[{"id":"1","libraryId":"audio","title":"Audio"}],"total":1,"page":0,"size":100}"""
+        server.enqueue(jsonResponse(payload))
+        server.enqueue(jsonResponse(payload))
+
+        assertEquals(CoverAspectRatio.SQUARE, repository.loadCollectionBooksPage("collection", 0).items.single().coverAspectRatio)
+        assertEquals(CoverAspectRatio.SQUARE, repository.loadSmartScopeBooksPage(42, 0).items.single().coverAspectRatio)
+
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(MockResponse().setResponseCode(503))
+        assertEquals(CoverAspectRatio.SQUARE, repository.loadCollectionBooksPage("collection", 0).items.single().coverAspectRatio)
+        assertEquals(CoverAspectRatio.SQUARE, repository.loadSmartScopeBooksPage(42, 0).items.single().coverAspectRatio)
+    }
+
+    @Test
     fun smartScopeBooksUsePaginatedQueryAndCacheEachPage() = runBlocking {
         server.enqueue(jsonResponse("""{"items":[{"id":"book-1","title":"One"}],"total":101,"page":0,"size":100}"""))
         server.enqueue(jsonResponse("""{"items":[{"id":"book-2","title":"Two"}],"total":101,"page":1,"size":100}"""))

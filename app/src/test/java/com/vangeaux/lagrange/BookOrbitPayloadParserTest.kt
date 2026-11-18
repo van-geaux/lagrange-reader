@@ -1618,6 +1618,7 @@ class BookOrbitPayloadParserTest {
             "https://example.test/api/v1/books/42/thumbnail",
             series.items.single().coverUrl
         )
+        assertEquals("42", series.items.single().coverBookId)
     }
 
     @Test

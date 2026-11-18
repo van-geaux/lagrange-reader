@@ -582,7 +582,9 @@ data class SeriesSummary(
     val lastAddedAtMillis: Long? = null,
     val availableFormats: List<String> = emptyList(),
     val downloadedFormats: List<String> = emptyList(),
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    val coverBookId: String? = null,
+    val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT
 )
 
 data class AuthorSummary(
