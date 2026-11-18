@@ -186,6 +186,14 @@ class AppPreferencesStoreTest {
     }
 
     @Test
+    fun vehicleSkipButtonsJumpChaptersDefaultsToDisabledAndRoundTrips() {
+        assertEquals(false, AppPreferences().vehicleSkipButtonsJumpChapters)
+        assertEquals(false, vehicleSkipButtonsJumpChaptersFromStorage(false))
+        assertEquals(true, vehicleSkipButtonsJumpChaptersFromStorage(true))
+        assertEquals(false, vehicleSkipButtonsJumpChaptersFromStorage(null))
+    }
+
+    @Test
     fun `stored app theme values round trip and invalid values follow system`() {
         AppThemeMode.values().forEach { value ->
             assertEquals(value, appThemeModeFromStorage(appThemeModeStorageValue(value)))

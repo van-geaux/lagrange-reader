@@ -88,7 +88,8 @@ data class AppPreferences(
     val confirmDeleteLocalCopy: Boolean = true,
     val confirmAudiobookSeek: Boolean = true,
     val pauseAudiobookForAudioInterruptions: Boolean = true,
-    val scaleProgressByPlaybackSpeed: Boolean = false, // Added preference field
+    val scaleProgressByPlaybackSpeed: Boolean = false,
+    val vehicleSkipButtonsJumpChapters: Boolean = false, // Added preference field
     val epubImageMinimumDimensionPx: Int = DEFAULT_EPUB_IMAGE_MINIMUM_DIMENSION_PX,
     val seriesGroupingMode: SeriesGroupingMode = SeriesGroupingMode.LIBRARY,
     val libraryCardSize: LibraryCardSize = LibraryCardSize.SMALL,
@@ -150,7 +151,10 @@ internal class AppPreferencesStore(context: Context) {
         pauseAudiobookForAudioInterruptions = audiobookAudioInterruptionPauseFromStorage(
             preferences.getBoolean(PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY, true)
         ),
-        scaleProgressByPlaybackSpeed = preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, false), // Read preference
+        scaleProgressByPlaybackSpeed = preferences.getBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, false),
+        vehicleSkipButtonsJumpChapters = vehicleSkipButtonsJumpChaptersFromStorage(
+            preferences.getBoolean(VEHICLE_SKIP_BUTTONS_JUMP_CHAPTERS_KEY, false)
+        ), // Read preference
         epubImageMinimumDimensionPx = normalizeEpubImageMinimumDimensionPx(
             preferences.getInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
@@ -259,7 +263,11 @@ internal class AppPreferencesStore(context: Context) {
                 PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY,
                 value.pauseAudiobookForAudioInterruptions
             )
-            .putBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, value.scaleProgressByPlaybackSpeed) // Save preference
+            .putBoolean(SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY, value.scaleProgressByPlaybackSpeed)
+            .putBoolean(
+                VEHICLE_SKIP_BUTTONS_JUMP_CHAPTERS_KEY,
+                value.vehicleSkipButtonsJumpChapters
+            ) // Save preference
             .putInt(
                 EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY,
                 normalizeEpubImageMinimumDimensionPx(value.epubImageMinimumDimensionPx)
@@ -452,7 +460,8 @@ internal class AppPreferencesStore(context: Context) {
         const val CONFIRM_AUDIOBOOK_SEEK_KEY = "confirm_audiobook_seek"
         const val PAUSE_AUDIOBOOK_FOR_AUDIO_INTERRUPTION_KEY =
             "pause_audiobook_for_audio_interruptions"
-        const val SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY = "scale_progress_by_playback_speed" // Added key constant
+        const val SCALE_PROGRESS_BY_PLAYBACK_SPEED_KEY = "scale_progress_by_playback_speed"
+        const val VEHICLE_SKIP_BUTTONS_JUMP_CHAPTERS_KEY = "vehicle_skip_buttons_jump_chapters" // Added key constant
         const val EPUB_IMAGE_MINIMUM_DIMENSION_PX_KEY = "epub_image_minimum_dimension_px"
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
@@ -485,6 +494,8 @@ internal class AppPreferencesStore(context: Context) {
         const val IGNORED_RELEASE_TAG_KEY = "ignored_release_tag"
     }
 }
+
+internal fun vehicleSkipButtonsJumpChaptersFromStorage(value: Boolean?): Boolean = value ?: false
 
 internal fun offlineCacheLibraryIdsStorageValue(values: Set<String>): String = values
     .map(String::trim)

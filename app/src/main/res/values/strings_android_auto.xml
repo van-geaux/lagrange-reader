@@ -44,5 +44,5 @@
     <string name="auto_settings_steering_title">Steering wheel &amp; skip behavior</string>
     <string name="auto_settings_steering_summary">Define whether vehicle skip buttons jump chapters or perform timed skips.</string>
     <string name="auto_settings_vehicle_skip_title">Vehicle Skip Buttons Jump Chapters</string>
-    <string name="auto_settings_vehicle_skip_summary">When enabled, steering wheel next/previous skip chapters instead of jumping 10s/30s.</string>
+    <string name="auto_settings_vehicle_skip_summary">When enabled, steering wheel next/previous skip chapters instead of jumping -30s/+30s.</string>
 </resources>
