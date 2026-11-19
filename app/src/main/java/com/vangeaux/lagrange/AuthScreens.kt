@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +46,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -303,15 +305,26 @@ internal fun LoginScreen(
     configuredServerProfiles: List<ServerProfile>,
     message: String?,
     isSubmitting: Boolean,
+    savedUsername: String? = null,
+    savedPassword: String? = null,
+    rememberCredentials: Boolean = false,
+    onRememberCredentialsChange: (Boolean) -> Unit = {},
     onSwitchServer: (String) -> Unit,
     onNewServer: () -> Unit,
-    onSubmit: (String, String) -> Unit,
+    onSubmit: (String, String, Boolean) -> Unit,
     onOpenOidcSignIn: () -> Unit,
     onOpenServerSignIn: () -> Unit
 ) {
-    var username by remember(serverUrl) { mutableStateOf("") }
-    var password by remember(serverUrl) { mutableStateOf("") }
+    var username by remember(serverUrl, savedUsername) {
+        mutableStateOf(savedUsername.orEmpty())
+    }
+    var password by remember(serverUrl, savedPassword) {
+        mutableStateOf(savedPassword.orEmpty())
+    }
     var passwordVisible by remember(serverUrl, providerId) { mutableStateOf(false) }
+    var rememberPassword by remember(serverUrl, savedUsername, rememberCredentials) {
+        mutableStateOf(rememberCredentials)
+    }
     var validationMessageRes by remember(serverUrl) { mutableStateOf<Int?>(null) }
     var showServerPicker by rememberSaveable(serverUrl) { mutableStateOf(false) }
     val submit = {
@@ -320,7 +333,7 @@ internal fun LoginScreen(
             password.isBlank() -> validationMessageRes = R.string.login_enter_password
             else -> {
                 validationMessageRes = null
-                onSubmit(username.trim(), password)
+                onSubmit(username.trim(), password, rememberPassword)
             }
         }
     }
@@ -481,6 +494,36 @@ internal fun LoginScreen(
                         ),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = rememberPassword,
+                            onCheckedChange = {
+                                rememberPassword = it
+                                validationMessageRes = null
+                                onRememberCredentialsChange(it)
+                            },
+                            enabled = !isSubmitting,
+                            modifier = Modifier.testTag("login-remember-password")
+                        )
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 4.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.login_remember_credentials),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = stringResource(R.string.login_remember_credentials_summary),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     validationMessageRes?.let { res ->
                         OrbitMessage(stringResource(res), tone = OrbitMessageTone.ERROR)
                     }
@@ -490,6 +533,7 @@ internal fun LoginScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 52.dp)
+                            .testTag("login-submit")
                     ) {
                         if (isSubmitting) {
                             CircularProgressIndicator(
