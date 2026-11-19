@@ -13,12 +13,19 @@ internal enum class ReadiumPublicationRoute {
 }
 
 internal fun readiumPublicationRoute(format: String?, title: String?): ReadiumPublicationRoute {
-    val token = listOfNotNull(format, title).joinToString(" ").lowercase(Locale.US)
+    val formatRoute = format?.let { routeForToken(it) } ?: ReadiumPublicationRoute.UNSUPPORTED
+    if (formatRoute != ReadiumPublicationRoute.UNSUPPORTED) return formatRoute
+    val extension = title?.substringAfterLast('/')?.substringAfterLast('.', "")
+    return extension?.takeIf { it.isNotEmpty() }?.let { routeForToken(it) } ?: ReadiumPublicationRoute.UNSUPPORTED
+}
+
+private fun routeForToken(value: String): ReadiumPublicationRoute {
+    val token = value.lowercase(Locale.US)
     val parts = token.split(Regex("[^a-z0-9]+"))
     return when {
         parts.any { it in setOf("mobi", "azw", "azw3", "fb2") } ->
             ReadiumPublicationRoute.UNSUPPORTED_EBOOK
-        parts.any { it == "cbr" || it == "cb7" } || token.contains("rar") || token.contains("7z") ->
+        parts.any { it in setOf("cbr", "cb7", "rar", "7z") } ->
             ReadiumPublicationRoute.NORMALIZE_COMIC_TO_CBZ
         token.contains("epub") || parts.any { it == "kepub" } -> ReadiumPublicationRoute.EPUB
         parts.any { it == "cbz" } || token.contains("comic") || token.contains("zip") ->
