@@ -183,7 +183,7 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
 
     private lateinit var readerKey: String
     private lateinit var libraryId: String
-    private val readerProfileId by lazy { activeReaderProfileId(this) }
+    private val readerPreferenceOwner by lazy { resolveReaderPreferenceOwner(this) }
     private lateinit var displayTitle: String
     private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
@@ -260,7 +260,9 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         val appPreferences = AppPreferencesStore(this).read()
         showTapZoneTutorialAfterChanges = appPreferences.showPdfTapZoneTutorialAfterChanges
         appThemeMode = appPreferences.themeMode
-        readerPreferences = appPreferences.readerPreferencesFor(readerProfileId, libraryId)
+        readerPreferences = readerPreferenceOwner?.let { owner ->
+            appPreferences.readerPreferencesFor(owner, libraryId)
+        } ?: LibraryReaderPreferences()
         readingDirection = readerPreferences.readingDirection
         isPreview = intent.getBooleanExtra(EXTRA_IS_PREVIEW, false)
         readingSessionReporter = ViewModelProvider(this)[ReadingSessionReporterViewModel::class.java].reporter(
@@ -759,16 +761,20 @@ class ReadiumPdfReaderActivity : FragmentActivity() {
         navigator?.submitPreferences(pdfiumPreferencesFor(normalized))
         applyPdfColorInversion()
         val store = AppPreferencesStore(this)
-        store.save(store.read().withReaderPreferences(readerProfileId, libraryId, normalized))
+        readerPreferenceOwner?.let { owner ->
+            store.save(store.read().withReaderPreferences(owner, libraryId, normalized))
+        }
         configureSystemBars()
         if (tapZoneChanged && showTapZoneTutorialAfterChanges) showTapZoneTutorial()
     }
 
     private fun applyCurrentPreferencesToAllLibraries() {
         val store = AppPreferencesStore(this)
-        store.save(
-            store.read().withReaderPreferencesForAllLibraries(readerProfileId, libraryId, readerPreferences)
-        )
+        readerPreferenceOwner?.let { owner ->
+            store.save(
+                store.read().withReaderPreferencesForAllLibraries(owner, libraryId, readerPreferences)
+            )
+        }
         Toast.makeText(
             this,
             R.string.sheet_apply_to_all_libraries_applied,

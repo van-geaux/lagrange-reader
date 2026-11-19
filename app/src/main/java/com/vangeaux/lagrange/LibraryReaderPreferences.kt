@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import androidx.annotation.StringRes
 import android.content.Context
 import org.json.JSONObject
+import java.util.Base64
 
 enum class LibraryReadingDirection(
     val displayName: String,
@@ -95,7 +96,7 @@ internal const val MAX_EPUB_WORD_SPACING = 1f
 internal const val DEFAULT_EPUB_PARAGRAPH_SPACING = 0f
 internal const val MAX_EPUB_PARAGRAPH_SPACING = 2f
 
-private const val READER_PREFERENCES_STORAGE_VERSION = 4
+private const val READER_PREFERENCES_STORAGE_VERSION = 5
 private const val READER_PREFERENCES_PROFILES_KEY = "profiles"
 
 /** Fallback profile used for libraries that have no explicit profile yet (and for local books). */
@@ -236,6 +237,156 @@ internal fun readerHeaderReservedTopSpace(
 )
 
 private const val READER_PREFERENCES_SCOPE_SEPARATOR = "::"
+
+private const val READER_PREFERENCES_V5_PREFIX = "v5|"
+
+/** Stable owner of reader appearance settings, independent of a local server profile UUID. */
+internal data class ReaderPreferenceOwner(
+    val providerId: String,
+    val serverUrl: String,
+    val accountScope: String
+)
+
+internal val LocalReaderPreferenceOwner = ReaderPreferenceOwner(
+    providerId = "local",
+    serverUrl = "",
+    accountScope = ""
+)
+
+internal fun readerPreferenceOwner(
+    profile: ServerProfile,
+    accountScope: String
+): ReaderPreferenceOwner? {
+    val serverUrl = normalizeServerUrl(profile.serverUrl) ?: return null
+    if (accountScope.isBlank()) return null
+    return ReaderPreferenceOwner(
+        providerId = profile.providerId.ifBlank { PROVIDER_BOOKORBIT },
+        serverUrl = serverUrl,
+        accountScope = accountScope
+    )
+}
+
+private fun readerPreferenceKeyPart(value: String): String = Base64.getUrlEncoder()
+    .withoutPadding()
+    .encodeToString(value.toByteArray(Charsets.UTF_8))
+
+private fun decodeReaderPreferenceKeyPart(value: String): String? = runCatching {
+    String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
+}.getOrNull()
+
+internal fun readerPreferencesStorageKey(
+    owner: ReaderPreferenceOwner,
+    libraryId: String
+): String = buildString {
+    append(READER_PREFERENCES_V5_PREFIX)
+    append(readerPreferenceKeyPart(owner.providerId))
+    append('|')
+    append(readerPreferenceKeyPart(owner.serverUrl))
+    append('|')
+    append(readerPreferenceKeyPart(owner.accountScope))
+    append('|')
+    append(readerPreferenceKeyPart(libraryId))
+}
+
+internal fun defaultReaderPreferencesStorageKey(owner: ReaderPreferenceOwner): String =
+    readerPreferencesStorageKey(owner, DEFAULT_READER_PROFILE_KEY)
+
+internal fun readerPreferenceKeyParts(key: String): Pair<ReaderPreferenceOwner, String>? {
+    if (!key.startsWith(READER_PREFERENCES_V5_PREFIX)) return null
+    val parts = key.removePrefix(READER_PREFERENCES_V5_PREFIX).split('|')
+    if (parts.size != 4) return null
+    val provider = decodeReaderPreferenceKeyPart(parts[0]) ?: return null
+    val serverUrl = decodeReaderPreferenceKeyPart(parts[1]) ?: return null
+    val accountScope = decodeReaderPreferenceKeyPart(parts[2]) ?: return null
+    val libraryId = decodeReaderPreferenceKeyPart(parts[3]) ?: return null
+    if (provider.isBlank() || libraryId.isBlank()) return null
+    return ReaderPreferenceOwner(provider, serverUrl, accountScope) to libraryId
+}
+
+internal fun AppPreferences.hasReaderPreferences(
+    owner: ReaderPreferenceOwner,
+    libraryId: String
+): Boolean = libraryReaderPreferences.containsKey(readerPreferencesStorageKey(owner, libraryId)) ||
+    libraryReaderPreferences.containsKey(defaultReaderPreferencesStorageKey(owner))
+
+internal fun AppPreferences.readerPreferencesFor(
+    owner: ReaderPreferenceOwner,
+    libraryId: String
+): LibraryReaderPreferences = (
+    libraryReaderPreferences[readerPreferencesStorageKey(owner, libraryId)]
+        ?: libraryReaderPreferences[defaultReaderPreferencesStorageKey(owner)]
+    )?.normalized() ?: LibraryReaderPreferences()
+
+internal fun AppPreferences.withReaderPreferences(
+    owner: ReaderPreferenceOwner,
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences {
+    if (libraryId.isBlank()) return this
+    val key = readerPreferencesStorageKey(owner, libraryId)
+    return copy(libraryReaderPreferences = libraryReaderPreferences + (key to value.normalized()))
+}
+
+internal fun AppPreferences.withReaderPreferencesForAllLibraries(
+    owner: ReaderPreferenceOwner,
+    libraryId: String,
+    value: LibraryReaderPreferences
+): AppPreferences {
+    val normalized = value.normalized()
+    val targetKeys = buildSet {
+        libraryReaderPreferences.keys.mapNotNullTo(this) { key ->
+            readerPreferenceKeyParts(key)?.takeIf { it.first == owner }?.let { key }
+        }
+        add(readerPreferencesStorageKey(owner, libraryId))
+        add(defaultReaderPreferencesStorageKey(owner))
+    }
+    return copy(
+        libraryReaderPreferences = libraryReaderPreferences + targetKeys.associateWith { normalized }
+    )
+}
+
+/** Migrates v4 keys for profiles that still exist, based on the current server and account. */
+internal fun migrateConfiguredReaderPreferences(
+    values: Map<String, LibraryReaderPreferences>,
+    profiles: List<ServerProfile>,
+    accountScopeOf: (String) -> String?
+): Map<String, LibraryReaderPreferences> {
+    val migrated = values.filterKeys { it.startsWith(READER_PREFERENCES_V5_PREFIX) }.toMutableMap()
+    profiles.forEach { profile ->
+        val owner = accountScopeOf(profile.id)?.let { scope -> readerPreferenceOwner(profile, scope) }
+            ?: return@forEach
+        val prefix = "${profile.id}::"
+        values.forEach { (key, value) ->
+            if (!key.startsWith(prefix)) return@forEach
+            val libraryId = key.removePrefix(prefix)
+            if (libraryId.isBlank()) return@forEach
+            migrated.putIfAbsent(
+                readerPreferencesStorageKey(owner, libraryId),
+                value.normalized()
+            )
+        }
+    }
+    if (profiles.size == 1) {
+        val profile = profiles.single()
+        val owner = accountScopeOf(profile.id)?.let { scope -> readerPreferenceOwner(profile, scope) }
+        if (owner != null) {
+            values.forEach { (key, value) ->
+                if (key.contains("::") || key.startsWith(READER_PREFERENCES_V5_PREFIX)) return@forEach
+                if (key.isBlank()) return@forEach
+                migrated.putIfAbsent(
+                    readerPreferencesStorageKey(owner, key),
+                    value.normalized()
+                )
+            }
+        }
+    }
+    return migrated
+}
+
+internal data class ReaderPreferencesStorage(
+    val version: Int,
+    val preferences: Map<String, LibraryReaderPreferences>
+)
 
 /** Profile-aware key for a library reader profile. */
 internal fun readerPreferencesStorageKey(profileId: String, libraryId: String): String =
@@ -468,12 +619,16 @@ private fun libraryReaderPreferenceStorageValue(value: LibraryReaderPreferences)
         }
     }
 
-internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, LibraryReaderPreferences> {
-    if (value.isNullOrBlank()) return emptyMap()
+internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, LibraryReaderPreferences> =
+    readerPreferencesStorageFromStorage(value).preferences
+
+internal fun readerPreferencesStorageFromStorage(value: String?): ReaderPreferencesStorage {
+    if (value.isNullOrBlank()) return ReaderPreferencesStorage(version = 1, preferences = emptyMap())
     return runCatching {
         val root = JSONObject(value)
+        val version = root.optInt("version", 1)
         val profiles = root.optJSONObject(READER_PREFERENCES_PROFILES_KEY) ?: root
-        buildMap {
+        val preferences = buildMap {
             profiles.keys().forEach { libraryId ->
                 if (libraryId.isBlank()) return@forEach
                 val item = profiles.optJSONObject(libraryId) ?: return@forEach
@@ -569,7 +724,8 @@ internal fun libraryReaderPreferencesFromStorage(value: String?): Map<String, Li
                 }.getOrNull()?.let { decoded -> put(libraryId, decoded) }
             }
         }
-    }.getOrDefault(emptyMap())
+        ReaderPreferencesStorage(version = version, preferences = preferences)
+    }.getOrDefault(ReaderPreferencesStorage(version = 1, preferences = emptyMap()))
 }
 
 internal fun EpubPaddingPercentages.normalizedReaderPadding(): EpubPaddingPercentages = copy(
