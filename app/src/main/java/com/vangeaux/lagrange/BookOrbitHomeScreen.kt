@@ -4399,9 +4399,11 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             AppPreferenceSwitchRow(
                 title = stringResource(R.string.auto_settings_vehicle_skip_title),
                 summary = stringResource(R.string.auto_settings_vehicle_skip_summary),
-                checked = false, // Map to your app preference key when ready
+                checked = preferences.vehicleSkipButtonsJumpChapters,
                 testTag = "options-aa-vehicle-skip-chapters",
-                onCheckedChange = { /* Save preference */ }
+                onCheckedChange = {
+                    onPreferencesChange(preferences.copy(vehicleSkipButtonsJumpChapters = it))
+                }
             )
         }
         if (selectedCategory == OptionsCategory.LIBRARY) item(key = "library-card-size") {
