@@ -253,7 +253,8 @@ data class ReleaseDownloadState(
     val downloading: Boolean = false,
     val progressPercent: Int? = null,
     val errorMessage: String? = null,
-    val signerStatus: ReleaseSignerStatus? = null
+    val signerStatus: ReleaseSignerStatus? = null,
+    val apkVerificationFailed: Boolean = false
 )
 
 @Composable
@@ -286,6 +287,12 @@ internal fun ReleaseUpdateDialog(
                     )
                     else -> Unit
                 }
+                if (downloadState.apkVerificationFailed) {
+                    Text(
+                        stringResource(R.string.release_download_apk_verification_failed),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 if (update.notes.isNotBlank()) {
                     Markdown(update.notes)
                 }
@@ -315,15 +322,20 @@ internal fun ReleaseUpdateDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (downloadState.signerStatus == null) onDownload() else onOpenReleasePage()
+                    if (downloadState.signerStatus != null || downloadState.apkVerificationFailed) {
+                        onOpenReleasePage()
+                    } else {
+                        onDownload()
+                    }
                 },
                 enabled = !downloadState.downloading &&
-                    (update.apkDownloadUrl != null || downloadState.signerStatus != null),
+                    (update.apkDownloadUrl != null || downloadState.signerStatus != null ||
+                        downloadState.apkVerificationFailed),
                 modifier = Modifier.testTag("release-update-download")
             ) {
                 Text(
                     when {
-                        downloadState.signerStatus != null ->
+                        downloadState.signerStatus != null || downloadState.apkVerificationFailed ->
                             stringResource(R.string.release_download_open_release)
                         downloadState.downloading ->
                             stringResource(R.string.release_download_in_progress)

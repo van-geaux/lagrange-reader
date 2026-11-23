@@ -11,6 +11,7 @@
     <string name="release_download_failed">无法下载更新。</string>
     <string name="release_download_signer_mismatch">Lagrange 已阻止应用内更新，因为此版本的签名与固定的正式版签名不匹配。如需切换，请先备份重要数据，从官方发布页面下载 APK，然后卸载此版本并安装该 APK。卸载会删除 Lagrange 的本地数据。</string>
     <string name="release_download_signer_unknown">无法验证此版本的签名密钥，因此已阻止应用内更新。请先备份重要数据，再打开官方发布页面。如果 Android 拒绝安装，手动切换可能需要卸载此版本，这会删除本地数据。</string>
+    <string name="release_download_apk_verification_failed">Lagrange 已丢弃下载的 APK，因为其包标识、发行版本或签名证书与预期发行版不匹配。该 APK 未发送给 Android 安装。请打开官方发布页面查看可用文件。</string>
     <string name="release_download_open_release">打开官方发布页面</string>
     <string name="release_download_browser_unavailable">没有可用的浏览器来打开 GitHub 发布页面。</string>
     <string name="shell_update_ignore">忽略</string>

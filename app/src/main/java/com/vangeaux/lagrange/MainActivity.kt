@@ -20,6 +20,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal fun requestedOrientationForLock(
@@ -53,6 +55,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
     private val releaseDownloadState = mutableStateOf(ReleaseDownloadState())
+    private var releaseDownloadJob: Job? = null
+    private var releaseDownloadGeneration = 0L
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
@@ -81,33 +85,62 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun downloadReleaseApkAfterSignerCheck(update: ReleaseUpdate) {
+        if (releaseDownloadState.value.downloading) return
+        val generation = ++releaseDownloadGeneration
         releaseDownloadState.value = ReleaseDownloadState(downloading = true)
-        lifecycleScope.launch {
+        releaseDownloadJob = lifecycleScope.launch {
             try {
                 ReleaseApkInstaller(this@MainActivity).downloadAndInstall(
                     update = update,
                     onProgress = { progress ->
                         runOnUiThread {
-                            releaseDownloadState.value = releaseDownloadState.value.copy(
-                                progressPercent = progress
-                            )
+                            if (generation == releaseDownloadGeneration &&
+                                releaseDownloadState.value.downloading
+                            ) {
+                                releaseDownloadState.value = releaseDownloadState.value.copy(
+                                    progressPercent = progress
+                                )
+                            }
                         }
                     },
                     onInstallPermissionRequired = {
-                        releaseDownloadState.value = ReleaseDownloadState(
-                            errorMessage = getString(R.string.release_download_permission_required)
-                        )
+                        if (generation == releaseDownloadGeneration) {
+                            releaseDownloadState.value = ReleaseDownloadState(
+                                errorMessage = getString(R.string.release_download_permission_required)
+                            )
+                        }
                     }
                 )
-                if (releaseDownloadState.value.errorMessage == null) {
+                if (generation == releaseDownloadGeneration &&
+                    releaseDownloadState.value.errorMessage == null
+                ) {
                     releaseDownloadState.value = ReleaseDownloadState()
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: ReleaseApkVerificationException) {
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadState.value = ReleaseDownloadState(apkVerificationFailed = true)
+                }
             } catch (error: Exception) {
-                releaseDownloadState.value = ReleaseDownloadState(
-                    errorMessage = error.localizedMessage ?: getString(R.string.release_download_failed)
-                )
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadState.value = ReleaseDownloadState(
+                        errorMessage = error.localizedMessage ?: getString(R.string.release_download_failed)
+                    )
+                }
+            } finally {
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadJob = null
+                }
             }
         }
+    }
+
+    private fun cancelReleaseDownload() {
+        releaseDownloadGeneration += 1
+        releaseDownloadJob?.cancel()
+        releaseDownloadJob = null
+        releaseDownloadState.value = ReleaseDownloadState()
     }
 
     private fun openGitHubReleasePage(update: ReleaseUpdate) {
@@ -215,9 +248,7 @@ class MainActivity : ComponentActivity() {
                         releaseDownloadState = releaseDownloadState.value,
                         onDownloadReleaseUpdate = ::downloadReleaseApk,
                         onOpenReleasePage = ::openGitHubReleasePage,
-                        onClearReleaseDownloadState = {
-                            releaseDownloadState.value = ReleaseDownloadState()
-                        }
+                        onClearReleaseDownloadState = ::cancelReleaseDownload
                     )
                 }
             }

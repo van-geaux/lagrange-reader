@@ -28,19 +28,21 @@ internal object ReleaseSignerCompatibility {
     }
 
     fun currentInstalledStatus(context: Context): ReleaseSignerStatus {
-        val expectedFingerprint = try {
-            context.assets.open(RELEASE_SIGNER_FINGERPRINT_ASSET).bufferedReader().use {
-                it.readText().trim()
-            }
-        } catch (_: Exception) {
-            null
-        }
+        val expectedFingerprint = expectedReleaseFingerprint(context)
         val installedFingerprint = try {
             installedSignerFingerprint(context.packageManager, context.packageName)
         } catch (_: Exception) {
             null
         }
         return evaluate(installedFingerprint, expectedFingerprint)
+    }
+
+    fun expectedReleaseFingerprint(context: Context): String? = try {
+        context.assets.open(RELEASE_SIGNER_FINGERPRINT_ASSET).bufferedReader().use {
+            it.readText().trim()
+        }
+    } catch (_: Exception) {
+        null
     }
 
     fun routeUpdateAction(
