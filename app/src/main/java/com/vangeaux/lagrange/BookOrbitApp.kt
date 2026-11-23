@@ -275,6 +275,17 @@ internal fun ReleaseUpdateDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(stringResource(R.string.shell_update_ready, update.versionName))
+                when (downloadState.signerStatus) {
+                    ReleaseSignerStatus.MISMATCH -> Text(
+                        stringResource(R.string.release_download_signer_mismatch),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    ReleaseSignerStatus.UNKNOWN -> Text(
+                        stringResource(R.string.release_download_signer_unknown),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    else -> Unit
+                }
                 if (update.notes.isNotBlank()) {
                     Markdown(update.notes)
                 }
@@ -292,17 +303,6 @@ internal fun ReleaseUpdateDialog(
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
-                }
-                when (downloadState.signerStatus) {
-                    ReleaseSignerStatus.MISMATCH -> Text(
-                        stringResource(R.string.release_download_signer_mismatch),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    ReleaseSignerStatus.UNKNOWN -> Text(
-                        stringResource(R.string.release_download_signer_unknown),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    else -> Unit
                 }
                 downloadState.errorMessage?.let { error ->
                     Text(error, color = MaterialTheme.colorScheme.error)

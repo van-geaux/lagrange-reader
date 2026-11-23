@@ -78,7 +78,10 @@ class ReleaseUpdateDialogInstrumentedTest {
         versionName = "2.1.4",
         tagName = "v2.1.4",
         title = "Lagrange 2.1.4",
-        notes = "",
+        notes = (1..18).joinToString("\n\n") { section ->
+            "Release note section $section: " +
+                "This update improves library discovery, reader controls, provider integrations, and background download reliability. ".repeat(3)
+        },
         htmlUrl = "https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.4",
         apkDownloadUrl = "https://github.com/van-geaux/lagrange-reader/releases/download/v2.1.4/Lagrange-2.1.4.apk",
         apkFileName = "Lagrange-2.1.4.apk"
