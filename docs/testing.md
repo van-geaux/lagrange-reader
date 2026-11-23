@@ -28,6 +28,16 @@ These tests verify the client-side endpoint and projection contract; they do not
 
 For issue #411's audiobook notification regression, run the focused connected test `AudiobookMediaNotificationInstrumentedTest#notificationPublisherRequestsManagerUpdate`. It verifies that the notification publisher forwards the notification unchanged with `DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID`; it covers the dispatch seam, not WhatsApp/call/audio-focus lifecycle simulation.
 
+For the in-app release updater, with a test build older than a published release:
+
+1. Trigger the update prompt or use About -> `Check for updates`.
+2. Tap `Download APK`; verify download progress appears in the prompt without opening a browser or GitHub page.
+3. Verify successful download opens Android's package installer and offers the APK update. Complete or cancel the system installer explicitly.
+4. On a fresh install where Lagrange is not allowed to install unknown apps, verify Android opens the per-app permission screen. Enable the permission, return to Lagrange, tap `Download APK` again, and verify Android's package installer opens.
+5. Verify network/download failures show an actionable retry state, releases without the combined APK do not offer a broken download, and `Ignore` still suppresses the release.
+
+This requires a real older signed build and a device/emulator; parser tests and debug APK assembly do not validate package installation or signing-key compatibility.
+
 For release work, also verify the approved release assembly/workflow and the release asset naming policy. For PDFium packaging, verify the built APK is `arm64-v8a`-only, run `zipalign -P 16 -c`, and inspect packaged native libraries for `p_align=0x4000`. These checks do not replace connected UI tests.
 
 ## Issue #411 manual regression procedure

@@ -79,6 +79,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -170,6 +171,7 @@ fun BookOrbitApp(
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
+    releaseDownloadState: ReleaseDownloadState = ReleaseDownloadState(),
     onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
@@ -233,19 +235,24 @@ fun BookOrbitApp(
         releaseUpdate?.let { update ->
             ReleaseUpdateDialog(
                 update = update,
-                onDownload = {
-                    coordinator.dismissReleaseUpdate()
-                    onDownloadReleaseUpdate(update)
-                },
+                downloadState = releaseDownloadState,
+                onDownload = { onDownloadReleaseUpdate(update) },
                 onIgnore = coordinator::ignoreReleaseUpdate
             )
         }
     }
 }
 
+data class ReleaseDownloadState(
+    val downloading: Boolean = false,
+    val progressPercent: Int? = null,
+    val errorMessage: String? = null
+)
+
 @Composable
 private fun ReleaseUpdateDialog(
     update: ReleaseUpdate,
+    downloadState: ReleaseDownloadState,
     onDownload: () -> Unit,
     onIgnore: () -> Unit
 ) {
@@ -263,14 +270,42 @@ private fun ReleaseUpdateDialog(
                 if (update.notes.isNotBlank()) {
                     Markdown(update.notes)
                 }
+                if (downloadState.downloading) {
+                    Text(
+                        downloadState.progressPercent?.let {
+                            stringResource(R.string.release_download_progress, it)
+                        } ?: stringResource(R.string.release_download_in_progress)
+                    )
+                    if (downloadState.progressPercent == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { downloadState.progressPercent.coerceIn(0, 100) / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                downloadState.errorMessage?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                if (update.apkDownloadUrl == null) {
+                    Text(stringResource(R.string.release_download_unavailable))
+                }
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(
-                    onClick = onDownload,
-                    modifier = Modifier.testTag("release-update-download")
-                ) { Text("GitHub") }
+            TextButton(
+                onClick = onDownload,
+                enabled = !downloadState.downloading && update.apkDownloadUrl != null,
+                modifier = Modifier.testTag("release-update-download")
+            ) {
+                Text(
+                    if (downloadState.downloading) {
+                        stringResource(R.string.release_download_in_progress)
+                    } else {
+                        stringResource(R.string.release_download_button)
+                    }
+                )
             }
         },
         dismissButton = {

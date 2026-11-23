@@ -94,7 +94,7 @@ The important boundary is simple: the configured provider stays authoritative, w
 - **PDF and comic reading:** Readium-powered PDF and image readers with fullscreen controls, page navigation, Preview isolation, and CBZ/online CBR support.
 - **Audiobook playback:** compact and full players with seeking, chapter selection, previous/next chapter controls, playback speed, sleep timer, resume, responsive portrait/landscape layouts, session history, read-along support, and optional pausing/resuming when Android reports competing audio focus (enabled by default).
 - **Library discovery:** Home, libraries, series, authors, search, achievements, local books, filters, sorting, and series navigation.
-- **Reliable offline downloads:** progress, cancellation, retry/update flows, cache validation, and safe local replacement.
+- **Reliable offline downloads:** progress, cancellation, retry/update flows, cache validation, and safe local replacement. Release updates can be downloaded in-app and handed to Android's package installer.
 - **Personalized controls:** five app themes, reader themes, orientation lock, reduce motion, cellular download policy, cache management, and background-network controls.
 
 ## Supported formats

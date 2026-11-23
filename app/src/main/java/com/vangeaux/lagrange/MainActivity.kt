@@ -1,10 +1,8 @@
 package com.vangeaux.lagrange
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 internal fun requestedOrientationForLock(
     enabled: Boolean,
@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferencesStore: AppPreferencesStore
     private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
+    private val releaseDownloadState = mutableStateOf(ReleaseDownloadState())
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
@@ -61,6 +62,37 @@ class MainActivity : ComponentActivity() {
         }
         if (::appCoordinator.isInitialized) {
             appCoordinator.checkForAppUpdate()
+        }
+    }
+
+    private fun downloadReleaseApk(update: ReleaseUpdate) {
+        if (releaseDownloadState.value.downloading) return
+        releaseDownloadState.value = ReleaseDownloadState(downloading = true)
+        lifecycleScope.launch {
+            try {
+                ReleaseApkInstaller(this@MainActivity).downloadAndInstall(
+                    update = update,
+                    onProgress = { progress ->
+                        runOnUiThread {
+                            releaseDownloadState.value = releaseDownloadState.value.copy(
+                                progressPercent = progress
+                            )
+                        }
+                    },
+                    onInstallPermissionRequired = {
+                        releaseDownloadState.value = ReleaseDownloadState(
+                            errorMessage = getString(R.string.release_download_permission_required)
+                        )
+                    }
+                )
+                if (releaseDownloadState.value.errorMessage == null) {
+                    releaseDownloadState.value = ReleaseDownloadState()
+                }
+            } catch (error: Exception) {
+                releaseDownloadState.value = ReleaseDownloadState(
+                    errorMessage = error.localizedMessage ?: getString(R.string.release_download_failed)
+                )
+            }
         }
     }
 
@@ -146,11 +178,8 @@ class MainActivity : ComponentActivity() {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }
                         },
-                        onDownloadReleaseUpdate = { update ->
-                            startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(update.htmlUrl))
-                            )
-                        }
+                        releaseDownloadState = releaseDownloadState.value,
+                        onDownloadReleaseUpdate = ::downloadReleaseApk
                     )
                 }
             }

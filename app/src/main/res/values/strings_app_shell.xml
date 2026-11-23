@@ -3,6 +3,12 @@
     <!-- App shell: update dialog -->
     <string name="shell_update_available">%1$s is available</string>
     <string name="shell_update_ready">Version %1$s is ready to download.</string>
+    <string name="release_download_button">Download APK</string>
+    <string name="release_download_in_progress">Downloading update…</string>
+    <string name="release_download_progress">Downloading update: %1$d%%</string>
+    <string name="release_download_unavailable">A compatible APK is not attached to this release.</string>
+    <string name="release_download_permission_required">Allow Lagrange to install unknown apps, then return and tap Download APK again.</string>
+    <string name="release_download_failed">The update could not be downloaded.</string>
     <string name="shell_update_ignore">Ignore</string>
 
     <!-- App shell: startup and loading -->

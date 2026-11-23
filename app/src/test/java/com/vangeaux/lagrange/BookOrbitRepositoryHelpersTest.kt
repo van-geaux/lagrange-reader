@@ -2,6 +2,7 @@ package com.vangeaux.lagrange
 
 import java.io.ByteArrayInputStream
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -646,6 +647,11 @@ class BookOrbitRepositoryHelpersTest {
                 .put("name", "Lagrange 1.2")
                 .put("body", "New reader improvements")
                 .put("html_url", "https://github.com/van-geaux/lagrange-reader/releases/tag/v1.2.0")
+                .put("assets", JSONArray().put(
+                    JSONObject()
+                        .put("name", "Lagrange-1.2.0.apk")
+                        .put("browser_download_url", "https://github.com/van-geaux/lagrange-reader/releases/download/v1.2.0/Lagrange-1.2.0.apk")
+                ))
                 .toString(),
             "1.1.0"
         )
@@ -654,6 +660,23 @@ class BookOrbitRepositoryHelpersTest {
         assertEquals("1.2.0", update.versionName)
         assertEquals("v1.2.0", update.tagName)
         assertEquals("New reader improvements", update.notes)
+        assertEquals("Lagrange-1.2.0.apk", update.apkFileName)
+        assertEquals(
+            "https://github.com/van-geaux/lagrange-reader/releases/download/v1.2.0/Lagrange-1.2.0.apk",
+            update.apkDownloadUrl
+        )
+        val noCombinedApk = parseGitHubReleaseUpdate(
+            JSONObject()
+                .put("tag_name", "v1.2.0")
+                .put("assets", JSONArray().put(
+                    JSONObject()
+                        .put("name", "Lagrange-1.2.0-arm.apk")
+                        .put("browser_download_url", "https://github.com/van-geaux/lagrange-reader/releases/download/v1.2.0/Lagrange-1.2.0-arm.apk")
+                ))
+                .toString(),
+            "1.1.0"
+        )
+        assertEquals(null, noCombinedApk?.apkDownloadUrl)
         assertNull(parseGitHubReleaseUpdate(
             JSONObject().put("tag_name", "v1.1.0").toString(),
             "1.1.0"

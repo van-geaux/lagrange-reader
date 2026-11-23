@@ -3,6 +3,12 @@
     <!-- 应用外壳：更新提示 -->
     <string name="shell_update_available">%1$s 已发布</string>
     <string name="shell_update_ready">版本 %1$s 已可下载。</string>
+    <string name="release_download_button">下载 APK</string>
+    <string name="release_download_in_progress">正在下载更新…</string>
+    <string name="release_download_progress">正在下载更新：%1$d%%</string>
+    <string name="release_download_unavailable">此版本未附带兼容的 APK。</string>
+    <string name="release_download_permission_required">请允许 Lagrange 安装未知来源应用，然后返回并再次点按“下载 APK”。</string>
+    <string name="release_download_failed">无法下载更新。</string>
     <string name="shell_update_ignore">忽略</string>
 
     <!-- 应用外壳：启动与加载 -->
