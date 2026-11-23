@@ -125,6 +125,41 @@ class ReadiumComicOpenInstrumentedTest {
     }
 
     @Test
+    fun remotePublicationOpensGrimmoryOneBasedPageTemplateAndReadsSelectedPage() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val pages = listOf(pageBytes(Color.RED), pageBytes(Color.GREEN))
+        val server = MockWebServer()
+        server.dispatcher = imagePageDispatcher(pages, pageNumberBase = 1)
+        server.start()
+        try {
+            val pageTemplate = server.url("/api/v1/media/book/42/cbx/pages/")
+                .toString().trimEnd('/') + "/{page1}"
+            val result = openReadiumRemoteComic(
+                context = context,
+                title = "Grimmory comic",
+                pagesUrl = pageTemplate,
+                pageCount = pages.size,
+                pageMediaType = MediaType.JPEG,
+                httpClient = DefaultHttpClient()
+            )
+            assertTrue(result is ReadiumComicOpenResult.Opened)
+            val publication = (result as ReadiumComicOpenResult.Opened).publication
+            try {
+                assertEquals(0, server.requestCount)
+                assertEquals(2, publication.readingOrder.size)
+                val secondPage = requireNotNull(publication.get(publication.readingOrder[1]))
+                val bytes = secondPage.read(0L..15L).getOrNull()
+                assertArrayEquals(pages[1].copyOfRange(0, 16), bytes)
+                assertEquals("/api/v1/media/book/42/cbx/pages/2", server.takeRequest().path)
+            } finally {
+                publication.close()
+            }
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    @Test
     fun continuousRemotePageAllowsChunkedResponsesWithoutContentLength() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val page = pageBytes(Color.CYAN)
@@ -408,9 +443,12 @@ class ReadiumComicOpenInstrumentedTest {
         }
     }
 
-    private fun imagePageDispatcher(pages: List<ByteArray>): Dispatcher = object : Dispatcher() {
+    private fun imagePageDispatcher(
+        pages: List<ByteArray>,
+        pageNumberBase: Int = 0
+    ): Dispatcher = object : Dispatcher() {
         override fun dispatch(request: RecordedRequest): MockResponse {
-            val pageIndex = request.path.orEmpty().substringAfterLast('/').toInt()
+            val pageIndex = request.path.orEmpty().substringAfterLast('/').toInt() - pageNumberBase
             val page = pages[pageIndex]
             val range = request.getHeader("Range")
             if (range == null) {
