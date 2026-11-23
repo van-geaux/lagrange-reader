@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import android.content.Context
 import androidx.annotation.StringRes
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.roundToInt
 
 enum class AppThemeMode(
@@ -171,40 +172,34 @@ internal class AppPreferencesStore(context: Context) {
         ),
         lockedBookFilters = stringMapFromStorage(preferences.getString(LOCKED_BOOK_FILTERS_KEY, null)),
         lockedSeriesFilters = stringMapFromStorage(preferences.getString(LOCKED_SERIES_FILTERS_KEY, null))
-    ).let { value ->
-        // Legacy unscoped profiles can only be assigned once, when exactly one server profile
-        // exists. If ownership is ambiguous, persist a block marker and never retry after one
-        // profile is later removed.
-        val hasLegacy = value.hasLegacyReaderPreferences()
-        val migrationBlocked = preferences.getBoolean(LEGACY_READER_MIGRATION_BLOCKED_KEY, false)
-        val profiles = if (hasLegacy && !migrationBlocked) {
-            ServerProfileStore(appContext).readAll()
-        } else {
-            emptyList()
+    ).let(::migrateConfiguredReaderPreferences)
+
+    private fun migrateConfiguredReaderPreferences(value: AppPreferences): AppPreferences {
+        val raw = preferences.getString(LIBRARY_READER_PREFERENCES_KEY, null)
+        if (raw.isNullOrBlank()) return value
+        val storage = readerPreferencesStorageFromStorage(raw)
+        if (storage.version >= 5) return value
+        val profiles = ServerProfileStore(appContext).readAll()
+        if (profiles.isEmpty()) return value
+        val scopeStore = AuthenticatedAccountScopeStore(appContext)
+        val migrated = migrateConfiguredReaderPreferences(
+            values = storage.preferences,
+            profiles = profiles,
+            accountScopeOf = scopeStore::read
+        )
+        if (migrated == storage.preferences) return value
+        if (migrated.isEmpty() && storage.preferences.isNotEmpty()) return value
+        runCatching {
+            File(appContext.filesDir, READER_PREFERENCES_BACKUP_FILE)
+                .writeText(raw, Charsets.UTF_8)
         }
-        when (legacyReaderMigrationAction(hasLegacy, profiles.size, migrationBlocked)) {
-            LegacyReaderMigrationAction.NONE -> value
-            LegacyReaderMigrationAction.BLOCK -> {
-                preferences.edit()
-                    .putBoolean(LEGACY_READER_MIGRATION_BLOCKED_KEY, true)
-                    .commit()
-                value
-            }
-            LegacyReaderMigrationAction.MIGRATE -> {
-                val migrated = value.migrateLegacyReaderPreferences(profiles.single().id)
-                // Persist immediately: otherwise a second profile could be added before the
-                // migrated map is saved, leaving the original ambiguous state behind.
-                if (migrated.libraryReaderPreferences != value.libraryReaderPreferences) {
-                    preferences.edit()
-                        .putString(
-                            LIBRARY_READER_PREFERENCES_KEY,
-                            libraryReaderPreferencesStorageValue(migrated.libraryReaderPreferences)
-                        )
-                        .commit()
-                }
-                migrated
-            }
-        }
+        val committed = preferences.edit()
+            .putString(
+                LIBRARY_READER_PREFERENCES_KEY,
+                libraryReaderPreferencesStorageValue(migrated)
+            )
+            .commit()
+        return if (committed) value.copy(libraryReaderPreferences = migrated) else value
     }
 
     fun save(value: AppPreferences) {
@@ -457,6 +452,7 @@ internal class AppPreferencesStore(context: Context) {
         const val SERIES_GROUPING_MODE_KEY = "series_grouping_mode"
         const val LIBRARY_CARD_SIZE_KEY = "library_card_size"
         const val LIBRARY_READER_PREFERENCES_KEY = "library_reader_preferences"
+        const val READER_PREFERENCES_BACKUP_FILE = "reader-preferences-v4-backup.json"
         const val LEGACY_READER_MIGRATION_BLOCKED_KEY = "legacy_reader_migration_blocked"
         const val LIBRARY_BROWSE_OPTIONS_EXPANDED_KEY = "library_browse_options_expanded"
         const val LOCKED_BOOK_FILTERS_KEY = "locked_book_filters"

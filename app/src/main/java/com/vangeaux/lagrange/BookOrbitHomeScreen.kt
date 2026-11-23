@@ -4489,21 +4489,28 @@ if (selectedCategory == OptionsCategory.PLAYBACK && subDestination == null) item
             }
         }
         if (selectedCategory == OptionsCategory.LIBRARY) item(key = "reading-configuration") {
+            val readerPreferenceOwner = remember(profileId) {
+                resolveReaderPreferenceOwnerForProfile(context, profileId)
+            }
             LibraryReaderConfiguration(
                 libraries = libraries,
                 selectedLibraryId = readingLibraryId,
-                preferences = readingLibraryId?.let {
-                    preferences.readerPreferencesFor(profileId.orEmpty(), it)
+                preferences = readingLibraryId?.let { libraryId ->
+                    readerPreferenceOwner?.let { owner ->
+                        preferences.readerPreferencesFor(owner, libraryId)
+                    }
                 },
                 onLibrarySelected = { readingLibraryId = it },
                 onPreferencesChange = { libraryId, readerPreferences ->
-                    onPreferencesChange(
-                        preferences.withReaderPreferences(
-                            profileId.orEmpty(),
-                            libraryId,
-                            readerPreferences
+                    readerPreferenceOwner?.let { owner ->
+                        onPreferencesChange(
+                            preferences.withReaderPreferences(
+                                owner,
+                                libraryId,
+                                readerPreferences
+                            )
                         )
-                    )
+                    }
                 }
             )
         }

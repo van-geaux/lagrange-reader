@@ -2333,7 +2333,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var publicationFingerprint: String? = null
     private lateinit var ttsOwnerToken: String
     private lateinit var libraryId: String
-    private val readerProfileId by lazy { activeReaderProfileId(this) }
+    private val readerPreferenceOwner by lazy { resolveReaderPreferenceOwner(this) }
     private lateinit var displayTitle: String
     private lateinit var displayAuthor: String
     private lateinit var readingSessionReporter: ReadingSessionReporter
@@ -2457,13 +2457,15 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                         customFont = result.record,
                         fontFamily = EpubReaderFontFamily.CUSTOM
                     )
-                    appPreferencesStore.save(
-                        appPreferencesStore.read().withReaderPreferences(
-                            readerProfileId,
-                            libraryId,
-                            next
+                    readerPreferenceOwner?.let { owner ->
+                        appPreferencesStore.save(
+                            appPreferencesStore.read().withReaderPreferences(
+                                owner,
+                                libraryId,
+                                next
+                            )
                         )
-                    )
+                    }
                     recreate()
                 }
                 is CustomFontImportResult.Rejected -> showError(getString(result.reasonRes))
@@ -2561,8 +2563,11 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         val appPreferences = appPreferencesStore.read()
         showTapZoneTutorialAfterChanges = appPreferences.showEpubTapZoneTutorialAfterChanges
         highContrastTapZoneTutorial = isColorEinkTheme(appPreferences.themeMode)
-        readerPreferences = if (appPreferences.hasReaderPreferences(readerProfileId, libraryId)) {
-            appPreferences.readerPreferencesFor(readerProfileId, libraryId)
+        val readerOwner = readerPreferenceOwner
+        readerPreferences = if (
+            readerOwner != null && appPreferences.hasReaderPreferences(readerOwner, libraryId)
+        ) {
+            appPreferences.readerPreferencesFor(readerOwner, libraryId)
         } else {
             LibraryReaderPreferences(
                 theme = themeStore.read(),
@@ -2580,9 +2585,11 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         readingDirection = readerPreferences.readingDirection
         epubLayoutMode = readerPreferences.epubLayoutMode
         ttsSettings = appPreferencesStore.readEpubTtsSettings()
-        appPreferencesStore.save(
-            appPreferences.withReaderPreferences(readerProfileId, libraryId, readerPreferences)
-        )
+        readerOwner?.let { owner ->
+            appPreferencesStore.save(
+                appPreferences.withReaderPreferences(owner, libraryId, readerPreferences)
+            )
+        }
         twoPageSpreadActive = computeTwoPageSpread()
         windowTracker.start()
         windowTracker.observeSpreadChanges({ computeTwoPageSpread() }) { recreateIfSpreadChanged() }
@@ -5581,9 +5588,11 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             )
         )
         val current = appPreferencesStore.read()
-        appPreferencesStore.save(
-            current.withReaderPreferences(readerProfileId, libraryId, normalized)
-        )
+        readerPreferenceOwner?.let { owner ->
+            appPreferencesStore.save(
+                current.withReaderPreferences(owner, libraryId, normalized)
+            )
+        }
         configureSystemBars()
         if (epubReaderThemeChangeRequiresRecreate(previousTheme, normalized.theme)) {
             recreate()
@@ -5595,9 +5604,11 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
 
     private fun applyCurrentPreferencesToAllLibraries() {
         val current = appPreferencesStore.read()
-        appPreferencesStore.save(
-            current.withReaderPreferencesForAllLibraries(readerProfileId, libraryId, readerPreferences)
-        )
+        readerPreferenceOwner?.let { owner ->
+            appPreferencesStore.save(
+                current.withReaderPreferencesForAllLibraries(owner, libraryId, readerPreferences)
+            )
+        }
         Toast.makeText(
             this,
             R.string.sheet_apply_to_all_libraries_applied,
@@ -5630,8 +5641,9 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private fun initialReaderTheme(): EpubReaderTheme {
         val library = intent.getStringExtra(EXTRA_LIBRARY_ID).orEmpty()
         val preferences = appPreferencesStore.read()
-        return if (preferences.hasReaderPreferences(readerProfileId, library)) {
-            preferences.readerPreferencesFor(readerProfileId, library).theme
+        val owner = readerPreferenceOwner
+        return if (owner != null && preferences.hasReaderPreferences(owner, library)) {
+            preferences.readerPreferencesFor(owner, library).theme
         } else {
             themeStore.read()
         }
