@@ -9,6 +9,10 @@
     <string name="release_download_unavailable">A compatible APK is not attached to this release.</string>
     <string name="release_download_permission_required">Allow Lagrange to install unknown apps, then return and tap Download APK again.</string>
     <string name="release_download_failed">The update could not be downloaded.</string>
+    <string name="release_download_signer_mismatch">Lagrange blocked this in-app update because the installed signing certificate differs from the pinned release certificate. To switch, back up important data, download the APK from the official release page, then uninstall this copy and install that APK. Uninstalling deletes Lagrange local data.</string>
+    <string name="release_download_signer_unknown">Lagrange could not verify the signing certificate for this copy, so the in-app update is blocked. Back up important data, then open the official release page. If Android refuses the install, switching may require uninstalling this copy, which deletes local data.</string>
+    <string name="release_download_open_release">Open official release page</string>
+    <string name="release_download_browser_unavailable">No browser is available to open the GitHub release page.</string>
     <string name="shell_update_ignore">Ignore</string>
 
     <!-- App shell: startup and loading -->

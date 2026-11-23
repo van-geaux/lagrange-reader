@@ -172,7 +172,9 @@ fun BookOrbitApp(
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
     releaseDownloadState: ReleaseDownloadState = ReleaseDownloadState(),
-    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
+    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {},
+    onOpenReleasePage: (ReleaseUpdate) -> Unit = {},
+    onClearReleaseDownloadState: () -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
     val fullAudioPlayerBook by coordinator.fullAudioPlayerBook.collectAsState()
@@ -237,7 +239,11 @@ fun BookOrbitApp(
                 update = update,
                 downloadState = releaseDownloadState,
                 onDownload = { onDownloadReleaseUpdate(update) },
-                onIgnore = coordinator::ignoreReleaseUpdate
+                onOpenReleasePage = { onOpenReleasePage(update) },
+                onIgnore = {
+                    onClearReleaseDownloadState()
+                    coordinator.ignoreReleaseUpdate()
+                }
             )
         }
     }
@@ -246,14 +252,16 @@ fun BookOrbitApp(
 data class ReleaseDownloadState(
     val downloading: Boolean = false,
     val progressPercent: Int? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val signerStatus: ReleaseSignerStatus? = null
 )
 
 @Composable
-private fun ReleaseUpdateDialog(
+internal fun ReleaseUpdateDialog(
     update: ReleaseUpdate,
     downloadState: ReleaseDownloadState,
     onDownload: () -> Unit,
+    onOpenReleasePage: () -> Unit,
     onIgnore: () -> Unit
 ) {
     AlertDialog(
@@ -285,6 +293,17 @@ private fun ReleaseUpdateDialog(
                         )
                     }
                 }
+                when (downloadState.signerStatus) {
+                    ReleaseSignerStatus.MISMATCH -> Text(
+                        stringResource(R.string.release_download_signer_mismatch),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    ReleaseSignerStatus.UNKNOWN -> Text(
+                        stringResource(R.string.release_download_signer_unknown),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    else -> Unit
+                }
                 downloadState.errorMessage?.let { error ->
                     Text(error, color = MaterialTheme.colorScheme.error)
                 }
@@ -295,15 +314,20 @@ private fun ReleaseUpdateDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = onDownload,
-                enabled = !downloadState.downloading && update.apkDownloadUrl != null,
+                onClick = {
+                    if (downloadState.signerStatus == null) onDownload() else onOpenReleasePage()
+                },
+                enabled = !downloadState.downloading &&
+                    (update.apkDownloadUrl != null || downloadState.signerStatus != null),
                 modifier = Modifier.testTag("release-update-download")
             ) {
                 Text(
-                    if (downloadState.downloading) {
-                        stringResource(R.string.release_download_in_progress)
-                    } else {
-                        stringResource(R.string.release_download_button)
+                    when {
+                        downloadState.signerStatus != null ->
+                            stringResource(R.string.release_download_open_release)
+                        downloadState.downloading ->
+                            stringResource(R.string.release_download_in_progress)
+                        else -> stringResource(R.string.release_download_button)
                     }
                 )
             }

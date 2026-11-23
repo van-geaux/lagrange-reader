@@ -55,6 +55,15 @@ jobs:
       - name: Build signed release APK
         run: ./gradlew assembleRelease -PreleaseAbiSplits --no-daemon --console=plain
 
+      - name: Verify GitHub release signing certificate
+        run: |
+          expected="$(grep -Eo '[0-9a-fA-F]{64}' app/src/main/assets/release-signer-sha256.txt | tr '[:upper:]' '[:lower:]')"
+          actual="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-universal-release.apk | awk -F': ' '/Signer #[0-9]+ certificate SHA-256 digest:/ { gsub(/:/, "", $2); print tolower($2) }')"
+          if [[ ! "$expected" =~ ^[0-9a-f]{64}$ || "$actual" != "$expected" ]]; then
+            echo "Release APK signer does not match the pinned GitHub release certificate." >&2
+            exit 1
+          fi
+
       - name: Prepare release assets
         run: |
           release_version="${GITHUB_REF_NAME#v}"

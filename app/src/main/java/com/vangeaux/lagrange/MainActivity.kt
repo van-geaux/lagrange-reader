@@ -1,8 +1,11 @@
 package com.vangeaux.lagrange
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -67,6 +70,17 @@ class MainActivity : ComponentActivity() {
 
     private fun downloadReleaseApk(update: ReleaseUpdate) {
         if (releaseDownloadState.value.downloading) return
+        val signerStatus = ReleaseSignerCompatibility.currentInstalledStatus(this)
+        ReleaseSignerCompatibility.routeUpdateAction(
+            status = signerStatus,
+            onDownload = { downloadReleaseApkAfterSignerCheck(update) },
+            onManualSwitch = {
+                releaseDownloadState.value = ReleaseDownloadState(signerStatus = signerStatus)
+            }
+        )
+    }
+
+    private fun downloadReleaseApkAfterSignerCheck(update: ReleaseUpdate) {
         releaseDownloadState.value = ReleaseDownloadState(downloading = true)
         lifecycleScope.launch {
             try {
@@ -93,6 +107,25 @@ class MainActivity : ComponentActivity() {
                     errorMessage = error.localizedMessage ?: getString(R.string.release_download_failed)
                 )
             }
+        }
+    }
+
+    private fun openGitHubReleasePage(update: ReleaseUpdate) {
+        val releaseUri = Uri.Builder()
+            .scheme("https")
+            .authority("github.com")
+            .appendPath("van-geaux")
+            .appendPath("lagrange-reader")
+            .appendPath("releases")
+            .appendPath("tag")
+            .appendPath(update.tagName)
+            .build()
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, releaseUri))
+        } catch (_: ActivityNotFoundException) {
+            releaseDownloadState.value = releaseDownloadState.value.copy(
+                errorMessage = getString(R.string.release_download_browser_unavailable)
+            )
         }
     }
 
@@ -180,7 +213,11 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         releaseDownloadState = releaseDownloadState.value,
-                        onDownloadReleaseUpdate = ::downloadReleaseApk
+                        onDownloadReleaseUpdate = ::downloadReleaseApk,
+                        onOpenReleasePage = ::openGitHubReleasePage,
+                        onClearReleaseDownloadState = {
+                            releaseDownloadState.value = ReleaseDownloadState()
+                        }
                     )
                 }
             }
