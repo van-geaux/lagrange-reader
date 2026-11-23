@@ -40,41 +40,43 @@ internal class ReleaseApkInstaller(
         val target = File(updateDirectory, fileName)
         val partial = File(updateDirectory, "$fileName.part")
         val request = Request.Builder().url(url).get().build()
-        client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Download failed (HTTP ${response.code})." }
-            val body = response.body ?: error("The release returned an empty download.")
-            val total = body.contentLength().takeIf { it > 0L }
-            body.byteStream().use { input ->
-                FileOutputStream(partial).use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var downloaded = 0L
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        downloaded += count
-                        onProgress(total?.let { ((downloaded * 100L) / it).toInt().coerceIn(0, 100) })
+        ReleaseApkCache.deletePartialOnFailure(partial) {
+            client.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Download failed (HTTP ${response.code})." }
+                val body = response.body ?: error("The release returned an empty download.")
+                val total = body.contentLength().takeIf { it > 0L }
+                body.byteStream().use { input ->
+                    FileOutputStream(partial).use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var downloaded = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            downloaded += count
+                            onProgress(total?.let { ((downloaded * 100L) / it).toInt().coerceIn(0, 100) })
+                        }
+                        output.fd.sync()
                     }
-                    output.fd.sync()
                 }
             }
-        }
-        check(partial.length() > 4L) { "The downloaded APK is empty or incomplete." }
-        val hasZipHeader = partial.inputStream().use { input ->
-            val header = ByteArray(4)
-            var offset = 0
-            while (offset < header.size) {
-                val read = input.read(header, offset, header.size - offset)
-                if (read < 0) break
-                offset += read
+            check(partial.length() > 4L) { "The downloaded APK is empty or incomplete." }
+            val hasZipHeader = partial.inputStream().use { input ->
+                val header = ByteArray(4)
+                var offset = 0
+                while (offset < header.size) {
+                    val read = input.read(header, offset, header.size - offset)
+                    if (read < 0) break
+                    offset += read
+                }
+                offset == header.size && header.contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04))
             }
-            offset == header.size && header.contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04))
+            check(hasZipHeader) { "The downloaded file is not a valid APK archive." }
+            if (target.exists()) {
+                check(target.delete()) { "Unable to replace the previous downloaded APK." }
+            }
+            check(partial.renameTo(target)) { "Unable to prepare the downloaded APK for installation." }
         }
-        check(hasZipHeader) { "The downloaded file is not a valid APK archive." }
-        if (target.exists()) {
-            check(target.delete()) { "Unable to replace the previous downloaded APK." }
-        }
-        check(partial.renameTo(target)) { "Unable to prepare the downloaded APK for installation." }
         val apkUri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.updates",

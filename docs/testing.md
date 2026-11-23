@@ -33,8 +33,9 @@ For the in-app release updater, with a test build older than a published release
 1. Trigger the update prompt or use About -> `Check for updates`.
 2. Tap `Download APK`; verify download progress appears in the prompt without opening a browser or GitHub page.
 3. Verify successful download opens Android's package installer and offers the APK update. Complete or cancel the system installer explicitly.
-4. On a fresh install where Lagrange is not allowed to install unknown apps, verify Android opens the per-app permission screen. Enable the permission, return to Lagrange, tap `Download APK` again, and verify Android's package installer opens.
-5. Verify network/download failures show an actionable retry state, releases without the combined APK do not offer a broken download, and `Ignore` still suppresses the release.
+4. After a successful update, reopen Lagrange and verify cached APK/partial files for the installed or older versions are removed; canceling the installer should leave the newer APK available for retry.
+5. On a fresh install where Lagrange is not allowed to install unknown apps, verify Android opens the per-app permission screen. Enable the permission, return to Lagrange, tap `Download APK` again, and verify Android's package installer opens.
+6. Verify network/download failures show an actionable retry state, releases without the combined APK do not offer a broken download, and `Ignore` still suppresses the release.
 
 This requires a real older signed build and a device/emulator; parser tests and debug APK assembly do not validate package installation or signing-key compatibility.
 

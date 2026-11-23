@@ -99,6 +99,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        ReleaseApkCache.cleanupInstalledOrOlder(cacheDir, BuildConfig.VERSION_NAME)
 
         val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
