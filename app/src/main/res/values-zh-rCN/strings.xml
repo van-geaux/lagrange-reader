@@ -66,6 +66,10 @@
     <string name="login_hide_password">隐藏</string>
     <string name="login_enter_username">请输入用户名。</string>
     <string name="login_enter_password">请输入密码。</string>
+    <string name="login_remember_credentials">记住账号和密码</string>
+    <string name="login_remember_credentials_summary">已安全保存在本机，仅用于此服务器。</string>
+    <string name="login_using_saved_credentials">正在使用已保存的账号登录…</string>
+    <string name="login_saved_credentials_failed">保存的登录信息已失效，请重新输入密码。</string>
     <string name="login_open_server_sign_in">打开服务器登录</string>
     <string name="login_sign_in_with_sso">使用 SSO 登录</string>
     <string name="login_choose_server">选择一个已配置的服务器，或添加新服务器。</string>
@@ -91,6 +95,12 @@
 
     <!-- 设置：应用语言 -->
     <string name="settings_language">语言</string>
+    <string name="settings_forget_saved_passwords">清除已保存的服务器密码</string>
+    <string name="settings_forget_saved_passwords_summary">从本机移除已保存的账号和密码；切换服务器后需要重新登录。</string>
+    <string name="settings_forget_saved_passwords_confirm_title">清除已保存的密码？</string>
+    <string name="settings_forget_saved_passwords_confirm_message">这会移除本机保存的所有服务器密码，但不会退出当前服务器。</string>
+    <string name="settings_forget_saved_passwords_confirm">清除</string>
+    <string name="settings_forget_saved_passwords_done">已清除保存的服务器密码。</string>
     <string name="settings_language_summary">应用显示语言</string>
     <string name="language_system">跟随系统</string>
     <string name="language_english">English</string>

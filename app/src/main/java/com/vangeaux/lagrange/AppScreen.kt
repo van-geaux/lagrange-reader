@@ -17,7 +17,10 @@ sealed interface AppScreen {
         val message: String? = null,
         val isSubmitting: Boolean = false,
         val serverSignIn: ServerSignInState? = null,
-        val oidcSignIn: OidcSignInState? = null
+        val oidcSignIn: OidcSignInState? = null,
+        val savedUsername: String? = null,
+        val savedPassword: String? = null,
+        val rememberCredentials: Boolean = false
     ) : AppScreen
 
     data class Browser(

@@ -330,6 +330,10 @@ private fun BookOrbitDestination(
                 configuredServerProfiles = coordinator.configuredServerProfiles(),
                 message = screen.message,
                 isSubmitting = screen.isSubmitting,
+                savedUsername = screen.savedUsername,
+                savedPassword = screen.savedPassword,
+                rememberCredentials = screen.rememberCredentials,
+                onRememberCredentialsChange = coordinator::setRememberLoginCredentials,
                 onSwitchServer = coordinator::switchToServerProfile,
                 onNewServer = coordinator::clearServer,
                 onSubmit = coordinator::submitLogin,
@@ -417,6 +421,7 @@ private fun BookOrbitDestination(
             onStartOfflineCacheUpdate = coordinator::startOfflineCacheUpdate,
             onCancelOfflineCacheUpdate = coordinator::cancelOfflineCacheUpdate,
             onClearOfflineCache = coordinator::clearOfflineCache,
+            onForgetSavedLoginCredentials = coordinator::forgetSavedLoginCredentials,
             bookDetailRequest = audioPlaybackController?.bookDetailRequest?.collectAsState()?.value,
             onBookDetailRequestConsumed = { sequence ->
                 audioPlaybackController?.consumeBookDetailRequest(sequence)
