@@ -260,7 +260,9 @@ data class ReleaseUpdate(
     val tagName: String,
     val title: String,
     val notes: String,
-    val htmlUrl: String
+    val htmlUrl: String,
+    val apkDownloadUrl: String? = null,
+    val apkFileName: String? = null
 )
 
 internal fun parseGitHubReleaseUpdate(
@@ -277,12 +279,29 @@ internal fun parseGitHubReleaseUpdate(
     val htmlUrl = release.optString("html_url").trim()
         .takeIf { it.startsWith("https://") || it.startsWith("http://") }
         ?: LAGRANGE_GITHUB_RELEASES_PAGE_URL + tagName
+    val apkAsset = release.optJSONArray("assets")?.let { assets ->
+        val expectedName = "Lagrange-${remoteVersion.toDisplayString()}.apk"
+        (0 until assets.length()).asSequence()
+            .mapNotNull(assets::optJSONObject)
+            .firstOrNull { asset ->
+                asset.optString("name") == expectedName &&
+                    asset.optString("browser_download_url").let { url ->
+                        runCatching { url.toHttpUrlOrNull() }.getOrNull()?.let { parsed ->
+                            parsed.isHttps && parsed.host == "github.com" &&
+                                parsed.encodedPathSegments.contains("releases") &&
+                                parsed.encodedPathSegments.contains("download")
+                        } == true
+                    }
+            }
+    }
     return ReleaseUpdate(
         versionName = remoteVersion.toDisplayString(),
         tagName = tagName,
         title = release.optString("name").trim().ifBlank { "Lagrange " + remoteVersion.toDisplayString() },
         notes = release.optString("body").trim().take(8_000),
-        htmlUrl = htmlUrl
+        htmlUrl = htmlUrl,
+        apkDownloadUrl = apkAsset?.optString("browser_download_url"),
+        apkFileName = apkAsset?.optString("name")
     )
 }
 

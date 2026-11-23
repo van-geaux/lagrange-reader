@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -18,6 +19,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 internal fun requestedOrientationForLock(
     enabled: Boolean,
@@ -49,6 +54,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferencesStore: AppPreferencesStore
     private lateinit var appCoordinator: AppCoordinator
     private val appPreferencesState = mutableStateOf(AppPreferences())
+    private val releaseDownloadState = mutableStateOf(ReleaseDownloadState())
+    private var releaseDownloadJob: Job? = null
+    private var releaseDownloadGeneration = 0L
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase))
@@ -64,9 +72,100 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun downloadReleaseApk(update: ReleaseUpdate) {
+        if (releaseDownloadState.value.downloading) return
+        val signerStatus = ReleaseSignerCompatibility.currentInstalledStatus(this)
+        ReleaseSignerCompatibility.routeUpdateAction(
+            status = signerStatus,
+            onDownload = { downloadReleaseApkAfterSignerCheck(update) },
+            onManualSwitch = {
+                releaseDownloadState.value = ReleaseDownloadState(signerStatus = signerStatus)
+            }
+        )
+    }
+
+    private fun downloadReleaseApkAfterSignerCheck(update: ReleaseUpdate) {
+        if (releaseDownloadState.value.downloading) return
+        val generation = ++releaseDownloadGeneration
+        releaseDownloadState.value = ReleaseDownloadState(downloading = true)
+        releaseDownloadJob = lifecycleScope.launch {
+            try {
+                ReleaseApkInstaller(this@MainActivity).downloadAndInstall(
+                    update = update,
+                    onProgress = { progress ->
+                        runOnUiThread {
+                            if (generation == releaseDownloadGeneration &&
+                                releaseDownloadState.value.downloading
+                            ) {
+                                releaseDownloadState.value = releaseDownloadState.value.copy(
+                                    progressPercent = progress
+                                )
+                            }
+                        }
+                    },
+                    onInstallPermissionRequired = {
+                        if (generation == releaseDownloadGeneration) {
+                            releaseDownloadState.value = ReleaseDownloadState(
+                                errorMessage = getString(R.string.release_download_permission_required)
+                            )
+                        }
+                    }
+                )
+                if (generation == releaseDownloadGeneration &&
+                    releaseDownloadState.value.errorMessage == null
+                ) {
+                    releaseDownloadState.value = ReleaseDownloadState()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: ReleaseApkVerificationException) {
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadState.value = ReleaseDownloadState(apkVerificationFailed = true)
+                }
+            } catch (error: Exception) {
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadState.value = ReleaseDownloadState(
+                        errorMessage = error.localizedMessage ?: getString(R.string.release_download_failed)
+                    )
+                }
+            } finally {
+                if (generation == releaseDownloadGeneration) {
+                    releaseDownloadJob = null
+                }
+            }
+        }
+    }
+
+    private fun cancelReleaseDownload() {
+        releaseDownloadGeneration += 1
+        releaseDownloadJob?.cancel()
+        releaseDownloadJob = null
+        releaseDownloadState.value = ReleaseDownloadState()
+    }
+
+    private fun openGitHubReleasePage(update: ReleaseUpdate) {
+        val releaseUri = Uri.Builder()
+            .scheme("https")
+            .authority("github.com")
+            .appendPath("van-geaux")
+            .appendPath("lagrange-reader")
+            .appendPath("releases")
+            .appendPath("tag")
+            .appendPath(update.tagName)
+            .build()
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, releaseUri))
+        } catch (_: ActivityNotFoundException) {
+            releaseDownloadState.value = releaseDownloadState.value.copy(
+                errorMessage = getString(R.string.release_download_browser_unavailable)
+            )
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        ReleaseApkCache.cleanupInstalledOrOlder(cacheDir, BuildConfig.VERSION_NAME)
 
         val graph = MainActivityGraphProvider.create(this)
         appCoordinator = graph.coordinator
@@ -146,11 +245,10 @@ class MainActivity : ComponentActivity() {
                                 graph.coordinator.reconfigureBackgroundRefresh()
                             }
                         },
-                        onDownloadReleaseUpdate = { update ->
-                            startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(update.htmlUrl))
-                            )
-                        }
+                        releaseDownloadState = releaseDownloadState.value,
+                        onDownloadReleaseUpdate = ::downloadReleaseApk,
+                        onOpenReleasePage = ::openGitHubReleasePage,
+                        onClearReleaseDownloadState = ::cancelReleaseDownload
                     )
                 }
             }

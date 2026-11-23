@@ -79,6 +79,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -170,7 +171,10 @@ fun BookOrbitApp(
     audioPlaybackController: ReadiumAudioPlaybackController? = null,
     appPreferences: AppPreferences = AppPreferences(),
     onAppPreferencesChange: (AppPreferences) -> Unit = {},
-    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {}
+    releaseDownloadState: ReleaseDownloadState = ReleaseDownloadState(),
+    onDownloadReleaseUpdate: (ReleaseUpdate) -> Unit = {},
+    onOpenReleasePage: (ReleaseUpdate) -> Unit = {},
+    onClearReleaseDownloadState: () -> Unit = {}
 ) {
     val releaseUpdate by coordinator.releaseUpdate.collectAsState()
     val fullAudioPlayerBook by coordinator.fullAudioPlayerBook.collectAsState()
@@ -233,20 +237,32 @@ fun BookOrbitApp(
         releaseUpdate?.let { update ->
             ReleaseUpdateDialog(
                 update = update,
-                onDownload = {
-                    coordinator.dismissReleaseUpdate()
-                    onDownloadReleaseUpdate(update)
-                },
-                onIgnore = coordinator::ignoreReleaseUpdate
+                downloadState = releaseDownloadState,
+                onDownload = { onDownloadReleaseUpdate(update) },
+                onOpenReleasePage = { onOpenReleasePage(update) },
+                onIgnore = {
+                    onClearReleaseDownloadState()
+                    coordinator.ignoreReleaseUpdate()
+                }
             )
         }
     }
 }
 
+data class ReleaseDownloadState(
+    val downloading: Boolean = false,
+    val progressPercent: Int? = null,
+    val errorMessage: String? = null,
+    val signerStatus: ReleaseSignerStatus? = null,
+    val apkVerificationFailed: Boolean = false
+)
+
 @Composable
-private fun ReleaseUpdateDialog(
+internal fun ReleaseUpdateDialog(
     update: ReleaseUpdate,
+    downloadState: ReleaseDownloadState,
     onDownload: () -> Unit,
+    onOpenReleasePage: () -> Unit,
     onIgnore: () -> Unit
 ) {
     AlertDialog(
@@ -260,17 +276,72 @@ private fun ReleaseUpdateDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(stringResource(R.string.shell_update_ready, update.versionName))
+                when (downloadState.signerStatus) {
+                    ReleaseSignerStatus.MISMATCH -> Text(
+                        stringResource(R.string.release_download_signer_mismatch),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    ReleaseSignerStatus.UNKNOWN -> Text(
+                        stringResource(R.string.release_download_signer_unknown),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    else -> Unit
+                }
+                if (downloadState.apkVerificationFailed) {
+                    Text(
+                        stringResource(R.string.release_download_apk_verification_failed),
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 if (update.notes.isNotBlank()) {
                     Markdown(update.notes)
+                }
+                if (downloadState.downloading) {
+                    Text(
+                        downloadState.progressPercent?.let {
+                            stringResource(R.string.release_download_progress, it)
+                        } ?: stringResource(R.string.release_download_in_progress)
+                    )
+                    if (downloadState.progressPercent == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { downloadState.progressPercent.coerceIn(0, 100) / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                downloadState.errorMessage?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+                if (update.apkDownloadUrl == null) {
+                    Text(stringResource(R.string.release_download_unavailable))
                 }
             }
         },
         confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(
-                    onClick = onDownload,
-                    modifier = Modifier.testTag("release-update-download")
-                ) { Text("GitHub") }
+            TextButton(
+                onClick = {
+                    if (downloadState.signerStatus != null || downloadState.apkVerificationFailed) {
+                        onOpenReleasePage()
+                    } else {
+                        onDownload()
+                    }
+                },
+                enabled = !downloadState.downloading &&
+                    (update.apkDownloadUrl != null || downloadState.signerStatus != null ||
+                        downloadState.apkVerificationFailed),
+                modifier = Modifier.testTag("release-update-download")
+            ) {
+                Text(
+                    when {
+                        downloadState.signerStatus != null || downloadState.apkVerificationFailed ->
+                            stringResource(R.string.release_download_open_release)
+                        downloadState.downloading ->
+                            stringResource(R.string.release_download_in_progress)
+                        else -> stringResource(R.string.release_download_button)
+                    }
+                )
             }
         },
         dismissButton = {
