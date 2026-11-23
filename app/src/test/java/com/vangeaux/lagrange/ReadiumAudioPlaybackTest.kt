@@ -126,6 +126,56 @@ class ReadiumAudioPlaybackTest {
     }
 
     @Test
+    fun audioProgressPositionKeepsLogicalFileIdSeparateFromActiveTrackCoordinates() {
+        val tracks = listOf(
+            file("shared-file", "https://server/stream?trackIndex=0", filename = "Track 1.mp3")
+                .copy(playbackItemId = "grimmory:42:track-0", audioTrackIndex = 0, audioCumulativeStartMs = 0L),
+            file("shared-file", "https://server/stream?trackIndex=1", filename = "Track 2.mp3")
+                .copy(playbackItemId = "grimmory:42:track-1", audioTrackIndex = 1, audioCumulativeStartMs = 10_000L)
+        )
+
+        val progress = resolveAudioProgressPosition(tracks, "grimmory:42:track-1", 2_500L)
+
+        assertEquals(AudioProgressPosition(12_500L, 1, 2_500L), progress)
+    }
+
+    @Test
+    fun restoredAudioCoordinatesBecomeThePlayerPlaylistIndexAndTrackLocalOffset() {
+        val tracks = listOf(
+            file("shared-file", "https://server/stream?trackIndex=0").copy(
+                playbackItemId = "grimmory:42:track-0", audioTrackIndex = 0, audioCumulativeStartMs = 0L
+            ),
+            file("shared-file", "https://server/stream?trackIndex=1").copy(
+                playbackItemId = "grimmory:42:track-1", audioTrackIndex = 1, audioCumulativeStartMs = 10_000L
+            )
+        )
+        val book = tracks.first().book.copy(
+            audioProgressPosition = AudioProgressPosition(12_500L, 1, 2_500L)
+        )
+
+        val position = resolveInitialAudiobookPosition(tracks, book, initialPositionMs = 12_500L)
+
+        assertEquals(1, position?.fileIndex)
+        assertEquals("grimmory:42:track-1", position?.playbackItemId)
+        assertEquals(2_500L, position?.positionMs)
+    }
+
+    @Test
+    fun folderAudiobookPlaylistKeepsProviderFileIdSeparateFromTrackMediaIds() {
+        val files = listOf(
+            file("shared-file", "https://server/stream?trackIndex=0", filename = "Track 1.mp3")
+                .copy(playbackItemId = "grimmory:42:track-0", audioTrackIndex = 0),
+            file("shared-file", "https://server/stream?trackIndex=1", filename = "Track 2.mp3")
+                .copy(playbackItemId = "grimmory:42:track-1", audioTrackIndex = 1)
+        )
+
+        val playlist = prepareAudiobookPlaylist(files)
+
+        assertEquals(listOf("shared-file", "shared-file"), playlist.files.map { it.fileId })
+        assertEquals(listOf("grimmory:42:track-0", "grimmory:42:track-1"), playlist.specs.map { it.fileId })
+    }
+
+    @Test
     fun buildAudiobookMediaItemSpecsSkipsEntriesMissingStreamUrlFileIdOrMimeType() {
         val files = listOf(
             file("f1", "https://server/stream/f1"),

@@ -510,6 +510,18 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `comic page URL resolves one-based provider placeholder`() {
+        assertEquals(
+            "https://grimmory.example/api/v1/media/book/42/cbx/pages/1",
+            comicPageUrl("https://grimmory.example/api/v1/media/book/42/cbx/pages/{page1}", 0)
+        )
+        assertEquals(
+            "https://grimmory.example/api/v1/media/book/42/cbx/pages/3",
+            comicPageUrl("https://grimmory.example/api/v1/media/book/42/cbx/pages/{page1}", 2)
+        )
+    }
+
+    @Test
     fun `coverThumbnailUrl uses BookOrbit thumbnail endpoint and preserves external urls`() {
         assertEquals(
             "https://example.test/api/v1/books/book-1/thumbnail",

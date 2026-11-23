@@ -64,4 +64,18 @@ class ServerProfileTest {
             ).providerId
         )
     }
+
+    @Test
+    fun GrimmoryProviderHasAnExplicitProfileIdentityAndDisplayName() {
+        assertEquals("grimmory", PROVIDER_GRIMMORY)
+        assertEquals("Grimmory", serverProviderDisplayName(PROVIDER_GRIMMORY))
+        assertEquals(
+            PROVIDER_GRIMMORY,
+            ServerProfile(
+                id = "profile-grimmory",
+                serverUrl = "https://books.example",
+                providerId = PROVIDER_GRIMMORY
+            ).providerId
+        )
+    }
 }

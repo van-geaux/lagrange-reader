@@ -19,7 +19,7 @@ These are server-owned text, not Android resources, so adding a language to the 
 them. This is why the Achievements page can be fully Chinese while achievement names and
 descriptions remain in the server's language.
 
-Komga and Kavita return an unsupported achievement catalogue, so this only applies to BookOrbit.
+Komga, Kavita, and Grimmory return an unsupported achievement catalogue, so this only applies to BookOrbit.
 
 ## App-side support
 

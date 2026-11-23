@@ -18,10 +18,12 @@ data class ServerProfile(
 const val PROVIDER_BOOKORBIT = "bookorbit"
 const val PROVIDER_KOMGA = "komga"
 const val PROVIDER_KAVITA = "kavita"
+const val PROVIDER_GRIMMORY = "grimmory"
 
 fun serverProviderDisplayName(providerId: String): String = when (providerId) {
     PROVIDER_KOMGA -> "Komga"
     PROVIDER_KAVITA -> "Kavita"
+    PROVIDER_GRIMMORY -> "Grimmory"
     PROVIDER_BOOKORBIT -> "BookOrbit"
     else -> "server"
 }

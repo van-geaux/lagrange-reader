@@ -39,9 +39,12 @@ import com.vangeaux.lagrange.provider.komga.KomgaRepository
 import com.vangeaux.lagrange.provider.komga.KomgaModuleSet
 import com.vangeaux.lagrange.provider.kavita.KavitaRepository
 import com.vangeaux.lagrange.provider.kavita.KavitaModuleSet
+import com.vangeaux.lagrange.provider.grimmory.GrimmoryRepository
+import com.vangeaux.lagrange.provider.grimmory.GrimmoryModuleSet
 
 internal fun resolveProviderDownloadModule(repository: BookOrbitDataSource): DownloadModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).downloads
         is KomgaRepository -> KomgaModuleSet(repository).downloads
         is KavitaRepository -> KavitaModuleSet(repository).modules.downloads
         else -> BookOrbitModuleSet(repository).modules.downloads
@@ -54,12 +57,14 @@ internal fun resolveProviderRepository(context: Context, serverUrl: String): Boo
     return when (profile?.providerId) {
         PROVIDER_KOMGA -> KomgaRepository(context)
         PROVIDER_KAVITA -> KavitaRepository(context)
+        PROVIDER_GRIMMORY -> GrimmoryRepository(context)
         else -> BookOrbitRepository(context)
     }
 }
 
 internal fun resolveProviderLocalBooksModule(repository: BookOrbitDataSource): LocalBooksModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).localBooks
         is KomgaRepository -> KomgaModuleSet(repository).localBooks
         is KavitaRepository -> KavitaModuleSet(repository).modules.localBooks
         else -> BookOrbitModuleSet(repository).modules.localBooks
@@ -67,6 +72,7 @@ internal fun resolveProviderLocalBooksModule(repository: BookOrbitDataSource): L
 
 internal fun resolveProviderReadingStatusModule(repository: BookOrbitDataSource): ReadingStatusModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).readingStatus
         is KomgaRepository -> KomgaModuleSet(repository).readingStatus
         is KavitaRepository -> KavitaModuleSet(repository).modules.readingStatus
         else -> BookOrbitModuleSet(repository).modules.readingStatus
@@ -74,6 +80,7 @@ internal fun resolveProviderReadingStatusModule(repository: BookOrbitDataSource)
 
 internal fun resolveProviderReadingProgressModule(repository: BookOrbitDataSource): ReadingProgressModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).readingProgress
         is KomgaRepository -> KomgaModuleSet(repository).readingProgress
         is KavitaRepository -> KavitaModuleSet(repository).modules.readingProgress
         else -> BookOrbitModuleSet(repository).modules.readingProgress
@@ -81,6 +88,7 @@ internal fun resolveProviderReadingProgressModule(repository: BookOrbitDataSourc
 
 internal fun resolveProviderReadingSessionModule(repository: BookOrbitDataSource): ReadingSessionModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).readingSessions
         is KomgaRepository -> KomgaModuleSet(repository).readingSessions
         is KavitaRepository -> KavitaModuleSet(repository).modules.readingSessions
         else -> BookOrbitModuleSet(repository).modules.readingSessions
@@ -88,6 +96,7 @@ internal fun resolveProviderReadingSessionModule(repository: BookOrbitDataSource
 
 internal fun resolveProviderAnnotationModule(repository: BookOrbitDataSource): AnnotationModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).annotations
         is KomgaRepository -> KomgaModuleSet(repository).annotations
         is KavitaRepository -> KavitaModuleSet(repository).modules.annotations
         else -> BookOrbitModuleSet(repository).modules.annotations
@@ -95,6 +104,7 @@ internal fun resolveProviderAnnotationModule(repository: BookOrbitDataSource): A
 
 internal fun resolveProviderEpubBookmarkModule(repository: BookOrbitDataSource): EpubBookmarkModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).epubBookmarks
         is KomgaRepository -> KomgaModuleSet(repository).epubBookmarks
         is KavitaRepository -> KavitaModuleSet(repository).modules.epubBookmarks
         else -> BookOrbitModuleSet(repository).modules.epubBookmarks
@@ -102,6 +112,7 @@ internal fun resolveProviderEpubBookmarkModule(repository: BookOrbitDataSource):
 
 internal fun resolveProviderAchievementModule(repository: BookOrbitDataSource): AchievementModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).achievements
         is KomgaRepository -> KomgaModuleSet(repository).achievements
         is KavitaRepository -> KavitaModuleSet(repository).modules.achievements
         else -> BookOrbitModuleSet(repository).modules.achievements
@@ -109,6 +120,7 @@ internal fun resolveProviderAchievementModule(repository: BookOrbitDataSource): 
 
 internal fun resolveProviderStatisticsModule(repository: BookOrbitDataSource): StatisticsModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).statistics
         is KomgaRepository -> KomgaModuleSet(repository).statistics
         is KavitaRepository -> KavitaModuleSet(repository).modules.statistics
         else -> BookOrbitModuleSet(repository).modules.statistics
@@ -116,6 +128,7 @@ internal fun resolveProviderStatisticsModule(repository: BookOrbitDataSource): S
 
 internal fun resolveProviderSmartScopeModule(repository: BookOrbitDataSource): SmartScopeModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).smartScopes
         is KomgaRepository -> KomgaModuleSet(repository).smartScopes
         is KavitaRepository -> KavitaModuleSet(repository).modules.smartScopes
         else -> BookOrbitModuleSet(repository).modules.smartScopes
@@ -123,6 +136,7 @@ internal fun resolveProviderSmartScopeModule(repository: BookOrbitDataSource): S
 
 internal fun resolveProviderCollectionCatalogModule(repository: BookOrbitDataSource): CollectionCatalogModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).collections
         is KomgaRepository -> KomgaModuleSet(repository).collections
         is KavitaRepository -> KavitaModuleSet(repository).collections
         else -> BookOrbitModuleSet(repository).collections
@@ -130,6 +144,7 @@ internal fun resolveProviderCollectionCatalogModule(repository: BookOrbitDataSou
 
 internal fun resolveProviderAuthorModule(repository: BookOrbitDataSource): AuthorModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).authors
         is KomgaRepository -> KomgaModuleSet(repository).authors
         is KavitaRepository -> KavitaModuleSet(repository).modules.authors
         else -> BookOrbitModuleSet(repository).modules.authors
@@ -137,6 +152,7 @@ internal fun resolveProviderAuthorModule(repository: BookOrbitDataSource): Autho
 
 internal fun resolveProviderBookDetailModule(repository: BookOrbitDataSource): BookDetailModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).bookDetail
         is KomgaRepository -> KomgaModuleSet(repository).bookDetail
         is KavitaRepository -> KavitaModuleSet(repository).modules.bookDetail
         else -> BookOrbitModuleSet(repository).modules.bookDetail
@@ -144,6 +160,7 @@ internal fun resolveProviderBookDetailModule(repository: BookOrbitDataSource): B
 
 internal fun resolveProviderBookCoverModule(repository: BookOrbitDataSource): BookCoverModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).covers
         is KomgaRepository -> KomgaModuleSet(repository).covers
         is KavitaRepository -> KavitaModuleSet(repository).modules.covers
         else -> BookOrbitModuleSet(repository).modules.covers
@@ -151,6 +168,7 @@ internal fun resolveProviderBookCoverModule(repository: BookOrbitDataSource): Bo
 
 internal fun resolveProviderBookCatalogModule(repository: BookOrbitDataSource): BookCatalogModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).bookCatalog
         is KomgaRepository -> KomgaModuleSet(repository).bookCatalog
         is KavitaRepository -> KavitaModuleSet(repository).modules.bookCatalog
         else -> BookOrbitModuleSet(repository).modules.bookCatalog
@@ -158,6 +176,7 @@ internal fun resolveProviderBookCatalogModule(repository: BookOrbitDataSource): 
 
 internal fun resolveProviderSeriesCatalogModule(repository: BookOrbitDataSource): SeriesCatalogModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).seriesCatalog
         is KomgaRepository -> KomgaModuleSet(repository).seriesCatalog
         is KavitaRepository -> KavitaModuleSet(repository).modules.seriesCatalog
         else -> BookOrbitModuleSet(repository).modules.seriesCatalog
@@ -165,6 +184,7 @@ internal fun resolveProviderSeriesCatalogModule(repository: BookOrbitDataSource)
 
 internal fun resolveProviderReaderModule(repository: BookOrbitDataSource): ReaderModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).reader
         is KomgaRepository -> KomgaModuleSet(repository).reader
         is KavitaRepository -> KavitaModuleSet(repository).modules.reader
         else -> BookOrbitModuleSet(repository).modules.reader
@@ -172,6 +192,7 @@ internal fun resolveProviderReaderModule(repository: BookOrbitDataSource): Reade
 
 internal fun resolveProviderHomeShelfModule(repository: BookOrbitDataSource): HomeShelfModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).home
         is KomgaRepository -> KomgaModuleSet(repository).home
         is KavitaRepository -> KavitaModuleSet(repository).modules.home
         else -> BookOrbitModuleSet(repository).modules.home
@@ -179,6 +200,7 @@ internal fun resolveProviderHomeShelfModule(repository: BookOrbitDataSource): Ho
 
 internal fun resolveProviderLibraryModule(repository: BookOrbitDataSource): LibraryModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).libraries
         is KomgaRepository -> KomgaModuleSet(repository).libraries
         is KavitaRepository -> KavitaModuleSet(repository).modules.libraries
         else -> BookOrbitModuleSet(repository).modules.libraries
@@ -186,6 +208,7 @@ internal fun resolveProviderLibraryModule(repository: BookOrbitDataSource): Libr
 
 internal fun resolveProviderLoginModule(repository: BookOrbitDataSource): LoginModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).login
         is KomgaRepository -> KomgaModuleSet(repository).login
         is KavitaRepository -> KavitaModuleSet(repository).modules.login
         else -> object : LoginModule {
@@ -197,6 +220,7 @@ internal fun resolveProviderLoginModule(repository: BookOrbitDataSource): LoginM
 
 internal fun resolveProviderServerDetectionModule(repository: BookOrbitDataSource): ServerDetectionModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).serverDetection
         is KomgaRepository -> KomgaModuleSet(repository).serverDetection
         is KavitaRepository -> KavitaModuleSet(repository).modules.serverDetection
         else -> object : ServerDetectionModule {
@@ -207,6 +231,7 @@ internal fun resolveProviderServerDetectionModule(repository: BookOrbitDataSourc
 
 internal fun resolveProviderServerSelectionModule(repository: BookOrbitDataSource): ServerSelectionModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).serverSelection
         is KomgaRepository -> KomgaModuleSet(repository).serverSelection
         is KavitaRepository -> KavitaModuleSet(repository).modules.serverSelection
         else -> object : ServerSelectionModule {
@@ -220,6 +245,7 @@ internal fun resolveProviderServerSelectionModule(repository: BookOrbitDataSourc
 
 internal fun resolveProviderCacheModule(repository: BookOrbitDataSource): CacheModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).cache
         is KomgaRepository -> KomgaModuleSet(repository).cache
         is KavitaRepository -> KavitaModuleSet(repository).modules.cache
         else -> object : CacheModule {
@@ -237,6 +263,7 @@ internal fun resolveProviderCacheModule(repository: BookOrbitDataSource): CacheM
 
 internal fun resolveProviderFeatureAvailability(repository: BookOrbitDataSource): ProviderFeatureAvailability =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).featureAvailability
         is KomgaRepository -> KomgaModuleSet(repository).featureAvailability
         is KavitaRepository -> KavitaModuleSet(repository).featureAvailability
         else -> ProviderFeatureAvailability()
@@ -244,6 +271,7 @@ internal fun resolveProviderFeatureAvailability(repository: BookOrbitDataSource)
 
 internal fun resolveProviderSessionModule(repository: BookOrbitDataSource): ProviderSessionModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).session
         is KomgaRepository -> KomgaModuleSet(repository).session
         is KavitaRepository -> KavitaModuleSet(repository).session
         else -> object : ProviderSessionModule {
@@ -260,6 +288,7 @@ internal fun resolveProviderBookOrbitOidcModule(repository: BookOrbitDataSource)
 
 internal fun resolveProviderAuthenticatedMediaModule(repository: BookOrbitDataSource): AuthenticatedMediaModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).authenticatedMedia
         is KomgaRepository -> KomgaModuleSet(repository).authenticatedMedia
         is KavitaRepository -> KavitaModuleSet(repository).authenticatedMedia
         else -> object : AuthenticatedMediaModule {
@@ -279,6 +308,7 @@ internal fun resolveProviderAuthenticatedMediaModule(repository: BookOrbitDataSo
 
 internal fun resolveProviderBackgroundCacheModule(repository: BookOrbitDataSource): BackgroundCacheModule =
     when (repository) {
+        is GrimmoryRepository -> GrimmoryModuleSet(repository).backgroundCache
         is KomgaRepository -> KomgaModuleSet(repository).backgroundCache
         is KavitaRepository -> KavitaModuleSet(repository).backgroundCache
         else -> object : BackgroundCacheModule {

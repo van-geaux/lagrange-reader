@@ -622,7 +622,7 @@ internal fun prepareAudiobookPlaylist(files: List<BookFileOption>): PreparedAudi
             ?: return@mapNotNull null
         val mimeType = file.format?.let(::media3AudioMimeType) ?: return@mapNotNull null
         file to AudiobookMediaItemSpec(
-            fileId = fileId,
+            fileId = file.playbackItemId ?: fileId,
             streamUrl = streamUrl,
             mimeType = mimeType,
             title = file.filename ?: file.book.title,
@@ -679,6 +679,22 @@ internal fun resolveAbsolutePositionMs(
         ?: currentFilePositionMs.coerceAtLeast(0L)
 }
 
+internal fun resolveAudioProgressPosition(
+    audioFiles: List<BookFileOption>,
+    currentPlaybackItemId: String?,
+    currentTrackPositionMs: Long
+): AudioProgressPosition {
+    val playableFiles = AudiobookTimeline.playbackAudioFiles(audioFiles)
+    val index = playableFiles.indexOfFirst {
+        (it.playbackItemId ?: it.fileId) == currentPlaybackItemId
+    }
+    val track = playableFiles.getOrNull(index)
+    val trackIndex = track?.audioTrackIndex ?: index.takeIf { it >= 0 } ?: 0
+    val localPosition = currentTrackPositionMs.coerceAtLeast(0L)
+    val absolutePosition = resolveAbsolutePositionMs(playableFiles, currentPlaybackItemId, localPosition)
+    return AudioProgressPosition(absolutePosition, trackIndex, localPosition)
+}
+
 internal fun resolveTotalDurationMs(
     audioFiles: List<BookFileOption>,
     fallbackDurationMs: Long,
@@ -704,14 +720,26 @@ internal fun resolvePlayerSeekTarget(
     absolutePositionMs: Long
 ): AudiobookTimelinePosition? {
     val target = resolveSeekTarget(audioFiles, absolutePositionMs) ?: return null
-    val mediaItemIndex = mediaItemIds.indexOf(target.fileId)
+    val mediaItemIndex = mediaItemIds.indexOf(target.playbackItemId)
     return target.takeIf { mediaItemIndex >= 0 }?.copy(fileIndex = mediaItemIndex)
+}
+
+internal fun resolveInitialAudiobookPosition(
+    audioFiles: List<BookFileOption>,
+    book: BookSummary,
+    initialPositionMs: Long
+): AudiobookTimelinePosition? {
+    val playableFiles = AudiobookTimeline.playbackAudioFiles(audioFiles)
+    return book.audioProgressPosition?.let {
+        AudiobookTimeline.fromAudioProgressPosition(playableFiles, it)
+    } ?: AudiobookTimeline.absoluteToPosition(playableFiles, initialPositionMs)
 }
 
 internal fun hasSameAudiobookPlaybackManifest(
     existing: List<BookFileOption>,
     requested: List<BookFileOption>
-): Boolean = existing.map { it.fileId } == requested.map { it.fileId }
+): Boolean = existing.map { it.playbackItemId ?: it.fileId } ==
+    requested.map { it.playbackItemId ?: it.fileId }
 
 internal fun resolveInitialAudiobookMediaItemIndex(
     mediaItemIds: List<String>,
@@ -734,7 +762,7 @@ internal fun activeBookSummaryForActiveFile(
     currentFileId: String?
 ): BookSummary {
     val activeFile = AudiobookTimeline.playbackAudioFiles(audioFiles)
-        .firstOrNull { it.fileId == currentFileId }
+        .firstOrNull { (it.playbackItemId ?: it.fileId) == currentFileId }
         ?: return book
     return book.copy(
         fileId = activeFile.book.fileId,
@@ -777,11 +805,13 @@ internal suspend fun openDirectMedia3Audio(
 ): ReadiumAudioOpenResult {
     val playlistItems = buildAudiobookMediaItems(audioFiles, application.packageName)
     if (shouldUsePlaylistMedia3Audio(playlistItems.size)) {
+        val initialPlaylistPosition = resolveInitialAudiobookPosition(audioFiles, book, initialPositionMs)
         return preparePlaylistMedia3Audio(
             application = application,
             mediaItems = playlistItems,
             initialFileId = book.fileId,
-            initialPositionMs = initialPositionMs,
+            initialFileIndex = initialPlaylistPosition?.fileIndex,
+            initialPositionMs = initialPlaylistPosition?.positionMs ?: initialPositionMs,
             pauseForAudioInterruptions = pauseForAudioInterruptions,
             headersProvider = headersProvider,
             recoverAuthentication = recoverAuthentication
@@ -812,6 +842,7 @@ private suspend fun preparePlaylistMedia3Audio(
     application: Application,
     mediaItems: List<MediaItem>,
     initialFileId: String?,
+    initialFileIndex: Int?,
     initialPositionMs: Long,
     pauseForAudioInterruptions: Boolean,
     headersProvider: suspend (AbsoluteUrl) -> Map<String, String>,
@@ -834,10 +865,8 @@ private suspend fun preparePlaylistMedia3Audio(
             )
         )
         .build()
-    val initialIndex = resolveInitialAudiobookMediaItemIndex(
-        mediaItems.map { it.mediaId },
-        initialFileId
-    )
+    val initialIndex = initialFileIndex?.takeIf { it in mediaItems.indices }
+        ?: resolveInitialAudiobookMediaItemIndex(mediaItems.map { it.mediaId }, initialFileId)
     player.setMediaItems(mediaItems, initialIndex, initialPositionMs.coerceAtLeast(0L))
     player.prepare()
 
@@ -1249,6 +1278,9 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
 
         fun absolutePositionMs(): Long =
             resolveAbsolutePositionMs(audioFiles, currentFileId(), currentFilePositionMs())
+
+        fun audioProgressPosition(): AudioProgressPosition =
+            resolveAudioProgressPosition(audioFiles, currentFileId(), currentFilePositionMs())
 
         fun effectivePositionMs(scaleBySpeed: Boolean): Long =
             scaleAudioTimeMs(absolutePositionMs(), currentPlaybackSpeed(), scaleBySpeed)
@@ -2266,7 +2298,11 @@ class ReadiumAudioPlaybackController internal constructor(
     }
 
     private fun publishProgress(session: ReadiumAudioPlaybackService.Session) {
-        val activeBook = session.activeBookSummary()
+        val audioProgressPosition = session.audioProgressPosition()
+        val activeBook = session.activeBookSummary().copy(
+            progressPositionMs = audioProgressPosition.absolutePositionMs,
+            audioProgressPosition = audioProgressPosition
+        )
         val positionMs = session.currentFilePositionMs()
         val percent = progressPercent(session)
         val listener = progressListener

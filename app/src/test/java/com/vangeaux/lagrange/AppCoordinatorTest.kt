@@ -1,9 +1,14 @@
 package com.vangeaux.lagrange
 
 import com.vangeaux.lagrange.core.ActiveReaderSession
+import com.vangeaux.lagrange.core.BookCatalogModule
 import com.vangeaux.lagrange.core.ProviderSessionModule
 import com.vangeaux.lagrange.core.ReaderLifecycleModule
 import com.vangeaux.lagrange.provider.resolveProviderHomeShelfModule
+import com.vangeaux.lagrange.provider.grimmory.GrimmoryRepository
+import com.vangeaux.lagrange.provider.kavita.KavitaRepository
+import com.vangeaux.lagrange.provider.komga.KomgaRepository
+
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -36,6 +41,41 @@ class AppCoordinatorTest {
         title = "Sample Book",
         mediaKind = MediaKind.EPUB
     )
+
+    private class RecordingBookCatalogModule(
+        private val pagesByLibrary: Map<String, LibraryBooksPage>
+    ) : BookCatalogModule {
+        val refreshedLibraryIds = mutableListOf<String>()
+
+        override suspend fun loadBooks(libraryId: String): List<BookSummary> =
+            pagesByLibrary[libraryId]?.items.orEmpty()
+
+        override suspend fun loadBooksPage(
+            libraryId: String,
+            page: Int,
+            filter: BookBrowseFilter
+        ): LibraryBooksPage = pagesByLibrary[libraryId]?.copy(page = page) ?: LibraryBooksPage(page = page)
+
+        override suspend fun loadRecentBooksPage(
+            libraryId: String,
+            section: HomeSection,
+            page: Int
+        ): LibraryBooksPage = pagesByLibrary[libraryId]?.copy(page = page) ?: LibraryBooksPage(page = page)
+
+        override suspend fun loadCachedLibraryCatalog(libraryId: String): LibraryBooksPage? = null
+
+        override suspend fun refreshLibraryCatalog(
+            libraryId: String,
+            firstPage: LibraryBooksPage?
+        ): LibraryBooksPage {
+            refreshedLibraryIds += libraryId
+            return pagesByLibrary[libraryId]?.copy(isComplete = true)
+                ?: firstPage?.copy(isComplete = true)
+                ?: LibraryBooksPage(isComplete = true)
+        }
+
+        override suspend fun searchBooks(query: String): List<BookSummary> = emptyList()
+    }
 
     @Test
     fun `login provider follows matching configured server profile`() {
@@ -172,6 +212,47 @@ class AppCoordinatorTest {
 
         assertEquals(listOf("mp3-1", "mp3-2", "mp3-3"), openedState?.audioFiles?.map { it.fileId })
         assertEquals(801_000L, openedState?.audioTotalDurationMs)
+    }
+
+    @Test
+    fun `Grimmory audiobook open is routed to its selected file opener`() = runTest {
+        val streamUrl = "$serverUrl/api/v1/audiobooks/book-audio/stream?bookType=AUDIOBOOK"
+        val selectedBook = book.copy(
+            id = "book-audio",
+            fileId = "m4b-file",
+            title = "Sample Audio",
+            format = "M4B",
+            mediaKind = MediaKind.AUDIO,
+            streamUrl = streamUrl
+        )
+        val selectedFile = BookFileOption(
+            book = selectedBook,
+            filename = "Sample Audio.m4b",
+            durationMs = 120_000L,
+            role = "content"
+        )
+        val repository = FakeBookOrbitDataSource(
+            bookDetailResult = BookDetailInfo(book = selectedBook, availableFiles = listOf(selectedFile)),
+            buildReaderResult = ReaderState(book = selectedBook, streamUrl = streamUrl)
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+        var openedState: ReaderState? = null
+        val opener = audioPlaybackOpenerForRepositoryType(GrimmoryRepository::class.java) { state, _ ->
+            openedState = state
+            true
+        }
+
+        coordinator.setAudioPlaybackOpener(requireNotNull(opener))
+        coordinator.openBook(selectedBook)
+        advanceUntilIdle()
+
+        assertEquals("m4b-file", openedState?.book?.fileId)
+        assertEquals("M4B", openedState?.book?.format)
+        assertEquals(streamUrl, openedState?.streamUrl)
+        assertNotNull(audioPlaybackOpenerForRepositoryType(BookOrbitRepository::class.java) { _, _ -> true })
+        assertNull(audioPlaybackOpenerForRepositoryType(KomgaRepository::class.java) { _, _ -> true })
+        assertNull(audioPlaybackOpenerForRepositoryType(KavitaRepository::class.java) { _, _ -> true })
+
     }
 
     @Test
@@ -1019,6 +1100,61 @@ class AppCoordinatorTest {
         assertEquals(setOf(book.id, mangaBook.id), state.homeBooks.mapTo(mutableSetOf()) { it.id })
         assertEquals(listOf(mangaBook.id), currentlyReadingBooks(state.homeBooks).map { it.id })
         assertEquals(listOf(library.id, mangaLibrary.id), repository.refreshedLibraryIds)
+    }
+
+    @Test
+    fun `browser catalog refreshes use provider catalog module`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val mangaBook = book.copy(libraryId = mangaLibrary.id, id = "book-manga", fileId = "file-manga")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary)
+        )
+        val catalogModule = RecordingBookCatalogModule(
+            mapOf(
+                library.id to LibraryBooksPage(items = listOf(book), total = 1),
+                mangaLibrary.id to LibraryBooksPage(items = listOf(mangaBook), total = 1)
+            )
+        )
+        val coordinator = AppCoordinator(
+            repository,
+            StandardTestDispatcher(testScheduler),
+            bookCatalogModuleResolver = { catalogModule }
+        )
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+
+        assertEquals(listOf(library.id, mangaLibrary.id), catalogModule.refreshedLibraryIds)
+        assertTrue(repository.refreshedLibraryIds.isEmpty())
+    }
+
+    @Test
+    fun `library selection refresh uses provider catalog module`() = runTest {
+        val mangaLibrary = LibrarySummary(id = "lib-manga", name = "Manga")
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = serverUrl,
+            loadLibrariesResult = listOf(library, mangaLibrary)
+        )
+        val catalogModule = RecordingBookCatalogModule(
+            mapOf(library.id to LibraryBooksPage(items = listOf(book), total = 1))
+        )
+        val coordinator = AppCoordinator(
+            repository,
+            StandardTestDispatcher(testScheduler),
+            bookCatalogModuleResolver = { catalogModule }
+        )
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        catalogModule.refreshedLibraryIds.clear()
+        repository.refreshedLibraryIds.clear()
+
+        coordinator.selectLibrary(mangaLibrary.id)
+        advanceUntilIdle()
+
+        assertEquals(listOf(mangaLibrary.id), catalogModule.refreshedLibraryIds)
+        assertTrue(repository.refreshedLibraryIds.isEmpty())
     }
 
     @Test

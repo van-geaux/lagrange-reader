@@ -15,6 +15,7 @@ This folder contains focused public engineering documentation for Lagrange Reade
 - Provider-specific API and integration contracts are indexed in [Provider documentation](./providers/README.md).
 - [Testing](./testing.md) — current automated gate and manual validation procedures.
 - [Provider Module/Function Matrix](./provider-checklists/module-function-matrix.md) — compare supported, unsupported, partial, and unverified functions across target servers.
+- [Grimmory provider checklist](./provider-checklists/grimmory.md) — native API capabilities, current automated evidence, and remaining device checks.
 - [Provider Manual Validation Checklist](./provider-checklists/provider-checklist-template.md) — copyable maintainer/user checklist for validating each target server/provider.
 - [UI/UX Workstream](./ui-ux.md) — current interaction contracts, design rules, and unresolved UX decisions.
 - [Roadmap](./roadmap.md) — current priorities and deferred work.
@@ -30,5 +31,7 @@ The session handover and historical operator archives (`docs/checklist-archive.m
 ## Current status
 
 Lagrange 2.1.0 is the current release target. The application supports authenticated BookOrbit, Komga, and Kavita browsing, provider-scoped offline caching and downloads, EPUB/PDF/comic reading, EPUB annotations and narration, Preview mode, audiobook playback where supported, progress synchronization where the provider supports it, account isolation on logout, server-missing catalog state, pull-to-refresh, reader font selection, server reading sessions, indexed book navigation, Smart Scopes where available, grouped download notifications, and server-hosted sign-in WebViews. Kavita support is capability-gated and does not expose unsupported authors, annotations, statistics, achievements, Smart Scopes, audiobook downloads, or server reading-session history.
+
+The Grimmory native integration is implemented in issue #422's branch; successful live token refresh and device behavior remain unverified. Keep it out of published-release support claims until those checks are complete.
 
 Use `CHECKLIST.md` for active completion and validation items and `docs/roadmap.md` for the next user-directed work. Session-specific worktree state belongs in the local-only `docs/handover.md`; do not use historical archives as current status without re-verification.

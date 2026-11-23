@@ -50,7 +50,7 @@ A provider-exclusive function is a real capability supplied by one provider but 
 | EPUB bookmarks | BookOrbit, Kavita | EPUB reader bookmark list and actions | Hide bookmark actions or report unavailable for providers without an EPUB bookmark module. |
 | Achievements | BookOrbit | Achievements destination and progress cards | Hide the destination for unsupported providers. |
 | Statistics | BookOrbit, where enabled | Statistics destination and refresh actions | Hide the destination for unsupported providers. |
-| Provider read-status mutations | BookOrbit, where enabled | Mark as menu, read-status filters, status cards | Do not show successful status actions for providers without a status module. |
+| Provider read-status mutations | BookOrbit, Komga, Grimmory (mapped subset) | Mark as menu, read-status filters, status cards | Expose only provider-advertised statuses; hide the action when no status options are available. |
 | Provider progress synchronization | BookOrbit, where enabled | Reader/player resume, sync indicators, progress filters | Do not display sync controls or claim synchronization for unsupported providers. |
 
 For every provider-exclusive row, manually verify all of the following:
@@ -160,6 +160,29 @@ This provider is implemented but has not received complete authenticated device/
 | Offline cache and Local Books | V | Kavita browser snapshot, app-private chapter files, and provider-scoped DownloadStore records | Completed downloads reopen through Local Books; cache warming and disposable-cache controls are provider-routed. |
 | Provider/profile isolation | V | `KavitaModuleSet`, provider-scoped profile/session/download identity | Kavita state must not fall back to BookOrbit after a failed request or leak across profiles. |
 | Home shelves, authors, annotations, statistics, achievements, Smart Scopes | N/U | No implemented module or verified shared contract | Keep UI actions hidden or explicitly unavailable. |
+
+## Grimmory implementation checkpoint
+
+Grimmory is wired as a distinct native `/api/v1` provider. `V` means implemented/source-backed with authenticated manual/device validation still pending. `N` means unavailable in the current Lagrange adapter; it does not assert that Grimmory's server lacks the endpoint. The live identity probe returned only status and field-presence metadata, not account values.
+
+| Function | Grimmory status | Endpoint/source evidence | UI/capability note |
+|---|---:|---|---|
+| Provider selection and profile routing | V | Distinct `grimmory` profile ID and explicit repository/module resolver branches | Device switching and process restoration remain unvalidated. |
+| Primary-account login | V | `POST /api/v1/auth/login`; sanitized live login returned HTTP 200 | Successful refresh/rotation is not verified; the recent live refresh attempt returned HTTP 401. |
+| Stable account identity | V | `GET /api/v1/users/me`; live HTTP 200 with root `id` present, confirmed against upstream `BookLoreUser` DTO | Used for profile-scoped download/reader identity; account switching needs device validation. |
+| Library discovery | V | `GET /api/v1/libraries`; native route and mapping are implemented | Live/device selection workflow remains unvalidated. |
+| Book catalog and search | V | `GET /api/v1/app/books`, native query mapping, and `/api/v1/app/books/search` | Focused parser/contract tests pass; device paging/filter behavior remains pending. |
+| Home shelves | V | Grimmory-native continue-reading and recently-added app endpoints | Only implemented shelves are shown; manual layout/data validation remains pending. |
+| Book detail and covers | V | Native app detail `files[]`/`fileTypes[]`, `/api/v1/media/book/{bookId}/cover`, and `/api/v1/media/book/{bookId}/audiobook-cover` | File formats/media kinds and file IDs are projected per attachment; bounded profile/server-scoped detail enrichment supplies browse labels. On 2026-11-22 the user reported the audiobook-cover fix works; exact tested build/device and fallback case were not supplied, so broader detail/cover validation remains pending. |
+| Multi-format labels and selected-file playback/download | V | `/api/v1/app/books/{bookId}` detail; `/api/v1/audiobooks/{bookId}/info|stream?bookType=…`; `/api/v1/books/{bookId}/files/{fileId}/download` | Automated contracts cover EPUB+M4B metadata, selected M4B info/stream routes, exact file IDs and download route; live alternate-file/device validation remains pending. |
+| Supported online content | V | Native `/api/v1/books/{bookId}/content`, Grimmory CBX page/image routes, and audiobook stream/info routes | CBX and selected audiobook routes have automated contract coverage; live/device validation remains pending. |
+| Downloads and local books | V | `/api/v1/books/{bookId}/download` and `/api/v1/books/{bookId}/files/{fileId}/download`; sanitized live primary response was HTTP 200 `application/octet-stream`; MockWebServer transfer tests | Uses shared profile-scoped download lifecycle; alternate-file server round-trip, on-device storage, and offline reopen remain pending. |
+| Series, collections, authors, Smart Scopes | N | No Grimmory module capability is exposed in this adapter | Actions are explicitly unavailable. |
+| Ratings | N | No Grimmory rating capability is exposed | Actions remain unavailable. |
+| Read-status mutations | V | `PUT /api/v1/app/books/{bookId}/status`; Grimmory `ReadStatus` accepts the mapped `UNREAD`, `READING`, `RE_READING`, `READ`, and `ABANDONED` values; successful response has no status body and library access is checked | Capability-driven `Mark as...` is available for Grimmory for this safe subset; `WANT_TO_READ`, `ON_HOLD`, and `SKIMMED` remain unavailable. Authenticated live round-trip and device validation are pending. The route does not clear/update `dateFinished` when moving away from `READ`. |
+| Online progress synchronization | V | Native `GET`/`PUT /api/v1/app/books/{bookId}/progress`; focused progress/reader/audio tests and the clean issue-branch full automated gate passed on 2026-11-23 | EPUB CFI/href, PDF/CBX page conversion, and audiobook track coordinates are implemented; authenticated Grimmory status/progress round-trips and device validation remain pending. The clean-branch gate aggregated 1,561 JUnit tests across 146 XML files with 0 failures, errors, or skips; lint and debug/debug-test APK assembly succeeded. |
+| Sessions, annotations, EPUB bookmarks | N | No enabled Grimmory implementation | Actions are explicitly unavailable. |
+| Achievements, statistics, offline/background cache | N | No enabled Grimmory implementation | Capability flags and module behavior report unavailable/unsupported. |
 
 ## Blank target-server column template
 

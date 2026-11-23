@@ -84,6 +84,56 @@ class AudiobookTimelineTest {
     }
 
     @Test
+    fun `folder audiobook tracks sharing provider file identity remain distinct`() {
+        val tracks = listOf(
+            file("shared-file", 10_000L, format = "mp3", filename = "Track 1.mp3").copy(
+                playbackItemId = "grimmory:book-42:track-0",
+                audioTrackIndex = 0
+            ),
+            file("shared-file", 20_000L, format = "mp3", filename = "Track 2.mp3").copy(
+                playbackItemId = "grimmory:book-42:track-1",
+                audioTrackIndex = 1
+            )
+        )
+
+        val playable = AudiobookTimeline.playbackAudioFiles(tracks)
+        val target = AudiobookTimeline.absoluteToPosition(playable, 12_000L)!!
+
+        assertEquals(2, playable.size)
+        assertEquals(listOf(0, 1), playable.map { it.audioTrackIndex })
+        assertEquals(30_000L, AudiobookTimeline.totalDurationMs(playable))
+        assertEquals("shared-file", target.fileId)
+        assertEquals("grimmory:book-42:track-1", target.playbackItemId)
+        assertEquals(2_000L, target.positionMs)
+        assertEquals(12_000L, AudiobookTimeline.fileRelativeToAbsolute(
+            playable, "grimmory:book-42:track-1", 2_000L
+        ))
+    }
+
+    @Test
+    fun `restored audiobook coordinates select the matching playback track and local offset`() {
+        val tracks = listOf(
+            file("shared-file", 10_000L, format = "mp3").copy(
+                playbackItemId = "grimmory:42:track-0", audioTrackIndex = 0, audioCumulativeStartMs = 0L
+            ),
+            file("shared-file", 20_000L, format = "mp3").copy(
+                playbackItemId = "grimmory:42:track-1", audioTrackIndex = 1, audioCumulativeStartMs = 10_000L
+            )
+        )
+
+        val position = AudiobookTimeline.fromAudioProgressPosition(
+            tracks,
+            AudioProgressPosition(absolutePositionMs = 12_500L, trackIndex = 1, trackPositionMs = 2_500L)
+        )
+
+        assertEquals(1, position?.fileIndex)
+        assertEquals("shared-file", position?.fileId)
+        assertEquals("grimmory:42:track-1", position?.playbackItemId)
+        assertEquals(2_500L, position?.positionMs)
+        assertEquals(12_500L, position?.absolutePositionMs)
+    }
+
+    @Test
     fun `downloadableAudioFiles drops blank and duplicate identities`() {
         val files = listOf(
             file("first", 1_000L),
@@ -376,6 +426,19 @@ class AudiobookTimelineTest {
     fun `cumulativeStartsMs computes track boundaries`() {
         val starts = AudiobookTimeline.cumulativeStartsMs(fiveTrackFiles)
         assertEquals(listOf(0L, 100_000L, 300_000L, 350_000L, 650_000L), starts)
+    }
+
+    @Test
+    fun `cumulativeStartsMs prefers provider supplied track starts`() {
+        val files = listOf(
+            file("shared", 10_000L).copy(audioCumulativeStartMs = 0L),
+            file("shared", 20_000L).copy(audioCumulativeStartMs = 12_000L)
+        )
+
+        assertEquals(listOf(0L, 12_000L), AudiobookTimeline.cumulativeStartsMs(files))
+        val position = AudiobookTimeline.absoluteToPosition(files, 15_000L)
+        assertEquals(1, position?.fileIndex)
+        assertEquals(3_000L, position?.positionMs)
     }
 
     @Test

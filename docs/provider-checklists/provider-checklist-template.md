@@ -1,10 +1,10 @@
 # Provider checklist template
 
-Copy this file into this folder using the target server/provider name, for example `bookorbit.md`, `komga.md`, or `kavita.md`. Keep one completed checklist per provider. The filename is the provider identity; the validation record inside the file identifies the exact server/build/device.
+Copy this file into this folder using the target server/provider name, for example `bookorbit.md`, `komga.md`, `kavita.md`, or `grimmory.md`. Keep one completed checklist per provider. The filename is the provider identity; the validation record inside the file identifies the exact server/build/device.
 
 ## Validation record
 
-- Provider/server type: `[BookOrbit / Komga / Kavita / other]`
+- Provider/server type: `[BookOrbit / Komga / Kavita / Grimmory / other]`
 - Server base URL: `[non-secret URL or redacted label]`
 - App build/version: `[version]`
 - APK path: `[path or release URL]`

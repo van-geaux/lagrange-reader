@@ -171,6 +171,13 @@ data class LibrarySummary(
     val coverAspectRatio: CoverAspectRatio = CoverAspectRatio.PORTRAIT
 )
 
+/** Provider-neutral audiobook coordinates: logical absolute time plus active track position. */
+data class AudioProgressPosition(
+    val absolutePositionMs: Long,
+    val trackIndex: Int,
+    val trackPositionMs: Long
+)
+
 data class BookSummary(
     val libraryId: String,
     val id: String,
@@ -191,6 +198,7 @@ data class BookSummary(
     val progressLabel: String? = null,
     val progressPercent: Float? = null,
     val progressPositionMs: Long? = null,
+    val audioProgressPosition: AudioProgressPosition? = null,
     val progressPageIndex: Int? = null,
     val seriesId: String? = null,
     val seriesName: String? = null,
@@ -263,7 +271,13 @@ data class BookFileOption(
     val durationMs: Long? = null,
     val groupingPath: String? = null,
     val audioAssetId: String? = null,
-    val audioManifestRevision: String? = null
+    val audioManifestRevision: String? = null,
+    /** Stable playback identity when one provider file expands to several ordered tracks. */
+    val playbackItemId: String? = null,
+    /** Provider-native zero-based track index, when the provider exposes one. */
+    val audioTrackIndex: Int? = null,
+    /** Provider-reported absolute start of this track in the logical audiobook. */
+    val audioCumulativeStartMs: Long? = null
 ) {
     val fileId: String? get() = book.fileId
     val format: String? get() = book.format

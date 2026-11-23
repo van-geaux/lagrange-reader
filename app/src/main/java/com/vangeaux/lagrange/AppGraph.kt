@@ -3,6 +3,7 @@ package com.vangeaux.lagrange
 import android.content.Context
 import com.vangeaux.lagrange.provider.komga.KomgaRepository
 import com.vangeaux.lagrange.provider.kavita.KavitaRepository
+import com.vangeaux.lagrange.provider.grimmory.GrimmoryRepository
 import com.vangeaux.lagrange.core.DownloadModule
 import com.vangeaux.lagrange.provider.bookorbit.BookOrbitModuleSet
 
@@ -33,9 +34,24 @@ class AppGraph private constructor(
         val sessionHistoryStore = sessionHistoryStore ?: return
         val reconfigure: (BookOrbitDataSource) -> Unit = { source ->
             val bookOrbitRepository = source as? BookOrbitRepository
+            coordinator.setAudioPlaybackOpener(
+                audioPlaybackOpenerForRepositoryType(source.javaClass) { state, playWhenReady ->
+                    controller.restorePersistedSession(state, playWhenReady)
+                }
+            )
             if (bookOrbitRepository == null) {
-                coordinator.setAudioPlaybackOpener(null)
                 coordinator.setAudioSessionHistoryOpener(null)
+                if (source is GrimmoryRepository) {
+                    val authenticatedMedia = resolveProviderAuthenticatedMediaModule(source)
+                    controller.setStreamingAuthentication(
+                        headersProvider = { url -> authenticatedMedia.requestHeaders(url.toString()) },
+                        recoverAuthentication = authenticatedMedia::recoverAuthentication
+                    )
+                    controller.setSessionHistoryStore(
+                        store = sessionHistoryStore,
+                        serverUrlProvider = source::getServerUrl
+                    )
+                }
             } else {
                 controller.setStreamingAuthentication(
                     headersProvider = { url ->
@@ -74,6 +90,7 @@ class AppGraph private constructor(
             val repository: BookOrbitDataSource = when (activeProfile?.providerId) {
                 PROVIDER_KOMGA -> KomgaRepository(context)
                 PROVIDER_KAVITA -> KavitaRepository(context)
+                PROVIDER_GRIMMORY -> GrimmoryRepository(context)
                 else -> BookOrbitRepository(context)
             }
             val sessionHistoryStore = AudiobookSessionHistoryStore(context)
@@ -124,4 +141,14 @@ class AppGraph private constructor(
             return Dependencies(repository, sessionHistoryStore, coordinator)
         }
     }
+}
+
+internal fun audioPlaybackOpenerForRepositoryType(
+    repositoryType: Class<*>,
+    opener: suspend (ReaderState, Boolean) -> Boolean
+): (suspend (ReaderState, Boolean) -> Boolean)? {
+    val supportsAudiobookPlayback =
+        BookOrbitRepository::class.java.isAssignableFrom(repositoryType) ||
+            GrimmoryRepository::class.java.isAssignableFrom(repositoryType)
+    return opener.takeIf { supportsAudiobookPlayback }
 }

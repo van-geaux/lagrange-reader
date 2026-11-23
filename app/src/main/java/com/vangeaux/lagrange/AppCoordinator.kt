@@ -1581,7 +1581,10 @@ class AppCoordinator internal constructor(
                 if (deferInitialCatalogLoad) {
                     return@runCatching
                 }
-                val refreshedCatalog = repository.refreshLibraryCatalog(
+                val refreshedCatalog = bookCatalogModule()?.refreshLibraryCatalog(
+                    libraryId = selectedLibrary,
+                    firstPage = firstPage.takeUnless { it.isComplete }
+                ) ?: repository.refreshLibraryCatalog(
                     libraryId = selectedLibrary,
                     firstPage = firstPage.takeUnless { it.isComplete }
                 )
@@ -1621,7 +1624,8 @@ class AppCoordinator internal constructor(
                         batch.map { library ->
                             async {
                                 try {
-                                    library to repository.refreshLibraryCatalog(library.id)
+                                    library to (bookCatalogModule()?.refreshLibraryCatalog(library.id)
+                                        ?: repository.refreshLibraryCatalog(library.id))
                                 } catch (error: CancellationException) {
                                     throw error
                                 } catch (error: AuthenticationRequiredException) {
@@ -1807,7 +1811,10 @@ class AppCoordinator internal constructor(
                         isCatalogSyncing = true
                     )
                 )
-                val refreshedCatalog = repository.refreshLibraryCatalog(
+                val refreshedCatalog = bookCatalogModule()?.refreshLibraryCatalog(
+                    libraryId = libraryId,
+                    firstPage = firstPage.takeUnless { it.isComplete }
+                ) ?: repository.refreshLibraryCatalog(
                     libraryId = libraryId,
                     firstPage = firstPage.takeUnless { it.isComplete }
                 )

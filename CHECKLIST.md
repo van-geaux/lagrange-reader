@@ -11,7 +11,10 @@ This is the active completion and validation checklist. Historical work orders a
 ## Current implementation status
 
 - [x] BookOrbit browsing, cache-first offline fallback, downloads, progress/status synchronization, EPUB/PDF/comic reading, audiobook playback, server reading sessions, statistics, achievements, and EPUB image/TTS tools are implemented.
-- [x] Provider module separation is implemented for BookOrbit, Komga, and Kavita; provider-specific behavior remains behind provider-owned modules and focused contracts. Kavita manual validation remains incomplete.
+- [x] Provider module separation is implemented for BookOrbit, Komga, Kavita, and Grimmory; provider-specific behavior remains behind provider-owned modules and focused contracts. Kavita and Grimmory manual validation remains incomplete.
+- [x] Grimmory is wired as a distinct native `/api/v1` provider with profile/repository routing, authentication, stable account identity, catalog, and download modules; focused and full automated gates passed, while device behavior and successful refresh remain pending.
+- [x] Grimmory's initial-library, remaining-library, and selected-library catalog refreshes route through the resolved `BookCatalogModule`; coordinator regressions verify the compatibility repository refresh is not invoked when that module is present.
+- [ ] Finish auditing incomplete/alternate resolver composition and local compatibility-cache projections; authenticated device validation and successful live token refresh remain pending.
 - [x] Komga catalog filtering, format sorting, scoped Recommended results, local-reader fallback, download lifecycle projection, and supported format coverage are documented in [`docs/provider-checklists/komga.md`](docs/provider-checklists/komga.md).
 - [x] EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, navigation-bar controls, audiobook speed/progress controls, and grouped physical-file handling are included in 1.5.4.
 - [x] CBR/CB7 offline opening uses client-side RAR4/RAR5/7z extraction into a cached CBZ; MOBI, AZW, AZW3, and FB2 remain unsupported.
