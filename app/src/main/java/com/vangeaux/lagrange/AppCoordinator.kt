@@ -6,10 +6,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -2961,9 +2963,22 @@ class AppCoordinator internal constructor(
         }
     }
 
+    private fun logProgressWarning(message: String, error: Throwable) {
+        runCatching { Log.w("ProgressSync", message, error) }
+    }
+
     fun onProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        val isEpub = book.mediaKind == MediaKind.EPUB
+        if (isEpub) {
+            ProgressSyncDiagnostics.log(
+                "coordinator_received percent=${progressPercent ?: "missing"} " +
+                    "locator_cfi_present=${epubBookmarkCfiFromLocatorJson(book.readerLocatorJson.orEmpty()) != null} " +
+                    "accepting_progress=$acceptAudioProgress"
+            )
+        }
         if (!acceptAudioProgress) return
         if ((_screen.value as? AppScreen.Reader)?.readerState?.launchMode == ReaderLaunchMode.PREVIEW) {
+            if (isEpub) ProgressSyncDiagnostics.log("coordinator_skipped reason=preview")
             return
         }
         val key = book.progressKey()
@@ -3011,15 +3026,21 @@ class AppCoordinator internal constructor(
             if (!activityServerUrl.isNullOrBlank()) {
                 lastBrowserState?.let { rememberReadingShelfOrder(activityServerUrl, it.homeBooks) }
             }
-            if (
+            val shouldQueueProgress =
                 acceptAudioProgress &&
                     ProgressQueuePolicy.shouldQueue(progress.toSnapshot(), queuedProgressByTarget[key]?.toSnapshot())
-            ) {
+            if (isEpub) {
+                ProgressSyncDiagnostics.log(
+                    "coordinator_decision percent=${progress.progressPercent ?: progress.book.progressPercent ?: "missing"} " +
+                        "should_queue=$shouldQueueProgress"
+                )
+            }
+            if (shouldQueueProgress) {
                 if (!activityServerUrl.isNullOrBlank()) {
                     persistReadingActivitySafely(activityServerUrl, progress)
                 }
                 runCatching { queueProgress(key, progress) }
-                    .onFailure { error -> Log.w("ProgressSync", "Unable to queue reading progress", error) }
+                    .onFailure { error -> logProgressWarning("Unable to queue reading progress", error) }
             }
         }
     }
@@ -3132,11 +3153,32 @@ class AppCoordinator internal constructor(
         }
         scope.launch {
             if (reader?.readerState?.launchMode != ReaderLaunchMode.PREVIEW) {
-                flushReaderProgress(reader)
-                // Try to publish before clearing the active reader. WorkManager remains
-                // the fallback for offline/transient failures.
-                runCatching { readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress() }
-                clearActiveReader()
+                try {
+                    try {
+                        flushReaderProgress(reader)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        logProgressWarning("Unable to flush reader progress while closing", error)
+                    }
+                    // Try to publish before clearing the active reader. WorkManager remains
+                    // the fallback for offline/transient failures.
+                    try {
+                        readingProgressModule()?.syncPendingProgress() ?: repository.syncPendingProgress()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        logProgressWarning("Unable to sync queued progress while closing", error)
+                    }
+                } finally {
+                    withContext(NonCancellable) {
+                        try {
+                            clearActiveReader()
+                        } catch (error: Exception) {
+                            logProgressWarning("Unable to clear active reader while closing", error)
+                        }
+                    }
+                }
             }
             loadBrowser()
         }
@@ -3490,13 +3532,26 @@ class AppCoordinator internal constructor(
     }
 
     private suspend fun queueProgress(key: BookProgressKey, progress: PendingProgress) {
-        (readingProgressModule() ?: resolveProviderReadingProgressModule(repository)).queueProgress(
-            book = progress.book,
-            position = progress.position,
-            pageIndex = progress.pageIndex,
-            progressPercent = progress.progressPercent
-        )
-        queuedProgressByTarget[key] = progress
+        val book = progress.book
+        val isEpub = book.mediaKind == MediaKind.EPUB
+        val percent = progress.progressPercent ?: book.progressPercent
+        val cfiPresent = epubBookmarkCfiFromLocatorJson(book.readerLocatorJson.orEmpty()) != null
+        if (isEpub) {
+            ProgressSyncDiagnostics.log("coordinator_queue_start percent=${percent ?: "missing"} locator_cfi_present=$cfiPresent")
+        }
+        try {
+            (readingProgressModule() ?: resolveProviderReadingProgressModule(repository)).queueProgress(
+                book = book,
+                position = progress.position,
+                pageIndex = progress.pageIndex,
+                progressPercent = progress.progressPercent
+            )
+            queuedProgressByTarget[key] = progress
+            if (isEpub) ProgressSyncDiagnostics.log("coordinator_queue_complete percent=${percent ?: "missing"}")
+        } catch (error: Exception) {
+            if (isEpub) ProgressSyncDiagnostics.log("coordinator_queue_failed class=${error.javaClass.simpleName}")
+            throw error
+        }
     }
 
     private fun PendingProgress.toSnapshot(): ProgressSnapshot {

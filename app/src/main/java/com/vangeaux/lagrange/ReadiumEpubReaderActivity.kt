@@ -117,6 +117,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.readium.navigator.media.tts.AndroidTtsNavigatorFactory
 import org.readium.navigator.media.tts.android.AndroidTtsEngine
 import com.vangeaux.lagrange.epubtts.EpubTtsModuleImpl
+import org.json.JSONArray
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.HyperlinkNavigator
@@ -2201,6 +2202,32 @@ internal fun shouldShowEpubBookmarks(
     readerFileId: String?
 ): Boolean = !isPreview && moduleAvailable &&
     !bookId.isNullOrBlank() && !readerFileId.isNullOrBlank()
+
+internal fun epubProgressLocatorJsonForExit(
+    preservedLocatorJson: String?,
+    activeLocatorJson: String?,
+    restoredLocatorJson: String?,
+    generatedCfi: String?
+): String? {
+    val candidate = sequenceOf(preservedLocatorJson, activeLocatorJson, restoredLocatorJson)
+        .mapNotNull(::boundedReaderLocatorJson)
+        .firstOrNull()
+        ?: return null
+    return epubProgressLocatorJsonWithCfi(candidate, generatedCfi)
+}
+
+internal fun epubProgressLocatorJsonWithCfi(locatorJson: String?, generatedCfi: String?): String? {
+    val bounded = boundedReaderLocatorJson(locatorJson) ?: return null
+    if (epubBookmarkCfiFromLocatorJson(bounded) != null) return bounded
+    val cfi = generatedCfi?.takeIf { it.startsWith("epubcfi(") && it.endsWith(")") }
+        ?: return bounded
+    val json = runCatching { JSONObject(bounded) }.getOrNull() ?: return bounded
+    if (json.optString("href").isBlank()) return bounded
+    val locations = json.optJSONObject("locations") ?: JSONObject()
+    locations.put("fragments", JSONArray().put(cfi))
+    json.put("locations", locations)
+    return boundedReaderLocatorJson(json.toString()) ?: bounded
+}
 
 internal fun epubBookmarkCfiFromLocatorJson(locatorJson: String): String? = runCatching {
     val fragments = JSONObject(locatorJson)
@@ -6014,6 +6041,19 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             .show()
     }
 
+    private suspend fun currentEpubBookmarkCfiForHref(expectedHref: String): String? {
+        val fragment = navigator ?: return null
+        val openedPublication = publication ?: return null
+        val readingOrderHrefs = openedPublication.readingOrder.map { it.url().toString() }
+        val expectedSpineIndex = selectedSpineIndex(expectedHref, readingOrderHrefs) ?: return null
+        val activeSpineIndex = selectedSpineIndex(
+            fragment.currentLocator.value.href.toString(),
+            readingOrderHrefs
+        ) ?: return null
+        if (expectedSpineIndex != activeSpineIndex) return null
+        return currentEpubBookmarkCfi()
+    }
+
     private suspend fun currentEpubBookmarkCfi(): String? {
         val fragment = navigator ?: return null
         val locator = fragment.currentLocator.value
@@ -6400,7 +6440,44 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         )
     }
 
-    private fun updateResult(reason: ReaderCompletionReason? = null) {
+    internal suspend fun currentEpubProgressLocatorJsonForExit(): String? {
+        val preservedLocatorJson = passiveRecoveryGuard.positionToPreserve?.locatorJson
+        val activeLocatorJson = navigator?.currentLocator?.value
+            ?.takeIf { rendererHealthConfirmed }
+            ?.toJSON()
+            ?.toString()
+        val restoredLocatorJson = restoredLocator?.toJSON()?.toString()
+        val candidate = sequenceOf(preservedLocatorJson, activeLocatorJson, restoredLocatorJson)
+            .mapNotNull(::boundedReaderLocatorJson)
+            .firstOrNull()
+            ?: return null
+        if (epubBookmarkCfiFromLocatorJson(candidate) != null) return candidate
+
+        val expectedHref = runCatching { JSONObject(candidate).optString("href") }
+            .getOrNull()
+            ?.takeIf(String::isNotBlank)
+        val generatedCfi = expectedHref?.let { href ->
+            withTimeoutOrNull(3_000L) {
+                runCatching { currentEpubBookmarkCfiForHref(href) }.getOrNull()
+            }
+        }
+        val result = epubProgressLocatorJsonForExit(
+            preservedLocatorJson = preservedLocatorJson,
+            activeLocatorJson = activeLocatorJson,
+            restoredLocatorJson = restoredLocatorJson,
+            generatedCfi = generatedCfi
+        )
+        ProgressSyncDiagnostics.log(
+            "exit_locator generated_cfi_present=${generatedCfi != null} " +
+                "locator_cfi_present=${epubBookmarkCfiFromLocatorJson(result.orEmpty()) != null}"
+        )
+        return result
+    }
+
+    private fun updateResult(
+        reason: ReaderCompletionReason? = null,
+        locatorJsonOverride: String? = null
+    ) {
         val preserved = passiveRecoveryGuard.positionToPreserve
         val currentLocatorJson = (navigator?.currentLocator?.value?.takeIf { rendererHealthConfirmed }
             ?: restoredLocator)
@@ -6413,6 +6490,13 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
             currentPercent = currentPercent,
             currentLocatorJson = currentLocatorJson
         )
+        val resultLocatorJson = locatorJsonOverride ?: progress.locatorJson
+        if (reason == ReaderCompletionReason.USER_CLOSED && !isPreview) {
+            ProgressSyncDiagnostics.log(
+                "activity_exit result_percent=${progress.percent ?: "missing"} current_percent=$currentPercent " +
+                    "display_percent=$currentDisplayPercent locator_cfi_present=${epubBookmarkCfiFromLocatorJson(resultLocatorJson.orEmpty()) != null}"
+            )
+        }
         val data = Intent().apply {
             reason?.let { putExtra(EXTRA_READER_COMPLETION_REASON, it.name) }
             if (!isPreview) {
@@ -6420,7 +6504,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                 putExtra(EXTRA_RESULT_PAGE, progress.pageIndex)
                 putExtra(EXTRA_RESULT_PAGE_COUNT, progress.pageCount)
                 putExtra(EXTRA_RESULT_PERCENT, progress.percent ?: Float.NaN)
-                progress.locatorJson?.let { putExtra(EXTRA_RESULT_LOCATOR_JSON, it) }
+                resultLocatorJson?.let { putExtra(EXTRA_RESULT_LOCATOR_JSON, it) }
             }
         }
         setResult(Activity.RESULT_OK, data)
@@ -6430,9 +6514,10 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         if (finishReaderJob != null) return
         closePlaybackForReaderExit()
         endReadingSession()
-        updateResult(ReaderCompletionReason.USER_CLOSED)
         finishReaderJob = lifecycleScope.launch {
             try {
+                val locatorJson = if (isPreview) null else currentEpubProgressLocatorJsonForExit()
+                updateResult(ReaderCompletionReason.USER_CLOSED, locatorJson)
                 flushLatestReaderPosition()
                 finish()
             } catch (_: Exception) {

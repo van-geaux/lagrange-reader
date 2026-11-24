@@ -31,7 +31,8 @@ import kotlin.coroutines.resumeWithException
 internal class GrimmoryProgressModule(
     private val client: OkHttpClient,
     private val auth: AuthenticatedMediaModule,
-    private val serverUrlProvider: suspend () -> String?
+    private val serverUrlProvider: suspend () -> String?,
+    private val diagnosticSink: ((String) -> Unit)? = null
 ) : ReadingProgressModule {
     suspend fun loadReaderProgress(
         book: BookSummary,
@@ -130,6 +131,27 @@ internal class GrimmoryProgressModule(
             else -> grimmoryUnavailable("Reading-progress synchronization for ${book.format}")
         }
         execute("PUT", progressUrl(bookId), payload.toString())
+        if (book.mediaKind == MediaKind.EPUB && diagnosticSink != null) {
+            try {
+                val readBack = loadReaderProgress(book, listOf(BookFileOption(book)))
+                val cfiPresent = runCatching {
+                    JSONObject(readBack.readerLocatorJson.orEmpty())
+                        .optJSONObject("locations")
+                        ?.optJSONArray("fragments")
+                        ?.optString(0)
+                        ?.startsWith("epubcfi(") == true
+                }.getOrDefault(false)
+                diagnostic("readback percent=${readBack.serverProgressPercent ?: "missing"} cfi_present=$cfiPresent")
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                diagnostic("readback_error class=${error.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun diagnostic(message: String) {
+        runCatching { diagnosticSink?.invoke(message) }
     }
 
     override suspend fun pendingProgressCount(): Int = 0
@@ -161,6 +183,7 @@ internal class GrimmoryProgressModule(
         if (result.statusCode == 401 && auth.recoverAuthentication()) {
             result = executeOnce(client.newCall(buildRequest()))
         }
+        diagnostic("http method=$method status=${result.statusCode}")
         if (result.statusCode == 401 || result.statusCode == 403) {
             throw AuthenticationRequiredException()
         }

@@ -2917,6 +2917,54 @@ class AppCoordinatorTest {
     }
 
     @Test
+    fun `close reader still cleans up when final progress queueing fails`() = runTest {
+        val epub = book.copy(format = "EPUB", mediaKind = MediaKind.EPUB)
+        val repository = FakeBookOrbitDataSource(
+            queueProgressError = IllegalStateException("synthetic missing CFI")
+        )
+        val clearCalls = mutableListOf<Unit>()
+        val lifecycle = object : ReaderLifecycleModule {
+            override suspend fun saveActiveReader(
+                serverUrl: String,
+                book: BookSummary,
+                launchMode: ReaderLaunchMode
+            ) = Unit
+
+            override suspend fun clearActiveReader() {
+                clearCalls += Unit
+            }
+
+            override suspend fun readActiveReaderSession(serverUrl: String): ActiveReaderSession? = null
+            override suspend fun saveEpubReaderPosition(serverUrl: String, book: BookSummary) = Unit
+            override suspend fun clearEpubReaderPosition(serverUrl: String, book: BookSummary) = Unit
+            override suspend fun restoreEpubReaderPosition(serverUrl: String, state: ReaderState): ReaderState = state
+        }
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            readerLifecycleModule = lifecycle
+        )
+        coordinator.bootstrapIntoBrowser(
+            BrowserState(
+                serverUrl = serverUrl,
+                libraries = listOf(library),
+                selectedLibraryId = library.id,
+                books = listOf(epub)
+            )
+        )
+        coordinator.setScreenForTest(AppScreen.Reader(ReaderState(book = epub, launchMode = ReaderLaunchMode.NORMAL)))
+        assertEquals(ReaderLaunchMode.NORMAL, (coordinator.screen.value as AppScreen.Reader).readerState.launchMode)
+
+        coordinator.onProgress(epub, position = 0L, pageIndex = 0, progressPercent = 42.5f)
+        advanceUntilIdle()
+        coordinator.closeReader()
+        advanceUntilIdle()
+
+        assertEquals(1, clearCalls.size)
+        assertTrue(repository.queuedProgress.isEmpty())
+    }
+
+    @Test
     fun `close reader restores cached browser before background work runs`() = runTest {
         val repository = FakeBookOrbitDataSource()
         val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
@@ -4613,6 +4661,7 @@ private class FakeBookOrbitDataSource(
     var checkServerResult: ServerCheckResult = ServerCheckResult.Reachable,
     var pendingProgressCountResult: Int = 0,
     var syncPendingProgressResult: SyncAttemptResult = SyncAttemptResult.Success,
+    var queueProgressError: Throwable? = null,
     var deleteLocalErrorsByBookId: Map<String, Throwable> = emptyMap(),
     var updateAnnotationError: Throwable? = null,
     var deleteAnnotationError: Throwable? = null,
@@ -4887,6 +4936,7 @@ private class FakeBookOrbitDataSource(
     }
 
     override suspend fun queueProgress(book: BookSummary, position: Long, pageIndex: Int, progressPercent: Float?) {
+        queueProgressError?.let { throw it }
         queuedProgress += book
     }
 

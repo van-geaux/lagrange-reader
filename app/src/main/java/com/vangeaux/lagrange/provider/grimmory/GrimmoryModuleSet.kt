@@ -45,7 +45,8 @@ internal class GrimmoryModuleSet(private val repository: GrimmoryRepository) {
     private val readingProgressModule = GrimmoryProgressModule(
         client = OkHttpClient(),
         auth = auth,
-        serverUrlProvider = { repository.getServerUrl() }
+        serverUrlProvider = { repository.getServerUrl() },
+        diagnosticSink = if (BuildConfig.DEBUG) ProgressSyncDiagnostics::log else null
     )
     private val formatMetadataEnricher = GrimmoryFormatMetadataEnricher { path -> repository.nativeJson(path) }
     private val homeShelfModule = GrimmoryHomeShelfModule(

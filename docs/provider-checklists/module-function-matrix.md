@@ -28,6 +28,8 @@ On 2026-11-10, the JVM `KavitaHomeShelfTest.homeShelfFailureDoesNotDiscardSucces
 
 On 2026-11-23, Van Geaux reported that online Grimmory comic reading works on their device. The exact build/device, server instance, and separate first/subsequent-page, page-mapping/progress, download-retention, and local-only results were not supplied. The assistant-run emulator separately showed an invalid comic page URL before the templated-page fix. The fix now passes a focused MockWebServer instrumentation test for the Grimmory `{page1}` URL and one-based page fetch, but the final APK has not been retested against a live server/device. Keep Grimmory online-content status `V` pending that retest and the remaining checklist scope; see `grimmory.md`.
 
+On 2026-11-24, Van Geaux reported that the previously reproduced EPUB progress mismatch was resolved after the latest provided APK, `Lagrange-debug-202611241232.apk`. This confirms only that reported EPUB scenario; the exact device/server, server-returned percentage, and CFI/`href` read-back were not supplied. Keep broad online progress synchronization `V` until endpoint-level read-back and PDF/CBX/audiobook behavior are verified; see `grimmory.md`.
+
 ## Status legend
 
 - `S` Supported and implemented for the target provider.

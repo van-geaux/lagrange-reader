@@ -58,6 +58,10 @@ internal fun ReadiumEpubReaderLauncher(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         ReadiumEpubReaderActivity.readProgressResult(result.data)?.let { progress ->
+            ProgressSyncDiagnostics.log(
+                "launcher_result percent=${progress.percent ?: "missing"} " +
+                    "locator_cfi_present=${epubBookmarkCfiFromLocatorJson(progress.locatorJson.orEmpty()) != null}"
+            )
             latestOnProgress(
                 progress.chapterIndex,
                 progress.pageIndex,

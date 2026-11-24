@@ -1,5 +1,6 @@
 package com.vangeaux.lagrange
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -521,6 +522,61 @@ class EpubWakeRecoveryTest {
         assertEquals(71, result.pageCount)
         assertNull(result.percent)
         assertEquals(stored.locatorJson, result.locatorJson)
+    }
+
+    @Test
+    fun `exit progress locator adds CFI to preserved and restored locators when needed`() {
+        val cfi = "epubcfi(/6/2!/4/2:8)"
+        val preserved = """{"href":"OPS/preserved.xhtml","type":"application/xhtml+xml","locations":{"progression":0.43}}"""
+        val restored = """{"href":"OPS/restored.xhtml","type":"application/xhtml+xml","locations":{"progression":0.20}}"""
+
+        val fromPreserved = requireNotNull(
+            epubProgressLocatorJsonForExit(
+                preservedLocatorJson = preserved,
+                activeLocatorJson = null,
+                restoredLocatorJson = restored,
+                generatedCfi = cfi
+            )
+        )
+        assertEquals("OPS/preserved.xhtml", JSONObject(fromPreserved).optString("href"))
+        assertEquals(0.43, JSONObject(fromPreserved).optJSONObject("locations")?.optDouble("progression") ?: -1.0, 0.0001)
+        assertEquals(cfi, epubBookmarkCfiFromLocatorJson(fromPreserved))
+
+        val fromRestored = requireNotNull(
+            epubProgressLocatorJsonForExit(
+                preservedLocatorJson = null,
+                activeLocatorJson = null,
+                restoredLocatorJson = restored,
+                generatedCfi = cfi
+            )
+        )
+        assertEquals("OPS/restored.xhtml", JSONObject(fromRestored).optString("href"))
+        assertEquals(cfi, epubBookmarkCfiFromLocatorJson(fromRestored))
+    }
+
+    @Test
+    fun `grimmory progress locator adds generated CFI when Readium omits one`() {
+        val cfi = "epubcfi(/6/2!/4/2:8)"
+        val locator = """{"href":"OPS/chapter.xhtml","type":"application/xhtml+xml","locations":{"progression":0.42}}"""
+
+        val result = requireNotNull(epubProgressLocatorJsonWithCfi(locator, cfi))
+        val json = JSONObject(result)
+
+        assertEquals("OPS/chapter.xhtml", json.optString("href"))
+        assertEquals(0.42, json.optJSONObject("locations")?.optDouble("progression") ?: -1.0, 0.0001)
+        assertEquals(cfi, epubBookmarkCfiFromLocatorJson(result))
+    }
+
+    @Test
+    fun `grimmory progress locator preserves an existing Readium CFI`() {
+        val existingCfi = "epubcfi(/6/2!/4/2:8)"
+        val generatedCfi = "epubcfi(/6/2!/4/4:12)"
+        val locator = """{"href":"OPS/chapter.xhtml","type":"application/xhtml+xml","locations":{"fragments":["$existingCfi"],"progression":0.42}}"""
+
+        val result = requireNotNull(epubProgressLocatorJsonWithCfi(locator, generatedCfi))
+
+        assertEquals(locator, result)
+        assertEquals(existingCfi, epubBookmarkCfiFromLocatorJson(result))
     }
 
     @Test

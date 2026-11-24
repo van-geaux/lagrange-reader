@@ -5,6 +5,7 @@ import com.vangeaux.lagrange.BookReadStatus
 import com.vangeaux.lagrange.BookSummary
 import com.vangeaux.lagrange.AudioProgressPosition
 import com.vangeaux.lagrange.MediaKind
+import com.vangeaux.lagrange.epubProgressLocatorJsonWithCfi
 import com.vangeaux.lagrange.core.AuthenticatedMediaModule
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
@@ -271,6 +272,57 @@ class GrimmoryProgressModuleTest {
     }
 
     @Test
+    fun `diagnostic EPUB progress records request status and server read back`() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setResponseCode(204))
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"epubProgress":{"cfi":"epubcfi(/6/2[chapter]!/4/2/2:8)","href":"OPS/chapter.xhtml","percentage":21.0}}"""
+                )
+            )
+            server.start()
+            val diagnostics = mutableListOf<String>()
+            val module = GrimmoryProgressModule(
+                client = OkHttpClient(),
+                auth = TestAuth(),
+                serverUrlProvider = { server.url("/library/").toString().trimEnd('/') },
+                diagnosticSink = diagnostics::add
+            )
+            val book = BookSummary(
+                libraryId = "7",
+                id = "42",
+                fileId = "99",
+                title = "A Story",
+                format = "EPUB",
+                mediaKind = MediaKind.EPUB,
+                readerLocatorJson = """{"href":"OPS/chapter.xhtml","locations":{"fragments":["epubcfi(/6/2[chapter]!/4/2/2:8)"]}}"""
+            )
+
+            module.queueProgress(book, position = 0L, pageIndex = 0, progressPercent = 21f)
+
+            val put = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals("PUT", put?.method)
+            assertEquals(
+                21.0,
+                JSONObject(put?.body?.readUtf8().orEmpty()).optJSONObject("fileProgress")
+                    ?.optDouble("progressPercent", -1.0) ?: -1.0,
+                0.001
+            )
+            val readBack = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS)
+            assertEquals("GET", readBack?.method)
+            assertEquals("/library/api/v1/app/books/42/progress", readBack?.path)
+            assertEquals(
+                listOf(
+                    "http method=PUT status=204",
+                    "http method=GET status=200",
+                    "readback percent=21.0 cfi_present=true"
+                ),
+                diagnostics
+            )
+        }
+    }
+
+    @Test
     fun `queue EPUB progress sends native file progress payload and accepts empty success`() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(204))
@@ -283,6 +335,12 @@ class GrimmoryProgressModuleTest {
             )
             val cfi = "epubcfi(/6/2[chapter]!/4/2/2:8)"
             val href = "OPS/chapter.xhtml"
+            val locatorJson = requireNotNull(
+                epubProgressLocatorJsonWithCfi(
+                    locatorJson = """{"href":"$href","type":"application/xhtml+xml","locations":{"progression":0.42}}""",
+                    generatedCfi = cfi
+                )
+            )
             val book = BookSummary(
                 libraryId = "7",
                 id = "42",
@@ -290,7 +348,7 @@ class GrimmoryProgressModuleTest {
                 title = "A Story",
                 format = "EPUB",
                 mediaKind = MediaKind.EPUB,
-                readerLocatorJson = """{"href":"$href","type":"application/xhtml+xml","locations":{"fragments":["$cfi"]}}"""
+                readerLocatorJson = locatorJson
             )
 
             module.queueProgress(book, position = 0L, pageIndex = 0, progressPercent = 65.5f)
