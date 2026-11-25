@@ -1916,10 +1916,38 @@ internal fun androidAutoSessionExtras(): Bundle = Bundle().apply {
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
+internal fun dispatchAndroidAutoVehicleSkipKeyCode(
+    player: Player,
+    keyCode: Int,
+    jumpChapters: Boolean = (player as? LagrangeLibrarySessionPlayer)?.isVehicleSkipChaptersEnabled() == true
+): Boolean = when (keyCode) {
+    android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+    android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
+        if (player is LagrangeLibrarySessionPlayer) {
+            if (jumpChapters) player.skipToPreviousChapterOrTrack() else player.seekBackAuto()
+        } else {
+            player.seekBack()
+        }
+        true
+    }
+    android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
+    android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+        if (player is LagrangeLibrarySessionPlayer) {
+            if (jumpChapters) player.skipToNextChapterOrTrack() else player.seekForward()
+        } else {
+            player.seekForward()
+        }
+        true
+    }
+    else -> false
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
 internal fun handleAndroidAutoMediaButtonEvent(
     session: MediaSession,
     controllerInfo: MediaSession.ControllerInfo,
-    intent: android.content.Intent
+    intent: android.content.Intent,
+    jumpChaptersOverride: Boolean? = null
 ): Boolean {
     val isAuto = session.isAutoCompanionController(controllerInfo) ||
         session.isAutomotiveController(controllerInfo) ||
@@ -1937,20 +1965,10 @@ internal fun handleAndroidAutoMediaButtonEvent(
         intent.getParcelableExtra(android.content.Intent.EXTRA_KEY_EVENT)
     } ?: return false
     if (keyEvent.action != android.view.KeyEvent.ACTION_DOWN) return false
-    return when (keyEvent.keyCode) {
-        android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-        android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
-            val player = session.player
-            if (player is LagrangeLibrarySessionPlayer) player.seekBackAuto() else player.seekBack()
-            true
-        }
-        android.view.KeyEvent.KEYCODE_MEDIA_NEXT,
-        android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-            session.player.seekForward()
-            true
-        }
-        else -> false
-    }
+    val player = session.player
+    val jumpChapters = jumpChaptersOverride
+        ?: ((player as? LagrangeLibrarySessionPlayer)?.isVehicleSkipChaptersEnabled() == true)
+    return dispatchAndroidAutoVehicleSkipKeyCode(player, keyEvent.keyCode, jumpChapters)
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -1960,8 +1978,11 @@ internal class LagrangeLibrarySessionPlayer(
     private val sessionProvider: (() -> ReadiumAudioPlaybackService.Session?)? = null,
     private val scaleBySpeedProvider: (() -> Boolean)? = null,
     private val isAutoConnectedProvider: (() -> Boolean)? = null,
-    private val contextProvider: (() -> Context?)? = null
+    private val contextProvider: (() -> Context?)? = null,
+    private val vehicleSkipChaptersProvider: (() -> Boolean)? = null
 ) : ForwardingPlayer(delegate) {
+    internal fun isVehicleSkipChaptersEnabled(): Boolean =
+        vehicleSkipChaptersProvider?.invoke() == true
     @Volatile
     private var suppressNextSetMediaItems = false
     @Volatile
@@ -2531,19 +2552,35 @@ internal class LagrangeLibrarySessionPlayer(
     override fun hasNextMediaItem(): Boolean = true
 
     override fun seekToPreviousMediaItem() {
-        if (isAutoConnected()) seekBackAuto() else seekBack()
+        if (isAutoConnected()) {
+            if (isVehicleSkipChaptersEnabled()) skipToPreviousChapterOrTrack() else seekBackAuto()
+        } else {
+            seekBack()
+        }
     }
 
     override fun seekToNextMediaItem() {
-        seekForward()
+        if (isAutoConnected() && isVehicleSkipChaptersEnabled()) {
+            skipToNextChapterOrTrack()
+        } else {
+            seekForward()
+        }
     }
 
     override fun seekToPrevious() {
-        if (isAutoConnected()) seekBackAuto() else seekBack()
+        if (isAutoConnected()) {
+            if (isVehicleSkipChaptersEnabled()) skipToPreviousChapterOrTrack() else seekBackAuto()
+        } else {
+            seekBack()
+        }
     }
 
     override fun seekToNext() {
-        seekForward()
+        if (isAutoConnected() && isVehicleSkipChaptersEnabled()) {
+            skipToNextChapterOrTrack()
+        } else {
+            seekForward()
+        }
     }
 
     fun skipToPreviousChapterOrTrack() {
@@ -2563,19 +2600,19 @@ internal class LagrangeLibrarySessionPlayer(
                 notifyMetadataAndPositionChanged()
                 return
             }
-            if (active.audioFiles.size > 1 || super.getMediaItemCount() > 1) {
-                val filePos = super.getCurrentPosition().coerceAtLeast(0L)
-                val currentItemIdx = super.getCurrentMediaItemIndex()
-                if (filePos > 5_000L) {
-                    super.seekTo(currentItemIdx, 0L)
-                } else if (currentItemIdx > 0) {
-                    super.seekTo(currentItemIdx - 1, 0L)
-                } else {
-                    super.seekTo(0, 0L)
-                }
-                notifyMetadataAndPositionChanged()
-                return
+        }
+        if ((active != null && active.audioFiles.size > 1) || super.getMediaItemCount() > 1) {
+            val filePos = super.getCurrentPosition().coerceAtLeast(0L)
+            val currentItemIdx = super.getCurrentMediaItemIndex()
+            if (filePos > 5_000L) {
+                super.seekTo(currentItemIdx, 0L)
+            } else if (currentItemIdx > 0) {
+                super.seekTo(currentItemIdx - 1, 0L)
+            } else {
+                super.seekTo(0, 0L)
             }
+            notifyMetadataAndPositionChanged()
+            return
         }
         super.seekToPrevious()
     }
@@ -2593,14 +2630,14 @@ internal class LagrangeLibrarySessionPlayer(
                 }
                 return
             }
-            if (active.audioFiles.size > 1 || super.getMediaItemCount() > 1) {
-                val nextItemIdx = super.getCurrentMediaItemIndex() + 1
-                if (nextItemIdx < super.getMediaItemCount()) {
-                    super.seekTo(nextItemIdx, 0L)
-                    notifyMetadataAndPositionChanged()
-                }
-                return
+        }
+        if ((active != null && active.audioFiles.size > 1) || super.getMediaItemCount() > 1) {
+            val nextItemIdx = super.getCurrentMediaItemIndex() + 1
+            if (nextItemIdx < super.getMediaItemCount()) {
+                super.seekTo(nextItemIdx, 0L)
+                notifyMetadataAndPositionChanged()
             }
+            return
         }
         super.seekToNext()
     }

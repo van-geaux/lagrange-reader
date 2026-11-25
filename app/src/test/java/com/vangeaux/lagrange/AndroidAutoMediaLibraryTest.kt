@@ -546,4 +546,86 @@ class AndroidAutoMediaLibraryTest {
         assertEquals(0, timelineChangedCount)
         assertTrue(metadataChangedCount > 0)
     }
+
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    @Test
+    fun vehicleSkipButtonsJumpChaptersPreference_switchesVehicleControlsWithoutChangingPrimaryScreenButtons() {
+        var jumpChapters = false
+        var currentTrackIdx = 1
+        var posMs = 100_000L
+        val stubPlayer = java.lang.reflect.Proxy.newProxyInstance(
+            androidx.media3.common.Player::class.java.classLoader,
+            arrayOf(androidx.media3.common.Player::class.java)
+        ) { _, method, args ->
+            when (method.name) {
+                "isCommandAvailable" -> true
+                "getCurrentPosition", "getContentPosition", "getContentBufferedPosition", "getBufferedPosition" -> posMs
+                "getDuration", "getContentDuration" -> 600_000L
+                "getCurrentMediaItemIndex", "getCurrentPeriodIndex" -> currentTrackIdx
+                "getMediaItemCount" -> 3
+                "getCurrentTimeline" -> androidx.media3.common.Timeline.EMPTY
+                "getAvailableCommands" -> androidx.media3.common.Player.Commands.EMPTY
+                "getMediaMetadata", "getPlaylistMetadata" -> androidx.media3.common.MediaMetadata.EMPTY
+                "getPlaybackParameters" -> androidx.media3.common.PlaybackParameters.DEFAULT
+                "seekTo" -> {
+                    if (args != null && args.size == 1 && args[0] is Long) {
+                        posMs = args[0] as Long
+                    } else if (args != null && args.size != 1 && args[0] is Int && args[1] is Long) {
+                        currentTrackIdx = args[0] as Int
+                        posMs = args[1] as Long
+                    }
+                    null
+                }
+                else -> when (method.returnType) {
+                    java.lang.Boolean.TYPE -> false
+                    java.lang.Integer.TYPE -> 0
+                    java.lang.Long.TYPE -> 0L
+                    java.lang.Float.TYPE -> 1.0f
+                    java.lang.Double.TYPE -> 0.0
+                    else -> null
+                }
+            }
+        } as androidx.media3.common.Player
+
+        val wrapper = LagrangeLibrarySessionPlayer(
+            delegate = stubPlayer,
+            isAutoConnectedProvider = { true },
+            vehicleSkipChaptersProvider = { jumpChapters }
+        )
+
+        // Primary on-screen Android Auto buttons stay fixed at -30s / +30s
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS))
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_BACK))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_FORWARD))
+
+        // When preference is OFF (default), vehicle skip buttons jump -30s / +30s
+        assertTrue(dispatchAndroidAutoVehicleSkipKeyCode(wrapper, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        assertEquals(1, currentTrackIdx)
+        assertEquals(70_000L, posMs)
+
+        assertTrue(dispatchAndroidAutoVehicleSkipKeyCode(wrapper, android.view.KeyEvent.KEYCODE_MEDIA_NEXT))
+        assertEquals(1, currentTrackIdx)
+        assertEquals(100_000L, posMs)
+
+        // When preference is ON, vehicle skip buttons jump chapters/tracks while primary screen commands remain seek back/forward
+        jumpChapters = true
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS))
+        assertFalse(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_BACK))
+        assertTrue(wrapper.isCommandAvailable(androidx.media3.common.Player.COMMAND_SEEK_FORWARD))
+        posMs = 2_000L
+        assertTrue(dispatchAndroidAutoVehicleSkipKeyCode(wrapper, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        assertEquals(0, currentTrackIdx)
+        assertEquals(0L, posMs)
+
+        assertTrue(dispatchAndroidAutoVehicleSkipKeyCode(wrapper, android.view.KeyEvent.KEYCODE_MEDIA_NEXT))
+        assertEquals(1, currentTrackIdx)
+        assertEquals(0L, posMs)
+
+        wrapper.seekToNext()
+        assertEquals(2, currentTrackIdx)
+        wrapper.seekToPrevious()
+        assertEquals(1, currentTrackIdx)
+    }
 }

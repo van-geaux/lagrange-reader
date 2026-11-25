@@ -508,7 +508,10 @@ internal class AudiobookMediaSessionCallback(
         controllerInfo: MediaSession.ControllerInfo,
         intent: Intent
     ): Boolean {
-        if (handleAndroidAutoMediaButtonEvent(session, controllerInfo, intent)) {
+        val jumpChapters = appContext?.let {
+            AppPreferencesStore(it).read().vehicleSkipButtonsJumpChapters
+        }
+        if (handleAndroidAutoMediaButtonEvent(session, controllerInfo, intent, jumpChapters)) {
             return true
         }
         return super.onMediaButtonEvent(session, controllerInfo, intent)
@@ -1300,7 +1303,10 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                 AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
             },
             isAutoConnectedProvider = ::hasConnectedAndroidAutoController,
-            contextProvider = ::getApplicationContext
+            contextProvider = ::getApplicationContext,
+            vehicleSkipChaptersProvider = {
+                AppPreferencesStore(applicationContext).read().vehicleSkipButtonsJumpChapters
+            }
         ).also {
             librarySessionPlayer = it
         }
@@ -1356,7 +1362,10 @@ class ReadiumAudioPlaybackService : MediaLibraryService() {
                         AppPreferencesStore(applicationContext).read().scaleProgressByPlaybackSpeed
                     },
                     isAutoConnectedProvider = ::hasConnectedAndroidAutoController,
-                    contextProvider = ::getApplicationContext
+                    contextProvider = ::getApplicationContext,
+                    vehicleSkipChaptersProvider = {
+                        AppPreferencesStore(applicationContext).read().vehicleSkipButtonsJumpChapters
+                    }
                 )
                 wrappedPlayer.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
