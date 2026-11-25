@@ -4,7 +4,8 @@ data class AudiobookTimelinePosition(
     val fileIndex: Int,
     val fileId: String,
     val positionMs: Long,
-    val absolutePositionMs: Long
+    val absolutePositionMs: Long,
+    val playbackItemId: String = fileId
 )
 
 object AudiobookTimeline {
@@ -19,7 +20,7 @@ object AudiobookTimeline {
                     file.role.equals("content", ignoreCase = true) ||
                     file.role.equals("primary", ignoreCase = true)
             }
-            .distinctBy { it.fileId }
+            .distinctBy { it.playbackItemId ?: it.fileId }
 
     fun selectedPlaybackAudioFiles(
         options: List<BookFileOption>,
@@ -65,8 +66,9 @@ object AudiobookTimeline {
         val starts = mutableListOf<Long>()
         var running = 0L
         for (file in files) {
-            starts += running
-            running = addSaturating(running, durationMs(file) ?: 0L)
+            val start = file.audioCumulativeStartMs?.takeIf { it >= 0L } ?: running
+            starts += start
+            running = addSaturating(start, durationMs(file) ?: 0L)
         }
         return starts
     }
@@ -83,7 +85,8 @@ object AudiobookTimeline {
                 fileIndex = 0,
                 fileId = fileId,
                 positionMs = clamped,
-                absolutePositionMs = clamped
+                absolutePositionMs = clamped,
+                playbackItemId = files.first().playbackItemId ?: fileId
             )
         }
 
@@ -91,16 +94,36 @@ object AudiobookTimeline {
         var index = starts.indexOfLast { it <= boundedAbsolute }
         if (index < 0) index = 0
         val fileId = files[index].fileId ?: return null
+        val playbackItemId = files[index].playbackItemId ?: fileId
         return AudiobookTimelinePosition(
             fileIndex = index,
             fileId = fileId,
             positionMs = boundedAbsolute - starts[index],
-            absolutePositionMs = boundedAbsolute
+            absolutePositionMs = boundedAbsolute,
+            playbackItemId = playbackItemId
+        )
+    }
+
+    fun fromAudioProgressPosition(
+        files: List<BookFileOption>,
+        position: AudioProgressPosition
+    ): AudiobookTimelinePosition? {
+        if (position.absolutePositionMs < 0L || position.trackIndex < 0 || position.trackPositionMs < 0L) return null
+        val index = files.indexOfFirst { it.audioTrackIndex == position.trackIndex }
+        if (index < 0) return null
+        val file = files[index]
+        val fileId = file.fileId ?: return null
+        return AudiobookTimelinePosition(
+            fileIndex = index,
+            fileId = fileId,
+            positionMs = position.trackPositionMs,
+            absolutePositionMs = position.absolutePositionMs,
+            playbackItemId = file.playbackItemId ?: fileId
         )
     }
 
     fun fileRelativeToAbsolute(files: List<BookFileOption>, fileId: String, positionMs: Long): Long? {
-        val index = files.indexOfFirst { it.fileId == fileId }
+        val index = files.indexOfFirst { (it.playbackItemId ?: it.fileId) == fileId }
         if (index < 0) return null
         val starts = cumulativeStartsMs(files)
         return addSaturating(starts[index], positionMs.coerceAtLeast(0L))

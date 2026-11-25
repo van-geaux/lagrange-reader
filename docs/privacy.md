@@ -1,12 +1,13 @@
 # Privacy Notes
 
-`Lagrange Reader` stores a limited amount of user and configured server data locally so the app can reconnect, reopen content, and recover progress. Lagrange currently supports BookOrbit, Komga, and Kavita servers. The provider determines which server requests, authentication/session data, catalog fields, and synchronization operations are available; the Android app applies the same local storage and offline-reader policies to all supported providers.
+`Lagrange Reader` stores a limited amount of user and configured server data locally so the app can reconnect, reopen content, and recover progress. The latest published release supports BookOrbit, Komga, and Kavita. The issue #422 branch adds a distinct Grimmory native `/api/v1` integration; its live token refresh and device behavior remain unverified. The provider determines which server requests, authentication/session data, catalog fields, and synchronization operations are available; the Android app applies the same local storage and offline-reader policies to all supported providers.
 
 ## Local data currently stored
 
-- configured BookOrbit, Komga, or Kavita server URL and provider selection
+- configured BookOrbit, Komga, Kavita, or Grimmory server URL and provider selection
 - selected library id
 - provider authentication state, including WebView cookies or HTTP session data where the selected server requires it
+- Grimmory access/refresh tokens, encrypted with an Android Keystore-backed AES-GCM key; the stable `/api/v1/users/me` identifier is converted to a derived local account scope, and the raw identifier is not stored by that scope record
 - cached library and book browser snapshots for offline fallback
 - downloaded book files
 - authenticated reader-cache copies for EPUB, PDF, and CBZ open flows before full download
@@ -17,13 +18,14 @@
 ## Storage location
 
 - app-private files and cache directories
+- encrypted app-private preferences for Grimmory token material, using Android Keystore-backed AES-GCM encryption
 - Android `DataStore` preferences for small app settings
 - `WorkManager` state for queued sync work
 
 ## Current behavior
 
 - local data is scoped to the current Android app sandbox and is not shared with other apps
-- explicit HTTP URLs for configured BookOrbit, Komga, or Kavita servers are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
+- explicit HTTP URLs for configured BookOrbit, Komga, Kavita, or Grimmory servers are supported, but cleartext transport can expose credentials, session tokens, metadata, progress, and content to other parties on the network; HTTPS is strongly recommended
 - the app sends functional requests to the configured server, including authentication, catalog metadata, cover and media requests, downloads, reading/listening progress, statuses, and other provider-supported synchronization; the exact endpoints and fields depend on the selected provider
 - the app trusts both Android's system CA store and user-installed CAs for all HTTPS connections; this is app-wide because the configured server URL is chosen by the user at runtime, so it lets self-hosted servers using a private/internal CA work over HTTPS without extra configuration, but it also means the app will trust any CA the user (or someone with access to the device) has installed, which is a broader trust surface than the system-only default
 - changing or clearing the configured server resets session state, but server-scoped cached browser and progress data may remain on disk

@@ -111,11 +111,13 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 ## Supported providers
 
-Lagrange currently supports BookOrbit, Komga, and Kavita. Each provider has different capabilities, authentication methods, and offline behavior. See the provider documentation for details:
+The latest published release (`v2.1.3`) supports BookOrbit, Komga, and Kavita. Each provider has different capabilities, authentication methods, and offline behavior. See the provider documentation for details:
 
 - [BookOrbit](docs/providers/bookorbit/)
 - [Komga](docs/providers/komga/)
 - [Kavita](docs/providers/kavita/)
+
+The current development branch also includes a native Grimmory adapter for issue [#422](https://github.com/van-geaux/lagrange-reader/issues/422), but it is not part of a published release yet. On-device behavior and successful live token refresh remain unverified; see the [integration status](docs/providers/grimmory/integration.md).
 
 Provider-specific validation is tracked in the [provider function matrix](docs/provider-checklists/module-function-matrix.md).
 

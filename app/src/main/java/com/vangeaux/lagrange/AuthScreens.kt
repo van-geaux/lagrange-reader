@@ -170,7 +170,7 @@ internal fun ServerSetupScreen(
                         onDismissRequest = { providerMenuExpanded = false },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA).forEach { option ->
+                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA, PROVIDER_GRIMMORY).forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(serverProviderDisplayName(option)) },
                                 onClick = {

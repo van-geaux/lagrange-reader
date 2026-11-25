@@ -31,6 +31,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
@@ -236,6 +237,62 @@ class ReadiumEpubOpenInstrumentedTest {
                     "Bookmark navigation returned to chapter start: progression=${reopened.locations.progression}",
                     requireNotNull(reopened.locations.progression) > 0.2
                 )
+            }
+        } finally {
+            epub.delete()
+        }
+    }
+
+    @Test
+    fun exitProgressLocatorAddsPointCfiWhenReadiumLocatorHasNone() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val epub = File(context.cacheDir, "readium-exit-progress-cfi.epub")
+        val readerKey = "instrumented-exit-progress-cfi-${System.nanoTime()}"
+        writeMultiResourceEpub(epub)
+        try {
+            ActivityScenario.launch<ReadiumEpubReaderActivity>(
+                ReadiumEpubReaderActivity.createIntent(
+                    context = context,
+                    file = epub,
+                    title = "Exit progress CFI regression",
+                    readerKey = readerKey,
+                    launchMode = ReaderLaunchMode.NORMAL,
+                    initialChapter = 0,
+                    initialPage = 0,
+                    initialPageCount = 1,
+                    initialPercent = null
+                )
+            ).use { scenario ->
+                val current = awaitEpubLocator(scenario, context, readerKey)
+                assertEquals(null, epubBookmarkCfiFromLocatorJson(current.toJSON().toString()))
+
+                val generated = withTimeout(10_000L) {
+                    var result: String? = null
+                    while (epubBookmarkCfiFromLocatorJson(result.orEmpty()) == null) {
+                        val next = CompletableDeferred<String?>()
+                        scenario.onActivity { activity ->
+                            activity.lifecycleScope.launch {
+                                next.complete(activity.currentEpubProgressLocatorJsonForExit())
+                            }
+                        }
+                        result = next.await()
+                        if (epubBookmarkCfiFromLocatorJson(result.orEmpty()) == null) delay(250L)
+                    }
+                    requireNotNull(result)
+                }
+
+                assertEquals(current.href.toString(), JSONObject(generated).optString("href"))
+                assertNotNull(epubBookmarkCfiFromLocatorJson(generated))
+
+                scenario.onActivity { activity ->
+                    ReadiumEpubReaderActivity::class.java
+                        .getDeclaredMethod("finishReader")
+                        .apply { isAccessible = true }
+                        .invoke(activity)
+                }
+                withTimeout(10_000L) {
+                    while (scenario.state != Lifecycle.State.DESTROYED) delay(100L)
+                }
             }
         } finally {
             epub.delete()

@@ -145,7 +145,9 @@ internal suspend fun openReadiumRemoteComic(
         return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_server_no_pages))
     }
     val normalizedPagesUrl = pagesUrl.trimEnd('/')
-    val baseUrl = AbsoluteUrl(normalizedPagesUrl.substringBefore('?') + "/")
+    val firstPageUrl = comicPageUrl(normalizedPagesUrl, 0)
+    val baseUrlValue = firstPageUrl.substringBefore('?').substringBeforeLast('/') + "/"
+    val baseUrl = AbsoluteUrl(baseUrlValue)
         ?: return@withContext ReadiumComicOpenResult.Error(context.getString(R.string.comic_page_url_invalid))
     val pageUrls = (0 until pageCount).mapNotNull { pageIndex ->
         AbsoluteUrl(comicPageUrl(normalizedPagesUrl, pageIndex))
@@ -184,6 +186,7 @@ internal suspend fun openReadiumRemoteComic(
 }
 
 internal fun comicPageUrl(pagesUrl: String, pageIndex: Int): String {
+    if (pagesUrl.contains("{page1}")) return pagesUrl.replace("{page1}", (pageIndex + 1).toString())
     if (pagesUrl.contains("{page}")) return pagesUrl.replace("{page}", pageIndex.toString())
     val normalized = pagesUrl.trimEnd('/')
     val queryIndex = normalized.indexOf('?')
