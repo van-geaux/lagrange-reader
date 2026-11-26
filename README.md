@@ -6,18 +6,18 @@
 
 # Lagrange Reader
 
-An offline-first Android reader for BookOrbit, Komga, and Kavita.
+An offline-first Android reader for BookOrbit, Komga, Kavita, and Grimmory.
 
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
-[![Version 2.1.3](https://img.shields.io/badge/version-2.1.3-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3)
+[![Version 2.2.0](https://img.shields.io/badge/version-2.2.0-blue)](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.2.0)
 [![Build](https://img.shields.io/github/actions/workflow/status/van-geaux/lagrange-reader/android-debug.yml?branch=main&label=build)](https://github.com/van-geaux/lagrange-reader/actions/workflows/android-debug.yml)
 [![Downloads](https://img.shields.io/github/downloads/van-geaux/lagrange-reader/total?label=Downloads&logo=github)](https://github.com/van-geaux/lagrange-reader/releases)
 
 </div>
 
-Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit), [Komga](https://komga.org/), and [Kavita](https://www.kavitareader.com/). It began with a personal need: I wanted an app that lets me take my library with me and read offline.
+Lagrange Reader is an independent Android app for reading and listening to books hosted on [BookOrbit](https://github.com/BookOrbit), [Komga](https://komga.org/), [Kavita](https://www.kavitareader.com/), and [Grimmory](https://grimmory.org). It began with a personal need: I wanted an app that lets me take my library with me and read offline.
 
-It is now for anyone who already uses a BookOrbit, Komga, or Kavita server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
+It is now for anyone who already uses a BookOrbit, Komga, Kavita, or Grimmory server, whether they run it themselves or received an account from someone else, and wants a native Android experience for their library.
 
 Your configured server remains the source of truth for its library. Lagrange is the Android client: it lets you browse, download, read, listen where supported, and keep working when your connection is unavailable. When you reconnect, queued progress and other supported changes synchronize back to the active provider.
 
@@ -111,13 +111,14 @@ The following ebook formats are intentionally not supported at this time: MOBI, 
 
 ## Supported providers
 
-The latest published release (`v2.1.3`) supports BookOrbit, Komga, and Kavita. Each provider has different capabilities, authentication methods, and offline behavior. See the provider documentation for details:
+The latest published release ([`v2.2.0`](docs/release-notes/v2.2.0.md)) supports BookOrbit, Komga, Kavita, and Grimmory. Each provider has different capabilities, authentication methods, and offline behavior. See the provider documentation for details:
 
 - [BookOrbit](docs/providers/bookorbit/)
 - [Komga](docs/providers/komga/)
 - [Kavita](docs/providers/kavita/)
+- [Grimmory](docs/providers/grimmory/)
 
-The current development branch also includes a native Grimmory adapter for issue [#422](https://github.com/van-geaux/lagrange-reader/issues/422), but it is not part of a published release yet. On-device behavior and successful live token refresh remain unverified; see the [integration status](docs/providers/grimmory/integration.md).
+Grimmory is included as a native `/api/v1` provider. Some live validation remains incomplete: successful refresh-token rotation and authenticated status/progress read-after-write have not yet been verified. See the [integration status](docs/providers/grimmory/integration.md).
 
 Provider-specific validation is tracked in the [provider function matrix](docs/provider-checklists/module-function-matrix.md).
 

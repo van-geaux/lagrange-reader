@@ -4,9 +4,9 @@ This document contains current project direction only. Historical work orders an
 
 ## Current status
 
-- Release: Lagrange 2.1.3 was published as [`v2.1.3`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3). See [`release-notes/v2.1.3.md`](release-notes/v2.1.3.md).
-- Version marker: `versionName 2.1.3`, `versionCode 31` in `app/build.gradle.kts`.
-- Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit, Komga, and Kavita are the published integration surfaces; a Grimmory native `/api/v1` provider is implemented on issue #422's branch, with successful live refresh and device validation still pending. Additional providers require a focused contract and validation plan.
+- Release: Lagrange 2.2.0 was published as [`v2.2.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.2.0). See [`release-notes/v2.2.0.md`](release-notes/v2.2.0.md).
+- Version marker: `versionName 2.2.0`, `versionCode 32` in `app/build.gradle.kts`.
+- Product direction: maintain Lagrange while expanding provider support beyond BookOrbit. BookOrbit, Komga, Kavita, and Grimmory are the published integration surfaces. Grimmory device behavior and successful live refresh remain unverified; additional providers require a focused contract and validation plan.
 - Current release capabilities include EPUB 3 read-along narration, BookOrbit OIDC WebView sign-in, immersive reader controls, audiobook speed/progress controls, grouped physical-file downloads, and client-side offline CBR/CB7 extraction.
 - Series and library bulk-download selection now use context-specific `Download series`/`Download library` actions, `Continue` confirmation actions, reachable bounded sheets, and expected aggregate download-size feedback ([#375](https://github.com/van-geaux/lagrange-reader/issues/375)); the user confirmed the final behavior.
 - Download location selection now supports writable internal shared-storage folders and mounted SD-card folders through persisted Android system-picker access. New downloads use the selected folder's managed `Lagrange Reader/account-*` directory, while existing downloads remain in place; the user confirmed the selected-folder flow works.
@@ -23,8 +23,8 @@ This document contains current project direction only. Historical work orders an
 4. [ ] Decide the next user-directed implementation item before opening new feature work.
 5. [ ] Consider Android e-ink validation for [#25](https://github.com/van-geaux/lagrange-reader/issues/25) only when a suitable device is available; no minSdk change is currently recommended.
 6. [ ] Treat broader offline archive extraction and optional device matrices as separately scoped follow-up.
-7. [ ] Carry issue [#378](https://github.com/van-geaux/lagrange-reader/issues/378), BookOrbit PDF progress from the web reader not always appearing on reopen, into the next release; deferred from 2.1.3 by the project owner.
-8. [ ] Complete Grimmory issue [#422](https://github.com/van-geaux/lagrange-reader/issues/422) device validation and successful live token-refresh verification before claiming release readiness.
+7. [ ] Continue investigating issue [#378](https://github.com/van-geaux/lagrange-reader/issues/378), BookOrbit PDF progress from the web reader not always appearing on reopen; it remains unresolved in 2.2.0.
+8. [ ] Investigate issue [#211](https://github.com/van-geaux/lagrange-reader/issues/211), an intermittent crash reported when starting a single-file BookOrbit download; obtain a reproducible case or logcat before fixing.
 
 ## Decision and documentation rules
 

@@ -4,15 +4,15 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Current release
 
-- [x] Lagrange 2.1.3 is published as [`v2.1.3`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.1.3), with combined and ABI-specific APK assets.
-- [x] `app/build.gradle.kts` records `versionName 2.1.3` and `versionCode 31`.
-- [x] Release workflow [run 43405471491](https://github.com/van-geaux/lagrange-reader/actions/runs/43405471491) succeeded and published the signed combined and ABI-specific APK assets.
+- [x] Lagrange 2.2.0 is published as [`v2.2.0`](https://github.com/van-geaux/lagrange-reader/releases/tag/v2.2.0), with combined and ABI-specific APK assets.
+- [x] `app/build.gradle.kts` records `versionName 2.2.0` and `versionCode 32`.
+- [x] Release workflow [run 45755847866](https://github.com/van-geaux/lagrange-reader/actions/runs/45755847866) succeeded and published the signed combined and ABI-specific APK assets.
 
 ## Current implementation status
 
 - [x] BookOrbit browsing, cache-first offline fallback, downloads, progress/status synchronization, EPUB/PDF/comic reading, audiobook playback, server reading sessions, statistics, achievements, and EPUB image/TTS tools are implemented.
 - [x] Provider module separation is implemented for BookOrbit, Komga, Kavita, and Grimmory; provider-specific behavior remains behind provider-owned modules and focused contracts. Kavita and Grimmory manual validation remains incomplete.
-- [x] Grimmory is wired as a distinct native `/api/v1` provider with profile/repository routing, authentication, stable account identity, catalog, and download modules; focused and full automated gates passed, while device behavior and successful refresh remain pending.
+- [x] Grimmory is included in the 2.2.0 release as a distinct native `/api/v1` provider with profile/repository routing, authentication, stable account identity, catalog, and download modules; device behavior and successful refresh remain pending.
 - [x] Grimmory's initial-library, remaining-library, and selected-library catalog refreshes route through the resolved `BookCatalogModule`; coordinator regressions verify the compatibility repository refresh is not invoked when that module is present.
 - [ ] Finish auditing incomplete/alternate resolver composition and local compatibility-cache projections; authenticated device validation and successful live token refresh remain pending.
 - [x] Komga catalog filtering, format sorting, scoped Recommended results, local-reader fallback, download lifecycle projection, and supported format coverage are documented in [`docs/provider-checklists/komga.md`](docs/provider-checklists/komga.md).
@@ -32,7 +32,8 @@ This is the active completion and validation checklist. Historical work orders a
 
 ## Active product follow-up
 
-- [ ] Carry issue [#378](https://github.com/van-geaux/lagrange-reader/issues/378), BookOrbit PDF progress from the web reader not always appearing on reopen, into the next release; deferred from 2.1.3 by the project owner.
+- [ ] Continue investigating issue [#378](https://github.com/van-geaux/lagrange-reader/issues/378), BookOrbit PDF progress from the web reader not always appearing on reopen; it remains unresolved in 2.2.0.
+- [ ] Investigate issue [#211](https://github.com/van-geaux/lagrange-reader/issues/211), an intermittent crash reported when starting a single-file BookOrbit download; collect a reproducible case or logcat before fixing.
 - [ ] Select the next user-directed roadmap or issue item before implementation; no new implementation scope is approved by this checklist.
 - [ ] Keep MOBI, AZW, AZW3, and FB2 unsupported unless a conversion/support plan is explicitly approved.
 - [ ] Treat broader offline RAR/7z coverage, additional device matrices, and Android e-ink validation for [#25](https://github.com/van-geaux/lagrange-reader/issues/25) as separately scoped follow-up.
