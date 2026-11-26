@@ -1152,6 +1152,8 @@ internal fun NativeLibraryBrowserScreen(
     state: BrowserState,
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit = {},
+    onNavigateCatalogFeed: (String, String) -> Unit = { _, _ -> },
+    onNavigateCatalogBack: () -> Unit = {},
     onSignIn: () -> Unit,
     onSignOut: () -> Unit,
     onNewServer: () -> Unit = {},
@@ -1521,8 +1523,11 @@ internal fun NativeLibraryBrowserScreen(
         activeBookGenre == null &&
         activeSeriesGenre == null &&
         !isSearchOpen
+    val catalogBackEnabled = state.catalogNavigationStack.isNotEmpty() &&
+        destination == BrowserDestination.LIBRARY &&
+        selectedBook == null && selectedSeriesKey == null && selectedAuthor == null && !isSearchOpen
 
-    BackHandler(enabled = showLibraryPicker || collectionDetailBackEnabled ||
+    BackHandler(enabled = showLibraryPicker || collectionDetailBackEnabled || catalogBackEnabled ||
         browserRootBackDestination(destination) != null ||
         destination.toHomeSection() != null || destination in setOf(
             BrowserDestination.CURRENTLY_READING,
@@ -1555,6 +1560,8 @@ internal fun NativeLibraryBrowserScreen(
         } else if (selectedAuthor != null) {
             selectedAuthor = null
             destination = BrowserDestination.AUTHORS
+        } else if (catalogBackEnabled) {
+            onNavigateCatalogBack()
         } else if (browserRootBackDestination(destination) != null) {
             destination = BrowserDestination.HOME
         } else {
@@ -2508,6 +2515,8 @@ internal fun NativeLibraryBrowserScreen(
                     isRefreshing = state.isRefreshing,
                     onRefresh = onRefresh,
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
+                    onNavigateCatalogFeed = onNavigateCatalogFeed,
+                    onNavigateCatalogBack = onNavigateCatalogBack,
                     libraryBookCatalogAvailable = libraryBookCatalogAvailable,
                     seriesCatalogLoader = seriesCatalogLoader,
                     catalogImageLoader = catalogImageLoader,
@@ -8676,6 +8685,8 @@ private fun LibraryContentScreen(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onLoadMoreLibraryBooks: () -> Unit,
+    onNavigateCatalogFeed: (String, String) -> Unit,
+    onNavigateCatalogBack: () -> Unit,
     libraryBookCatalogAvailable: Boolean,
     seriesCatalogLoader: suspend (SeriesCatalogFilter, Int) -> SeriesCatalogPage,
     catalogImageLoader: suspend (String) -> ByteArray?,
@@ -8894,6 +8905,8 @@ private fun LibraryContentScreen(
                     state = state,
                     modifier = Modifier.weight(1f),
                     onLoadMoreLibraryBooks = onLoadMoreLibraryBooks,
+                    onNavigateCatalogFeed = onNavigateCatalogFeed,
+                    onNavigateCatalogBack = onNavigateCatalogBack,
                     coverLoader = coverLoader,
                     onBookSelected = onBookSelected,
                     onSeriesSelected = onSeriesSelected,
@@ -9651,10 +9664,13 @@ internal suspend fun loadCompleteRecentBooks(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun LibraryBrowseScreen(
     state: BrowserState,
     modifier: Modifier,
     onLoadMoreLibraryBooks: () -> Unit = {},
+    onNavigateCatalogFeed: (String, String) -> Unit,
+    onNavigateCatalogBack: () -> Unit,
     coverLoader: suspend (BookSummary) -> ByteArray?,
     onBookSelected: (BookSummary) -> Unit,
     onSeriesSelected: (String) -> Unit,
@@ -9699,6 +9715,7 @@ private fun LibraryBrowseScreen(
         coverLoader = coverLoader,
         onBookSelected = onBookSelected,
         onSeriesSelected = onSeriesSelected,
+        titleOverride = state.catalogFeedTitle?.takeIf(String::isNotBlank),
         onDownload = onDownload,
         onCancelDownload = onCancelDownload,
         onClearFailedDownload = onClearFailedDownload,
@@ -9714,7 +9731,30 @@ private fun LibraryBrowseScreen(
         onLoadMore = onLoadMoreLibraryBooks.takeIf { !state.isCatalogComplete },
         serverJumpBuckets = state.libraryJumpBuckets.takeIf { filter == BookBrowseFilter() }.orEmpty(),
         onFilterClick = { showFilter = true },
-        headerContent = headerContent
+        headerContent = {
+            if (state.catalogNavigationStack.isNotEmpty() || state.catalogNavigationEntries.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (state.catalogNavigationStack.isNotEmpty()) {
+                        TextButton(onClick = onNavigateCatalogBack) {
+                            Text(stringResource(R.string.browse_back))
+                        }
+                    }
+                    state.catalogNavigationEntries.forEach { entry ->
+                        TextButton(
+                            onClick = { onNavigateCatalogFeed(entry.targetId, entry.title) },
+                            modifier = Modifier.testTag("catalog-navigation-${entry.id}")
+                        ) {
+                            Text(entry.title)
+                        }
+                    }
+                }
+            }
+            headerContent?.invoke()
+        }
     )
     if (showFilter) {
         BookFilterSheet(

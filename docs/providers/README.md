@@ -18,6 +18,10 @@ Provider-specific contracts and implementation notes live under this directory. 
 - [Integration](./kavita/integration.md) — Auth Key/JWT authentication, hierarchy projection, reader, progress, and download boundaries.
 - [Modules](./kavita/modules.md) — Kavita provider modules, endpoints, capability state, and unsupported operations.
 
+## OPDS
+
+- [Generic OPDS 1 integration](./opds/integration.md) — HTTP Basic authentication, Atom navigation, acquisitions, pagination, and legacy CWA compatibility boundaries.
+
 ## Grimmory
 
 - [Integration](./grimmory/integration.md) — native `/api/v1` authentication, account identity, catalog/content/download routes, capability limits, and current verification state.

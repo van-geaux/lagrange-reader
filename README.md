@@ -120,6 +120,8 @@ The latest published release ([`v2.2.0`](docs/release-notes/v2.2.0.md)) supports
 
 Grimmory is included as a native `/api/v1` provider. Some live validation remains incomplete: successful refresh-token rotation and authenticated status/progress read-after-write have not yet been verified. See the [integration status](docs/providers/grimmory/integration.md).
 
+The current development branch also includes a generic OPDS 1 adapter for Atom feeds under issue [#406](https://github.com/van-geaux/lagrange-reader/issues/406). It supports catalog navigation, acquisition downloads, server-linked paging, and optional HTTP Basic authentication with OPDS-account credentials. Bearer tokens, cookies, and server-specific authentication extensions are unsupported; live/device validation remains pending. See the [OPDS integration status](docs/providers/opds/integration.md).
+
 Provider-specific validation is tracked in the [provider function matrix](docs/provider-checklists/module-function-matrix.md).
 
 ## Sync accuracy by format

@@ -4587,6 +4587,122 @@ class AppCoordinatorTest {
         assertTrue(login.rememberCredentials)
         assertNotNull(credentials.values["target-profile"])
     }
+
+    @Test
+    fun `connecting to authenticated OPDS feed opens the credential form`() = runTest {
+        val feedUrl = "https://books.example.test/api/v1/opds"
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = null,
+            sessionState = SessionState.Unauthenticated,
+            checkServerResult = ServerCheckResult.Reachable
+        )
+        val coordinator = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
+
+        coordinator.saveServer(feedUrl, providerId = PROVIDER_OPDS)
+        advanceUntilIdle()
+
+        val screen = coordinator.screen.value
+        assertTrue(screen is AppScreen.Login)
+        assertEquals(feedUrl, (screen as AppScreen.Login).serverUrl)
+    }
+
+    @Test
+    fun `catalog navigation keeps server targets while paging and returns to root`() = runTest {
+        val root = "https://books.example.test/proxy/opds/root"
+        val section = "https://books.example.test/proxy/opds/fiction"
+        val rootTarget = CatalogNavigationEntry(id = "fiction", title = "Fiction", targetId = section)
+        val rootPage = LibraryBooksPage(page = 0, isComplete = true, navigationEntries = listOf(rootTarget))
+        val emptyNestedPage = LibraryBooksPage(page = 0, isComplete = false, title = "Fiction")
+        val laterBook = BookSummary(root, "book-2", "book-2:file", "Later book")
+        val laterPage = LibraryBooksPage(items = listOf(laterBook), page = 1, isComplete = true, title = "Fiction")
+        val module = NavigationCatalogModule(mapOf(root to listOf(rootPage), section to listOf(emptyNestedPage, laterPage)))
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = root,
+            loadLibrariesResult = listOf(LibrarySummary(id = root, name = "Library"))
+        )
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            bookCatalogModuleResolver = { module }
+        )
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        assertEquals(listOf(rootTarget), (coordinator.screen.value as AppScreen.Browser).browserState.catalogNavigationEntries)
+
+        coordinator.openCatalogFeed(rootTarget.targetId, rootTarget.title)
+        advanceUntilIdle()
+        var state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertTrue(state.books.isEmpty())
+        assertFalse(state.isCatalogComplete)
+        assertEquals(section, state.activeCatalogTargetId)
+
+        coordinator.loadMoreLibraryBooks()
+        advanceUntilIdle()
+        state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertEquals(listOf("book-2"), state.books.map { it.id })
+        assertEquals(section to 1, module.requests.last())
+
+        coordinator.navigateBackCatalogFeed()
+        advanceUntilIdle()
+        state = (coordinator.screen.value as AppScreen.Browser).browserState
+        assertNull(state.activeCatalogTargetId)
+        assertEquals(listOf(rootTarget), state.catalogNavigationEntries)
+        assertEquals(root to 0, module.requests.last())
+    }
+
+    @Test
+    fun `refresh on nested OPDS feed reloads current target instead of root`() = runTest {
+        val root = "https://books.example.test/opds"
+        val section = "https://books.example.test/opds/new"
+        val target = CatalogNavigationEntry(id = "new", title = "New", targetId = section)
+        val module = NavigationCatalogModule(
+            mapOf(
+                root to listOf(LibraryBooksPage(page = 0, isComplete = true, navigationEntries = listOf(target))),
+                section to listOf(LibraryBooksPage(page = 0, isComplete = false, title = "New"))
+            )
+        )
+        val repository = FakeBookOrbitDataSource(
+            serverUrl = root,
+            loadLibrariesResult = listOf(LibrarySummary(id = root, name = "Library"))
+        )
+        val coordinator = AppCoordinator(
+            repository = repository,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            bookCatalogModuleResolver = { module }
+        )
+
+        coordinator.loadBrowser()
+        advanceUntilIdle()
+        coordinator.openCatalogFeed(target.targetId, target.title)
+        advanceUntilIdle()
+        val initialRequestCount = module.requests.size
+
+        coordinator.refreshBrowser()
+        advanceUntilIdle()
+
+        assertEquals(section to 0, module.requests.last())
+        assertTrue(module.requests.size > initialRequestCount)
+        assertEquals(section, (coordinator.screen.value as AppScreen.Browser).browserState.activeCatalogTargetId)
+    }
+
+    private class NavigationCatalogModule(
+        private val pages: Map<String, List<LibraryBooksPage>>
+    ) : BookCatalogModule {
+        val requests = mutableListOf<Pair<String, Int>>()
+
+        override suspend fun loadBooks(libraryId: String) = pages[libraryId]?.firstOrNull()?.items.orEmpty()
+        override suspend fun loadBooksPage(libraryId: String, page: Int, filter: BookBrowseFilter): LibraryBooksPage {
+            requests += libraryId to page
+            return pages[libraryId]?.getOrNull(page) ?: LibraryBooksPage(page = page, isComplete = true)
+        }
+        override suspend fun loadRecentBooksPage(libraryId: String, section: HomeSection, page: Int) =
+            loadBooksPage(libraryId, page, BookBrowseFilter())
+        override suspend fun loadCachedLibraryCatalog(libraryId: String) = null
+        override suspend fun refreshLibraryCatalog(libraryId: String, firstPage: LibraryBooksPage?) =
+            firstPage ?: pages[libraryId]?.firstOrNull() ?: LibraryBooksPage(isComplete = true)
+        override suspend fun searchBooks(query: String) = emptyList<BookSummary>()
+    }
 }
 
 private class FakeSavedLoginCredentialsStore : SavedLoginCredentialsRepository {

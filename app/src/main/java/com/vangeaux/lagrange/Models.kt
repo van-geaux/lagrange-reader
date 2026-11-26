@@ -802,6 +802,15 @@ data class LibraryJumpBucket(
     val index: Int
 )
 
+data class CatalogNavigationEntry(
+    val id: String,
+    val title: String,
+    /** Opaque, server-provided feed target. The provider module validates and resolves it. */
+    val targetId: String
+)
+
+data class CatalogNavigationTarget(val targetId: String, val title: String)
+
 data class LibraryBooksPage(
     val items: List<BookSummary> = emptyList(),
     val total: Int? = null,
@@ -810,7 +819,9 @@ data class LibraryBooksPage(
     val size: Int? = null,
     val isComplete: Boolean = false,
     val refreshedAtMillis: Long? = null,
-    val jumpBuckets: List<LibraryJumpBucket> = emptyList()
+    val jumpBuckets: List<LibraryJumpBucket> = emptyList(),
+    val title: String? = null,
+    val navigationEntries: List<CatalogNavigationEntry> = emptyList()
 )
 
 data class BrowserState(
@@ -827,9 +838,14 @@ data class BrowserState(
     val booksPage: Int = 0,
     val booksPageSize: Int? = null,
     val isCatalogComplete: Boolean = false,
+    val hasLoadedCatalogPage: Boolean = true,
     val isCatalogSyncing: Boolean = false,
     val catalogRefreshedAtMillis: Long? = null,
     val libraryJumpBuckets: List<LibraryJumpBucket> = emptyList(),
+    val activeCatalogTargetId: String? = null,
+    val catalogNavigationStack: List<CatalogNavigationTarget> = emptyList(),
+    val catalogNavigationEntries: List<CatalogNavigationEntry> = emptyList(),
+    val catalogFeedTitle: String? = null,
     val isRefreshing: Boolean = false,
     val isLoadingLibraries: Boolean = false,
     val isLoadingBooks: Boolean = false,

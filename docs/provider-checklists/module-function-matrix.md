@@ -188,6 +188,26 @@ Grimmory is wired as a distinct native `/api/v1` provider. `V` means implemented
 | Sessions, annotations, EPUB bookmarks | N | No enabled Grimmory implementation | Actions are explicitly unavailable. |
 | Achievements, statistics, offline/background cache | N | No enabled Grimmory implementation | Capability flags and module behavior report unavailable/unsupported. |
 
+## OPDS implementation checkpoint
+
+Generic OPDS 1 support is implemented in the issue #406 worktree. `V` here means source and focused automated coverage exist, live-server/device validation is still pending. The generic adapter supports anonymous Atom feeds and optional HTTP Basic authentication with OPDS-account credentials; no OPDS 2 or unverified server-specific extension is claimed. The same provider-neutral Atom transport also hosts a separate legacy CWA mode, which retains its provider ID and established profile/auth/download/local-progress identities.
+
+| Function | OPDS status | Evidence / limitation |
+|---|---:|---|
+| Exact feed URL setup and provider profile | V | OPDS-specific profile matching preserves the configured URL; setup validation is covered by unit tests. |
+| Legacy CWA profile selection and routing | V | Separate CWA provider ID remains selectable and resolves to legacy `/opds` behavior; new profile setup/device switching validation remains pending. |
+| Legacy CWA Basic auth and saved session | V | Credentials remain in the encrypted profile-session store and are sent only to the configured same-origin feed; MockWebServer verifies Basic header formatting. Live sign-in remains pending. |
+| Legacy CWA download/progress identity | V | Acquisition `fileId`, profile-scoped local storage, and local-progress preference/key format are characterized; retain/download/reopen behavior remains pending live validation. |
+| Atom navigation and linked pagination | V | Atom parser/catalog tests cover nested navigation and server-provided `rel="next"` links. |
+| Publication metadata, covers, acquisitions | V | Projection and MockWebServer tests cover common metadata, cover links, multiple acquisition formats, and bounded origin checks. |
+| Feed transport, Basic authentication, and redirects | V | MockWebServer tests cover feed/image/acquisition auth headers, 401/403 distinction, cross-origin redirect rejection, and unauthorized-feed handling. |
+| Acquisition download and local reader | V | Streaming transport is tested; live download, file integrity across formats, offline reopen, and device reader behavior remain pending. |
+| Generic OPDS feed authentication | V | Optional profile-scoped HTTP Basic credentials are implemented; live BookOrbit login and other authenticated-server validation remain pending. |
+| Search, series, authors, status/progress sync, server-side rating | N | Not implemented by the generic adapter; server-specific extensions are outside scope. |
+| OPDS 2 | N | Not implemented or claimed. |
+
+Manual validation remains pending for all live OPDS feed and Android-device behaviors; do not mark any OPDS function `S` until the applicable manual checklist is completed.
+
 ## Blank target-server column template
 
 When adding a target server, copy this column and replace `[TARGET]` with its provider name. Do not reuse another provider's status without verifying the new provider's contract.
