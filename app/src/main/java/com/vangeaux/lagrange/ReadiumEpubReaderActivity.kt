@@ -2455,6 +2455,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
     private var lastHandledTtsLocator: Locator? = null
     private var lastTtsFailureSerial = 0L
     private var lastTtsCompletionSerial = 0L
+    private var lastTtsVoiceCompatibilityWarningSerial = 0L
     private var ttsAvailable by mutableStateOf(false)
     private var ttsIsPlaying by mutableStateOf(false)
     private var ttsCanGoPrevious by mutableStateOf(false)
@@ -3954,6 +3955,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
                     hideInactiveTtsControls()
                     return@collect
                 }
+                maybeShowTtsVoiceCompatibilityWarning(state)
                 if (state.failure != null && state.failureSerial > lastTtsFailureSerial) {
                     lastTtsFailureSerial = state.failureSerial
                     showTtsFailure(state.failure)
@@ -4064,6 +4066,28 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
         ttsSettings = normalized
         appPreferencesStore.saveEpubTtsSettings(normalized)
         ttsServiceBinder?.setSettings(normalized, ttsOwnerToken)
+    }
+
+    private fun maybeShowTtsVoiceCompatibilityWarning(state: EpubTtsServiceState) {
+        if (!state.voiceCompatibilityConfirmationRequired ||
+            state.isPreparing || state.failure != null ||
+            state.voiceCompatibilityWarningSerial <= lastTtsVoiceCompatibilityWarningSerial ||
+            !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) || isFinishing
+        ) return
+        lastTtsVoiceCompatibilityWarningSerial = state.voiceCompatibilityWarningSerial
+        showTtsVoiceCompatibilityWarning()
+    }
+
+    private fun showTtsVoiceCompatibilityWarning() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.tts_voice_compatibility_title)
+            .setMessage(R.string.tts_voice_compatibility_message)
+            .setPositiveButton(R.string.common_continue) { _, _ ->
+                ttsServiceBinder?.confirmVoiceCompatibility(ttsOwnerToken)
+            }
+            .setNegativeButton(R.string.common_cancel) { _, _ -> closeTtsPlayback() }
+            .setOnCancelListener { closeTtsPlayback() }
+            .show()
     }
 
     private fun showTtsFailure(error: EpubTtsFailureKind) {
@@ -6791,6 +6815,7 @@ open class ReadiumEpubReaderActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        ttsServiceBinder?.state?.value?.let(::maybeShowTtsVoiceCompatibilityWarning)
         if (::readingSessionReporter.isInitialized && publication != null && !isFinishing) {
             readingSessionReporter.resume(progressPercentForReporting())
         }

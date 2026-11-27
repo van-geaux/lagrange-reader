@@ -43,6 +43,8 @@
     <string name="tts_voice_data_missing_message">Android needs voice data for this book\'s language before it can read aloud.</string>
     <string name="tts_install_voice">Install voice</string>
     <string name="tts_voice_failed_title">Text-to-speech voice failed</string>
+    <string name="tts_voice_compatibility_title">Voice compatibility warning</string>
+    <string name="tts_voice_compatibility_message">This TTS engine reports voice information Lagrange cannot interpret. Continue with this selected engine and voice? It may not work as expected.</string>
     <string name="tts_voice_failed_default_message">The selected voice could not read this text. Default Android voice is selected and paused.</string>
     <string name="tts_voice_failed_network_alternative">The selected voice could not reach its network service. Choose another voice.</string>
     <string name="tts_voice_failed_alternative">The selected voice could not read this text. Choose another voice.</string>

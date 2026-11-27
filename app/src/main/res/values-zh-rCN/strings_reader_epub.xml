@@ -43,6 +43,8 @@
     <string name="tts_voice_data_missing_message">在朗读之前，Android 需要此书籍语言的语音数据。</string>
     <string name="tts_install_voice">安装语音</string>
     <string name="tts_voice_failed_title">语音朗读失败</string>
+    <string name="tts_voice_compatibility_title">语音兼容性提示</string>
+    <string name="tts_voice_compatibility_message">此 TTS 引擎报告了 Lagrange 无法识别的语音信息。是否继续使用此引擎和所选语音？其运行可能不符合预期。</string>
     <string name="tts_voice_failed_default_message">所选语音无法朗读此文本。已改用默认 Android 语音并暂停。</string>
     <string name="tts_voice_failed_network_alternative">所选语音无法连接其网络服务，请选择其他语音。</string>
     <string name="tts_voice_failed_alternative">所选语音无法朗读此文本，请选择其他语音。</string>

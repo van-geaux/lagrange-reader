@@ -5,10 +5,44 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpubTtsPlaybackServiceTest {
+    @Test
+    fun `navigator creation exceptions reach recoverable failure handling`() = runBlocking {
+        var reportedFailure: Exception? = null
+
+        val result = createEpubTtsNavigatorOrNull<String>(
+            create = { throw IllegalStateException("Unexpected voice quality.") },
+            onFailure = { reportedFailure = it }
+        )
+
+        assertNull(result)
+        assertTrue(reportedFailure is IllegalStateException)
+        assertEquals("Unexpected voice quality.", reportedFailure?.message)
+    }
+
+    @Test
+    fun `navigator creation cancellation is not converted into failure`() = runBlocking {
+        val cancellation = kotlinx.coroutines.CancellationException("cancelled")
+        var reportedFailure = false
+
+        try {
+            createEpubTtsNavigatorOrNull<String>(
+                create = { throw cancellation },
+                onFailure = { reportedFailure = true }
+            )
+            throw AssertionError("Expected cancellation to propagate")
+        } catch (actual: kotlinx.coroutines.CancellationException) {
+            assertSame(cancellation, actual)
+        }
+
+        assertFalse(reportedFailure)
+    }
+
     @Test
     fun `inactive service exposes no stale media actions`() {
         val state = EpubTtsServiceState()

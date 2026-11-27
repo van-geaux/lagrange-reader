@@ -101,6 +101,19 @@ internal data class EpubTtsSessionSpec(
 
 private fun ttsReaderLeaseId(requestId: Long): String = "epub-tts:$requestId"
 
+/** Converts TTS engine initialization exceptions into a recoverable navigator-creation failure. */
+internal suspend fun <T> createEpubTtsNavigatorOrNull(
+    create: suspend () -> T,
+    onFailure: (Exception) -> Unit
+): T? = try {
+    create()
+} catch (error: kotlinx.coroutines.CancellationException) {
+    throw error
+} catch (error: Exception) {
+    onFailure(error)
+    null
+}
+
 internal enum class EpubTtsFailureKind {
     LANGUAGE_DATA,
     NETWORK,
@@ -115,6 +128,8 @@ internal data class EpubTtsServiceState(
     val utterance: String? = null,
     val isPreparing: Boolean = false,
     val isPlaying: Boolean = false,
+    val voiceCompatibilityConfirmationRequired: Boolean = false,
+    val voiceCompatibilityWarningSerial: Long = 0L,
     val canGoPrevious: Boolean = false,
     val canGoNext: Boolean = false,
     val settings: EpubTtsSettings = EpubTtsSettings(),
@@ -128,6 +143,9 @@ internal data class EpubTtsServiceState(
     val hasSession: Boolean
         get() = readerKey != null && (isPreparing || failure == null)
 }
+
+internal fun epubTtsMayStartPlayback(state: EpubTtsServiceState): Boolean =
+    !state.voiceCompatibilityConfirmationRequired
 
 internal data class EpubTtsVoice(
     val id: String,
@@ -147,6 +165,7 @@ internal fun epubTtsMediaPlaybackState(state: EpubTtsServiceState): Int = when {
 internal fun epubTtsMediaPlaybackActions(state: EpubTtsServiceState): Long {
     if (state.readerKey == null) return 0L
     var actions = PlaybackStateCompat.ACTION_STOP
+    if (state.voiceCompatibilityConfirmationRequired) return actions
     if (state.failure == null && !state.isPreparing) {
         actions = actions or PlaybackStateCompat.ACTION_PLAY or
             PlaybackStateCompat.ACTION_PAUSE or PlaybackStateCompat.ACTION_PLAY_PAUSE
@@ -300,7 +319,7 @@ class EpubTtsPlaybackService : Service() {
         }
 
         fun play(ownerToken: String? = null) {
-            if (!isOwner(ownerToken)) return
+            if (!isOwner(ownerToken) || !epubTtsMayStartPlayback(mutableState.value)) return
             val active = navigator ?: return
             requestedPlaybackState = true
             active.play()
@@ -390,6 +409,12 @@ class EpubTtsPlaybackService : Service() {
                 navigator?.let { active -> active.go(active.location.value.utteranceLocator) }
             }
             updateNotification()
+        }
+
+        fun confirmVoiceCompatibility(ownerToken: String?) {
+            if (!isOwner(ownerToken) || !mutableState.value.voiceCompatibilityConfirmationRequired) return
+            publish { it.copy(voiceCompatibilityConfirmationRequired = false) }
+            if (activeSpec?.playWhenReady == true) play(ownerToken)
         }
 
         fun stop(ownerToken: String? = null, requestId: Long? = null) {
@@ -524,7 +549,8 @@ class EpubTtsPlaybackService : Service() {
                     isPreparing = true,
                     settings = AppPreferencesStore(applicationContext).readEpubTtsSettings(),
                     failureSerial = it.failureSerial,
-                    completionSerial = it.completionSerial
+                    completionSerial = it.completionSerial,
+                    voiceCompatibilityWarningSerial = it.voiceCompatibilityWarningSerial
                 )
             }
         } else {
@@ -567,7 +593,8 @@ class EpubTtsPlaybackService : Service() {
                 isPreparing = true,
                 settings = spec.settings.normalized(),
                 failureSerial = it.failureSerial,
-                completionSerial = it.completionSerial
+                completionSerial = it.completionSerial,
+                voiceCompatibilityWarningSerial = it.voiceCompatibilityWarningSerial
             )
         }
         promoteToForeground(spec.title, isPlaying = false)
@@ -614,8 +641,19 @@ class EpubTtsPlaybackService : Service() {
                 application = application as Application,
                 publication = opened,
                 ttsEngineProvider = PunctuationPausingTtsEngineProvider(
-                    applicationContext
-                ) { binder.state.value.settings.pauses },
+                    applicationContext,
+                    pauseSettings = { binder.state.value.settings.pauses },
+                    onNonStandardVoiceMetadata = {
+                        if (isSessionCurrent(spec, requestGeneration)) {
+                            binder.publish {
+                                it.copy(
+                                    voiceCompatibilityConfirmationRequired = true,
+                                    voiceCompatibilityWarningSerial = it.voiceCompatibilityWarningSerial + 1
+                                )
+                            }
+                        }
+                    }
+                ),
                 tokenizerFactory = { language ->
                     EpubTtsSentenceTokenizer(
                         language = language,
@@ -628,22 +666,32 @@ class EpubTtsPlaybackService : Service() {
                 failSession(requestGeneration, EpubTtsFailureKind.GENERIC)
                 return@launch
             }
-            val result = factory.createNavigator(
-                listener = object : TtsNavigator.Listener {
-                    override fun onStopRequested() {
-                        closeSession(removeNotification = true)
-                    }
+            val result = createEpubTtsNavigatorOrNull(
+                create = {
+                    factory.createNavigator(
+                        listener = object : TtsNavigator.Listener {
+                            override fun onStopRequested() {
+                                closeSession(removeNotification = true)
+                            }
+                        },
+                        initialLocator = spec.initialLocator,
+                        initialPreferences = AndroidTtsPreferences(
+                            language = spec.languageTag?.let(::Language),
+                            pitch = spec.settings.normalized().pitch.toDouble(),
+                            speed = spec.settings.normalized().speed.toDouble(),
+                            voices = spec.settings.normalized().voiceIds
+                                .mapKeys { (language, _) -> Language(language) }
+                                .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
+                        )
+                    )
                 },
-                initialLocator = spec.initialLocator,
-                initialPreferences = AndroidTtsPreferences(
-                    language = spec.languageTag?.let(::Language),
-                    pitch = spec.settings.normalized().pitch.toDouble(),
-                    speed = spec.settings.normalized().speed.toDouble(),
-                    voices = spec.settings.normalized().voiceIds
-                        .mapKeys { (language, _) -> Language(language) }
-                        .mapValues { (_, voiceId) -> AndroidTtsEngine.Voice.Id(voiceId) }
-                )
-            )
+                onFailure = { error ->
+                    android.util.Log.w("EpubTts", "TTS navigator creation failed", error)
+                    if (isSessionCurrent(spec, requestGeneration)) {
+                        failSession(requestGeneration, EpubTtsFailureKind.GENERIC)
+                    }
+                }
+            ) ?: return@launch
             val created = result.getOrNull()
             if (created == null || !isSessionCurrent(spec, requestGeneration)) {
                 created?.close()
@@ -935,6 +983,7 @@ class EpubTtsPlaybackService : Service() {
                 isPlaying = false,
                 canGoPrevious = false,
                 canGoNext = false,
+                voiceCompatibilityConfirmationRequired = false,
                 failure = kind,
                 failureSerial = it.failureSerial + 1
             )
@@ -1020,6 +1069,7 @@ class EpubTtsPlaybackService : Service() {
         binder.publish {
             EpubTtsServiceState(
                 failureSerial = it.failureSerial,
+                voiceCompatibilityWarningSerial = it.voiceCompatibilityWarningSerial,
                 completedOwnerToken = completedOwnerToken,
                 completionSerial = if (completedOwnerToken != null) {
                     it.completionSerial + 1
