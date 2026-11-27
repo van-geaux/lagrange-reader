@@ -134,6 +134,16 @@ class BookOrbitRepositoryHelpersTest {
     }
 
     @Test
+    fun `normalizeOpdsFeedUrl preserves the exact feed path and query`() {
+        val configured = "https://books.example.test/proxy/opds/catalog.xml?profile=main&lang=en/"
+
+        assertEquals(configured, normalizeOpdsFeedUrl(configured))
+        assertNull(normalizeOpdsFeedUrl("ftp://books.example.test/catalog"))
+        assertNull(normalizeOpdsFeedUrl("https://reader:secret@books.example.test/catalog"))
+        assertNull(normalizeOpdsFeedUrl("https://books.example.test/catalog#section"))
+    }
+
+    @Test
     fun `normalizeServerUrl rejects unsupported schemes`() {
         assertNull(normalizeServerUrl("ftp://example.test"))
         assertNull(normalizeServerUrl("mailto:user@example.test"))

@@ -67,9 +67,8 @@ internal fun shouldRefreshAfterDownloadOutcome(
 internal fun providerIdForLogin(
     serverUrl: String,
     profiles: List<ServerProfile>
-): String = profiles
-    .firstOrNull { serverUrlsMatch(it.serverUrl, serverUrl) }
-    ?.providerId
+): String = profiles.firstOrNull { it.serverUrl == serverUrl }?.providerId
+    ?: profiles.firstOrNull { it.providerId != PROVIDER_OPDS && serverUrlsMatch(it.serverUrl, serverUrl) }?.providerId
     ?: PROVIDER_BOOKORBIT
 
 internal fun recoveredDownloadFilename(
@@ -271,29 +270,88 @@ class AppCoordinator internal constructor(
         bookCatalogModule()?.loadBooksPage(libraryId, page, filter) ?: repository.loadBooksPage(libraryId, page, filter)
     }
 
+    fun openCatalogFeed(targetId: String, title: String) {
+        val current = (_screen.value as? AppScreen.Browser)?.browserState ?: return
+        val stack = current.catalogNavigationStack + CatalogNavigationTarget(targetId, title)
+        loadCatalogFeed(current, targetId, title, stack)
+    }
+
+    fun navigateBackCatalogFeed() {
+        val current = (_screen.value as? AppScreen.Browser)?.browserState ?: return
+        if (current.catalogNavigationStack.isEmpty()) return
+        val stack = current.catalogNavigationStack.dropLast(1)
+        val parent = stack.lastOrNull()
+        val rootId = current.selectedLibraryId ?: return
+        val targetId = parent?.targetId ?: rootId
+        val title = parent?.title ?: current.libraries.firstOrNull { it.id == rootId }?.name.orEmpty()
+        loadCatalogFeed(current, targetId, title, stack)
+    }
+
+    private fun loadCatalogFeed(
+        current: BrowserState,
+        targetId: String,
+        title: String,
+        stack: List<CatalogNavigationTarget>
+    ) {
+        val libraryId = current.selectedLibraryId ?: return
+        catalogLoadJob?.cancel()
+        catalogLoadJob = scope.launch {
+            showBrowser(current.copy(isLoadingBooks = true, isCatalogSyncing = false, message = null))
+            runCatching { loadLibraryBooksPage(targetId, 0) }
+                .onSuccess { page ->
+                    val books = mergeKnownProgress(page.items, libraryId)
+                    showBrowser(
+                        current.copy(
+                            books = books,
+                            homeBooks = if (stack.isEmpty()) current.homeBooks.replaceLibrary(libraryId, books) else current.homeBooks,
+                            booksTotal = page.total ?: books.size,
+                            booksSeriesTotal = page.seriesTotal,
+                            booksPage = page.page ?: 0,
+                            booksPageSize = page.size,
+                            isCatalogComplete = page.isComplete,
+                            hasLoadedCatalogPage = true,
+                            isCatalogSyncing = false,
+                            catalogRefreshedAtMillis = page.refreshedAtMillis,
+                            libraryJumpBuckets = page.jumpBuckets,
+                            activeCatalogTargetId = targetId.takeUnless { stack.isEmpty() },
+                            catalogNavigationStack = stack,
+                            catalogNavigationEntries = page.navigationEntries,
+                            catalogFeedTitle = page.title ?: title,
+                            isRefreshing = false,
+                            isLoadingBooks = false,
+                            message = null
+                        )
+                    )
+                }
+                .onFailure { error ->
+                    showBrowser(current.copy(isRefreshing = false, isLoadingBooks = false, message = userMessage(error, "Unable to open this catalog feed.")))
+                }
+        }
+    }
+
     fun loadMoreLibraryBooks() {
         val current = (_screen.value as? AppScreen.Browser)?.browserState ?: return
         val libraryId = current.selectedLibraryId ?: return
+        val catalogTargetId = current.activeCatalogTargetId ?: libraryId
         if (current.isCatalogComplete || current.isCatalogSyncing) return
         catalogLoadJob?.cancel()
         catalogLoadJob = scope.launch {
             showBrowser(current.copy(isCatalogSyncing = true, message = null))
             runCatching {
-                val nextPage = if (current.books.isEmpty() && current.booksPage == 0) {
-                    0
-                } else {
-                    current.booksPage + 1
-                }
-                val page = loadLibraryBooksPage(libraryId, nextPage)
+                val nextPage = if (current.hasLoadedCatalogPage) current.booksPage + 1 else 0
+                val page = loadLibraryBooksPage(catalogTargetId, nextPage)
                 val merged = (current.books + page.items).distinctBy { it.id }
                 showBrowser(
                     current.copy(
                         books = merged,
-                        homeBooks = current.homeBooks.replaceLibrary(libraryId, merged),
+                        homeBooks = if (current.catalogNavigationStack.isEmpty()) current.homeBooks.replaceLibrary(libraryId, merged) else current.homeBooks,
                         booksTotal = page.total ?: merged.size,
                         booksPage = page.page ?: nextPage,
                         booksPageSize = page.size,
                         isCatalogComplete = page.isComplete,
+                        hasLoadedCatalogPage = true,
+                        catalogNavigationEntries = (current.catalogNavigationEntries + page.navigationEntries).distinctBy { it.targetId },
+                        catalogFeedTitle = page.title ?: current.catalogFeedTitle,
                         isCatalogSyncing = false,
                         isRefreshing = false,
                         isLoadingBooks = false,
@@ -783,6 +841,10 @@ class AppCoordinator internal constructor(
                     lastUsedAtMillis = System.currentTimeMillis()
                 )
             )
+            if (providerId == PROVIDER_OPDS) {
+                continueOpdsConnection()
+                return@launch
+            }
             showLogin(
                 message = uiText(
                     R.string.error_connect_complete_sign_in,
@@ -804,7 +866,8 @@ class AppCoordinator internal constructor(
             val oldServerUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
             val oldProviderId = serverProfileStore?.active()?.providerId ?: PROVIDER_BOOKORBIT
             if (oldServerUrl.isNotBlank() &&
-                serverUrlsMatch(oldServerUrl, serverUrl) &&
+                (if (providerId == PROVIDER_OPDS && oldProviderId == PROVIDER_OPDS) oldServerUrl == serverUrl
+                else serverUrlsMatch(oldServerUrl, serverUrl)) &&
                 oldProviderId == providerId &&
                 (targetProfileId == null || serverProfileStore?.activeId() == targetProfileId)
             ) {
@@ -832,7 +895,8 @@ class AppCoordinator internal constructor(
             val restoreOffline = setupFailure != null && oldServerUrl.isBlank() &&
                 checkResult.isConnectivityFailure() &&
                 serverProfileStore?.readAll()?.any {
-                    serverUrlsMatch(it.serverUrl, serverUrl) && it.providerId == providerId
+                    (if (providerId == PROVIDER_OPDS) it.serverUrl == serverUrl else serverUrlsMatch(it.serverUrl, serverUrl)) &&
+                        it.providerId == providerId
                 } == true
             if (setupFailure != null && !restoreOffline) {
                 _screen.value = setupFailure
@@ -863,6 +927,10 @@ class AppCoordinator internal constructor(
                     lastUsedAtMillis = System.currentTimeMillis()
                 )
             )
+            if (providerId == PROVIDER_OPDS) {
+                continueOpdsConnection()
+                return@launch
+            }
             if (restoreOffline) {
                 // Startup restores the profile session and falls back to offline content; this is
                 // the user's own saved profile, so its offline library may be shown.
@@ -1423,6 +1491,15 @@ class AppCoordinator internal constructor(
     }
 
     fun refreshBrowser() {
+        val nested = (_screen.value as? AppScreen.Browser)?.browserState
+        val nestedTarget = nested?.catalogNavigationStack?.lastOrNull()
+        if (nested != null && nested.activeCatalogTargetId != null && nestedTarget != null) {
+            if (manualBrowserRefreshInFlight) return
+            manualBrowserRefreshInFlight = true
+            loadCatalogFeed(nested.copy(isRefreshing = true), nestedTarget.targetId, nestedTarget.title, nested.catalogNavigationStack)
+            catalogLoadJob?.invokeOnCompletion { manualBrowserRefreshInFlight = false }
+            return
+        }
         if (manualBrowserRefreshInFlight) return
         manualBrowserRefreshInFlight = true
         loadBrowser(userInitiated = true)
@@ -1570,7 +1647,8 @@ class AppCoordinator internal constructor(
                         homeShelves = homeShelves,
                         pendingProgressCount = pendingProgressCount,
                         isRefreshing = userInitiated,
-                        isCatalogSyncing = !deferInitialCatalogLoad
+                        isCatalogSyncing = !deferInitialCatalogLoad,
+                        hasLoadedCatalogPage = !deferInitialCatalogLoad
                     )
                 )
 
@@ -3199,7 +3277,8 @@ class AppCoordinator internal constructor(
         homeShelfPreferences: HomeShelfPreferences? = null,
         pendingProgressCount: Int,
         isRefreshing: Boolean,
-        isCatalogSyncing: Boolean
+        isCatalogSyncing: Boolean,
+        hasLoadedCatalogPage: Boolean = true
     ): BrowserState {
         val transient = lastBrowserState
         return BrowserState(
@@ -3219,9 +3298,14 @@ class AppCoordinator internal constructor(
             booksPage = page.page ?: 0,
             booksPageSize = page.size,
             isCatalogComplete = page.isComplete,
+            hasLoadedCatalogPage = hasLoadedCatalogPage,
             isCatalogSyncing = isCatalogSyncing,
             catalogRefreshedAtMillis = page.refreshedAtMillis,
             libraryJumpBuckets = page.jumpBuckets,
+            catalogNavigationEntries = page.navigationEntries,
+            catalogFeedTitle = page.title,
+            activeCatalogTargetId = null,
+            catalogNavigationStack = emptyList(),
             isRefreshing = isRefreshing,
             isLoadingLibraries = false,
             isLoadingBooks = false,
@@ -3463,6 +3547,37 @@ class AppCoordinator internal constructor(
         this == ServerCheckResult.UnreachableHost ||
             this == ServerCheckResult.Timeout ||
             this == ServerCheckResult.NetworkFailure
+
+    private suspend fun continueOpdsConnection() {
+        when (loginModule()?.getSessionState() ?: repository.getSessionState()) {
+            SessionState.Authenticated -> {
+                allowCachedLoginFallback = true
+                loadBrowser()
+            }
+            SessionState.Unauthenticated -> {
+                allowCachedLoginFallback = false
+                if (!trySavedCredentialLogin(PostLoginDestination.Browser)) {
+                    showLogin(
+                        message = uiText(
+                            R.string.opds_login_required,
+                            "This feed requires authentication. Sign in with the OPDS account username and password."
+                        ),
+                        destination = PostLoginDestination.Browser
+                    )
+                }
+            }
+            SessionState.Unavailable -> {
+                allowCachedLoginFallback = true
+                showLogin(
+                    message = uiText(
+                        R.string.error_server_unavailable_retry_login,
+                        "The server is unavailable. Keep the login page open or retry when the connection recovers."
+                    ),
+                    destination = PostLoginDestination.Browser
+                )
+            }
+        }
+    }
 
     private fun serverSetupFailure(
         serverUrl: String,

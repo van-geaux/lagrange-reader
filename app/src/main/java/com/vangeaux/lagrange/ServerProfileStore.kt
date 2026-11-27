@@ -19,12 +19,16 @@ const val PROVIDER_BOOKORBIT = "bookorbit"
 const val PROVIDER_KOMGA = "komga"
 const val PROVIDER_KAVITA = "kavita"
 const val PROVIDER_GRIMMORY = "grimmory"
+const val PROVIDER_OPDS = "opds"
+const val PROVIDER_CALIBRE_WEB_AUTOMATED = "calibre-web-automated"
 
 fun serverProviderDisplayName(providerId: String): String = when (providerId) {
     PROVIDER_KOMGA -> "Komga"
     PROVIDER_KAVITA -> "Kavita"
-    PROVIDER_GRIMMORY -> "Grimmory"
     PROVIDER_BOOKORBIT -> "BookOrbit"
+    PROVIDER_GRIMMORY -> "Grimmory"
+    PROVIDER_OPDS -> "OPDS"
+    PROVIDER_CALIBRE_WEB_AUTOMATED -> "Calibre-Web Automated"
     else -> "server"
 }
 

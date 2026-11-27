@@ -40,6 +40,9 @@
     <string name="setup_server_url_label">Server URL</string>
     <string name="setup_server_url_placeholder" translatable="false">https://books.example.com</string>
     <string name="setup_server_url_description">%1$s server URL</string>
+    <string name="setup_opds_feed_url_hint">Paste the exact OPDS 1 feed URL. If it requires HTTP Basic authentication, Lagrange will prompt for the OPDS account credentials.</string>
+    <string name="login_opds_account_hint">Use the OPDS account username and password, not your BookOrbit login.</string>
+    <string name="opds_login_required">This feed requires authentication. Sign in with your OPDS account credentials.</string>
     <string name="setup_server_type_title">Server type</string>
     <string name="setup_select_server_type">Select server type</string>
     <string name="setup_select_server_type_error">Select a server type.</string>

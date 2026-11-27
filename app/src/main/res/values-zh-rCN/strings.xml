@@ -40,6 +40,9 @@
     <string name="setup_server_name_placeholder">我的书库</string>
     <string name="setup_server_url_label">服务器地址</string>
     <string name="setup_server_url_description">%1$s 服务器地址</string>
+    <string name="setup_opds_feed_url_hint">粘贴完整的 OPDS 1 订阅源网址。如果需要 HTTP Basic 身份验证，Lagrange 会提示输入 OPDS 账号凭据。</string>
+    <string name="login_opds_account_hint">请使用 OPDS 账号的用户名和密码，而非 BookOrbit 登录凭据。</string>
+    <string name="opds_login_required">此订阅源需要身份验证。请使用 OPDS 账号凭据登录。</string>
     <string name="setup_server_type_title">服务器类型</string>
     <string name="setup_select_server_type">选择服务器类型</string>
     <string name="setup_select_server_type_error">请选择服务器类型。</string>

@@ -90,7 +90,11 @@ internal fun ServerSetupScreen(
         if (providerId.isBlank()) {
             errorRes = R.string.setup_select_server_type_error
         } else {
-            val normalized = normalizeServerUrl(server)
+            val normalized = if (providerId == PROVIDER_OPDS) {
+                normalizeOpdsFeedUrl(server)
+            } else {
+                normalizeServerUrl(server)
+            }
             if (normalized == null) {
                 errorRes = R.string.setup_invalid_server_url
             } else {
@@ -154,6 +158,13 @@ internal fun ServerSetupScreen(
                     placeholder = { Text(stringResource(R.string.setup_server_url_placeholder)) },
                     singleLine = true
                 )
+                if (providerId == PROVIDER_OPDS) {
+                    Text(
+                        stringResource(R.string.setup_opds_feed_url_hint),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 Text(stringResource(R.string.setup_server_type_title), style = MaterialTheme.typography.titleMedium)
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedButton(
@@ -170,7 +181,7 @@ internal fun ServerSetupScreen(
                         onDismissRequest = { providerMenuExpanded = false },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA, PROVIDER_GRIMMORY).forEach { option ->
+                        listOf(PROVIDER_BOOKORBIT, PROVIDER_KOMGA, PROVIDER_KAVITA, PROVIDER_GRIMMORY, PROVIDER_CALIBRE_WEB_AUTOMATED, PROVIDER_OPDS).forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(serverProviderDisplayName(option)) },
                                 onClick = {
@@ -426,6 +437,13 @@ internal fun LoginScreen(
                         stringResource(R.string.provider_server_label, serverProviderDisplayName(providerId))
                     )
                     Text(serverUrl, style = MaterialTheme.typography.bodySmall)
+                    if (providerId == PROVIDER_OPDS) {
+                        Text(
+                            stringResource(R.string.login_opds_account_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     OutlinedTextField(
                         value = username,
                         onValueChange = {

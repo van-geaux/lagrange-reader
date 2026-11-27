@@ -4,6 +4,7 @@ import android.content.Context
 import com.vangeaux.lagrange.provider.komga.KomgaRepository
 import com.vangeaux.lagrange.provider.kavita.KavitaRepository
 import com.vangeaux.lagrange.provider.grimmory.GrimmoryRepository
+import com.vangeaux.lagrange.provider.opds.OpdsRepository
 import com.vangeaux.lagrange.core.DownloadModule
 import com.vangeaux.lagrange.provider.bookorbit.BookOrbitModuleSet
 
@@ -91,6 +92,10 @@ class AppGraph private constructor(
                 PROVIDER_KOMGA -> KomgaRepository(context)
                 PROVIDER_KAVITA -> KavitaRepository(context)
                 PROVIDER_GRIMMORY -> GrimmoryRepository(context)
+                PROVIDER_OPDS -> OpdsRepository(context, activeProfile.serverUrl)
+                PROVIDER_CALIBRE_WEB_AUTOMATED -> OpdsRepository(
+                    context, activeProfile.serverUrl, legacyCwaProfileId = activeProfile.id
+                )
                 else -> BookOrbitRepository(context)
             }
             val sessionHistoryStore = AudiobookSessionHistoryStore(context)

@@ -419,6 +419,8 @@ private fun BookOrbitDestination(
             state = screen.browserState,
             onRefresh = coordinator::refreshBrowser,
             onLoadMoreLibraryBooks = coordinator::loadMoreLibraryBooks,
+            onNavigateCatalogFeed = coordinator::openCatalogFeed,
+            onNavigateCatalogBack = coordinator::navigateBackCatalogFeed,
             onSignIn = coordinator::beginSignIn,
             onSignOut = coordinator::signOut,
             onNewServer = coordinator::clearServer,
@@ -2770,6 +2772,15 @@ private fun localizedBookStatus(
         parts += context.getString(R.string.shell_status_not_available_offline)
     }
     return parts.joinToString(" | ")
+}
+
+internal fun normalizeOpdsFeedUrl(value: String): String? {
+    val raw = value.trim()
+    if (raw.isBlank()) return null
+    val uri = runCatching { URI(raw) }.getOrNull() ?: return null
+    if (!uri.scheme.equals("http", ignoreCase = true) && !uri.scheme.equals("https", ignoreCase = true)) return null
+    if (uri.host.isNullOrBlank() || uri.userInfo != null || uri.fragment != null) return null
+    return raw
 }
 
 internal fun normalizeServerUrl(value: String): String? {

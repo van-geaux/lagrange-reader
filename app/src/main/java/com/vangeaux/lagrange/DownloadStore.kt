@@ -41,7 +41,11 @@ internal fun downloadStorageScopeId(
         }
     } ?: return null
     val account = AuthenticatedAccountScopeStore(context).read(profile.id)
-        ?: return null
+        ?: when (profile.providerId) {
+            PROVIDER_OPDS -> "anonymous-feed:${profile.serverUrl}"
+            PROVIDER_CALIBRE_WEB_AUTOMATED -> "legacy-cwa-profile:${profile.id}"
+            else -> return null
+        }
     val identity = "${profile.providerId}\u0000$normalizedServer\u0000${profile.id}\u0000$account"
     return MessageDigest.getInstance("SHA-256")
         .digest(identity.toByteArray(Charsets.UTF_8))
