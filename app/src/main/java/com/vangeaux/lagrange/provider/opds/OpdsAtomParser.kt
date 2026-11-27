@@ -47,22 +47,39 @@ internal object OpdsAtomParser {
     private const val IMAGE_REL = "http://opds-spec.org/image"
     private const val THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail"
     private const val XML_BASE_NS = XMLConstants.XML_NS_URI
+    private const val ANDROID_DOCUMENT_BUILDER_FACTORY = "org.apache.harmony.xml.parsers.DocumentBuilderFactoryImpl"
 
     fun parse(xml: String, requestUrl: String, trustedOrigin: String = requestUrl): OpdsFeed {
+        val factory = DocumentBuilderFactory.newInstance()
+        // AOSP's built-in factory rejects provider-specific JAXP features and attributes. Its
+        // XmlPull implementation leaves DOCTYPE processing disabled by default.
+        val supportsJaxpSecurityOptions = factory.javaClass.name != ANDROID_DOCUMENT_BUILDER_FACTORY
+        return parseWithFactory(xml, requestUrl, trustedOrigin, factory, supportsJaxpSecurityOptions)
+    }
+
+    internal fun parseWithFactory(
+        xml: String,
+        requestUrl: String,
+        trustedOrigin: String,
+        factory: DocumentBuilderFactory,
+        supportsJaxpSecurityOptions: Boolean = true
+    ): OpdsFeed {
         val request = requireHttpUrl(requestUrl)
         val origin = requireHttpUrl(trustedOrigin)
         require(sameOrigin(request, origin)) { "OPDS request escaped the configured server origin" }
 
-        val factory = DocumentBuilderFactory.newInstance().apply {
+        factory.apply {
             isNamespaceAware = true
             isExpandEntityReferences = false
-            isXIncludeAware = false
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-            setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
-            setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+            if (supportsJaxpSecurityOptions) {
+                isXIncludeAware = false
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                setFeature("http://xml.org/sax/features/external-general-entities", false)
+                setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+                setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "")
+                setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "")
+            }
         }
         val root = factory.newDocumentBuilder().parse(InputSource(StringReader(xml))).documentElement
         require(root.localName == "feed" && root.namespaceURI == ATOM_NS) { "Expected an Atom feed" }

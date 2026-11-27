@@ -5,6 +5,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import javax.xml.parsers.DocumentBuilder
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.parsers.ParserConfigurationException
 
 class OpdsAtomParserTest {
     @Test
@@ -119,4 +122,43 @@ class OpdsAtomParserTest {
         assertFalse(parsed.entries.any { it is OpdsEntry.Publication })
         assertTrue(parsed.entries.isEmpty())
     }
+
+    @Test
+    fun `parses when the platform factory rejects optional JAXP security settings`() {
+        val url = "https://books.example/opds"
+        val parsed = OpdsAtomParser.parseWithFactory(
+            xml = """
+                <feed xmlns="http://www.w3.org/2005/Atom">
+                  <title>Android-compatible catalog</title>
+                </feed>
+            """.trimIndent(),
+            requestUrl = url,
+            trustedOrigin = url,
+            factory = UnsupportedJaxpSettingsFactory(),
+            supportsJaxpSecurityOptions = false
+        )
+
+        assertEquals("Android-compatible catalog", parsed.title)
+    }
+}
+
+private class UnsupportedJaxpSettingsFactory : DocumentBuilderFactory() {
+    private val delegate = DocumentBuilderFactory.newInstance()
+
+    override fun newDocumentBuilder(): DocumentBuilder {
+        delegate.isNamespaceAware = isNamespaceAware
+        return delegate.newDocumentBuilder()
+    }
+
+    override fun setAttribute(name: String?, value: Any?) {
+        throw IllegalArgumentException(name)
+    }
+
+    override fun getAttribute(name: String?): Any? = throw IllegalArgumentException(name)
+
+    override fun setFeature(name: String?, value: Boolean) {
+        throw ParserConfigurationException(name)
+    }
+
+    override fun getFeature(name: String?): Boolean = throw ParserConfigurationException(name)
 }

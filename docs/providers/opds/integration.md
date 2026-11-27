@@ -6,7 +6,7 @@ The generic OPDS adapter consumes the Atom feed URL supplied by the user. It pre
 
 Implemented OPDS 1 behavior:
 
-- Atom feed parsing with external entities and DTD loading disabled.
+- Atom feed parsing with DTD and external-entity processing disabled, using JAXP security settings where the selected factory supports them and the Android platform parser's DTD-disabled default otherwise.
 - Navigation entries and publication metadata, including title, author, publisher, summary, language, updated date, categories, covers, and acquisition links.
 - Server-provided `rel="next"` pagination links.
 - Acquisition file selection and bounded streaming downloads into Lagrange-managed storage.
