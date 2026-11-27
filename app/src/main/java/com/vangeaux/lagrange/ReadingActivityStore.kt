@@ -13,6 +13,24 @@ import org.json.JSONObject
 data class ReadingActivityKey(val libraryId: String, val bookId: String)
 data class ReadingActivityValue(val timestamp: Long, val localBaseline: Long? = null)
 
+internal fun applyPersistedReadingActivity(
+    books: List<BookSummary>,
+    activity: Map<ReadingActivityKey, Long>
+): List<BookSummary> = books.map { book ->
+    if (book.readStatus != BookReadStatus.READING && book.readStatus != BookReadStatus.REREADING) {
+        book
+    } else {
+        val localTimestamp = activity[ReadingActivityKey(book.libraryId, book.id)]
+        val latestTimestamp = listOfNotNull(localTimestamp, book.serverLastReadAtMillis, book.lastReadAtMillis).maxOrNull()
+        latestTimestamp
+            ?.let { timestamp -> book.copy(lastReadAtMillis = timestamp) }
+            ?: book
+    }
+}
+
+internal fun orderCurrentlyReadingByActivity(books: List<BookSummary>): List<BookSummary> =
+    books.sortedWith(compareByDescending<BookSummary> { it.lastReadAtMillis ?: Long.MIN_VALUE })
+
 internal fun nextReadingActivityOrder(
     observedAtMillis: Long,
     books: List<BookSummary>,
@@ -24,6 +42,34 @@ internal fun nextReadingActivityOrder(
         .maxOrNull()
     val latest = listOfNotNull(latestBook, localActivity.maxOrNull()).maxOrNull() ?: return observedAtMillis
     return maxOf(observedAtMillis, if (latest == Long.MAX_VALUE) latest else latest + 1)
+}
+
+internal suspend fun BookOrbitDataSource.loadProviderReadingActivity(
+    context: Context,
+    serverUrl: String
+): Map<ReadingActivityKey, Long> {
+    if (supportsLocalReadingActivity) return loadReadingActivity(serverUrl)
+    val scope = resolveEpubReaderScope(context, serverUrl) ?: return emptyMap()
+    return ReadingActivityStore(context).read(epubReaderPersistenceScopePrefix(scope))
+}
+
+internal suspend fun BookOrbitDataSource.recordProviderReadingActivity(
+    context: Context,
+    serverUrl: String,
+    key: ReadingActivityKey,
+    observedAtMillis: Long,
+    books: List<BookSummary>
+) {
+    if (supportsLocalReadingActivity) {
+        recordBackgroundReadingActivity(serverUrl, key, observedAtMillis)
+        return
+    }
+    val scope = resolveEpubReaderScope(context, serverUrl) ?: return
+    val storageKey = epubReaderPersistenceScopePrefix(scope)
+    val store = ReadingActivityStore(context)
+    val existing = store.read(storageKey)
+    val orderingAt = nextReadingActivityOrder(observedAtMillis, books, existing.values)
+    store.record(storageKey, key, orderingAt)
 }
 
 internal suspend fun BookOrbitDataSource.recordBackgroundReadingActivity(

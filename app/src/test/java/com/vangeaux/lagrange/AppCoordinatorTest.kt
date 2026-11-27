@@ -3134,7 +3134,7 @@ class AppCoordinatorTest {
         coordinator.loadBrowser()
         advanceUntilIdle()
         val initial = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(initial, limit = null).map { it.id })
+        assertEquals(listOf(second.id, first.id), currentlyReadingBooks(initial, limit = null).map { it.id })
 
         repository.loadBooksResult = listOf(
             second.copy(lastReadAtMillis = 1_004_000L),
@@ -3143,13 +3143,13 @@ class AppCoordinatorTest {
         coordinator.refreshBrowser()
         advanceUntilIdle()
         val refreshed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
+        assertEquals(listOf(second.id, first.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
 
         val restarted = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
         restarted.loadBrowser()
         advanceUntilIdle()
         val afterRestart = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(listOf(first.id, second.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
+        assertEquals(listOf(second.id, first.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
     }
 
     @Test
@@ -3432,7 +3432,7 @@ class AppCoordinatorTest {
     }
 
     @Test
-    fun `local reading timestamp wins even when server timestamp is later`() = runTest {
+    fun `newer provider timestamp wins over persisted local activity`() = runTest {
         val current = book.copy(readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
         val other = book.copy(
             id = "book-2",
@@ -3464,16 +3464,16 @@ class AppCoordinatorTest {
         advanceUntilIdle()
 
         val refreshed = (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(localReadAt, refreshed.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(localReadAt + 10_000L, refreshed.single { it.id == current.id }.lastReadAtMillis)
         assertEquals(75f, refreshed.single { it.id == current.id }.progressPercent)
-        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
+        assertEquals(listOf(current.id, other.id), currentlyReadingBooks(refreshed, limit = null).map { it.id })
 
         val restarted = AppCoordinator(repository, StandardTestDispatcher(testScheduler))
         restarted.loadBrowser()
         advanceUntilIdle()
         val afterRestart = (restarted.screen.value as AppScreen.Browser).browserState.homeBooks
-        assertEquals(localReadAt, afterRestart.single { it.id == current.id }.lastReadAtMillis)
-        assertEquals(listOf(other.id, current.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
+        assertEquals(localReadAt + 10_000L, afterRestart.single { it.id == current.id }.lastReadAtMillis)
+        assertEquals(listOf(current.id, other.id), currentlyReadingBooks(afterRestart, limit = null).map { it.id })
     }
 
     @Test
@@ -3497,7 +3497,7 @@ class AppCoordinatorTest {
         coordinator.refreshBrowser()
         advanceUntilIdle()
         assertEquals(100_000L, repository.loadReadingActivity(serverUrl)[remoteKey])
-        assertEquals(listOf(local.id, remote.id), currentlyReadingBooks(
+        assertEquals(listOf(remote.id, local.id), currentlyReadingBooks(
             (coordinator.screen.value as AppScreen.Browser).browserState.homeBooks, limit = null
         ).map { it.id })
 

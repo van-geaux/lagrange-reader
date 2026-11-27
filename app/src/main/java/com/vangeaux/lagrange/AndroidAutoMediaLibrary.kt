@@ -1240,16 +1240,27 @@ internal class AndroidAutoCatalogBridge private constructor(
             secondary = fromLibraryCaches
         )
 
-        activeSessionBook?.let { indexBooks(listOf(it)) }
-        indexBooks(localBooks)
-        indexBooks(catalogBooks)
+        val persistedActivity = if (serverUrl.isNotBlank()) {
+            runCatching { repository.loadProviderReadingActivity(application, serverUrl) }.getOrDefault(emptyMap())
+        } else {
+            emptyMap()
+        }
+        val orderedActiveBook = activeSessionBook?.let {
+            applyPersistedReadingActivity(listOf(it), persistedActivity).single()
+        }
+        val orderedCatalogBooks = applyPersistedReadingActivity(catalogBooks, persistedActivity)
+        val orderedLocalBooks = applyPersistedReadingActivity(localBooks, persistedActivity)
+
+        orderedActiveBook?.let { indexBooks(listOf(it)) }
+        indexBooks(orderedLocalBooks)
+        indexBooks(orderedCatalogBooks)
 
         AndroidAutoCatalogSnapshot(
             serverUrl = serverUrl,
-            activeBook = activeSessionBook,
+            activeBook = orderedActiveBook,
             libraries = libraries,
-            catalogBooks = catalogBooks,
-            localBooks = localBooks
+            catalogBooks = orderedCatalogBooks,
+            localBooks = orderedLocalBooks
         ).also {
             cachedSnapshot = it
             cachedSnapshotAtMs = System.currentTimeMillis()
@@ -1667,18 +1678,18 @@ internal class AndroidAutoCatalogBridge private constructor(
                         launchMode = launchMode
                     )
                 }
-                if (repository.supportsLocalReadingActivity) {
-                    try {
-                        repository.recordBackgroundReadingActivity(
-                            serverUrl,
-                            ReadingActivityKey(book.libraryId, book.id),
-                            now
-                        )
-                    } catch (error: kotlinx.coroutines.CancellationException) {
-                        throw error
-                    } catch (error: Exception) {
-                        android.util.Log.w("ReadingActivity", "Unable to save Android Auto reading activity", error)
-                    }
+                try {
+                    repository.recordProviderReadingActivity(
+                        application,
+                        serverUrl,
+                        ReadingActivityKey(book.libraryId, book.id),
+                        now,
+                        loadSnapshot().catalogBooks
+                    )
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    android.util.Log.w("ReadingActivity", "Unable to save Android Auto reading activity", error)
                 }
             }
             runCatching {
