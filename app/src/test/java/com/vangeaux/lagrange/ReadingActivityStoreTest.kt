@@ -26,6 +26,64 @@ class ReadingActivityStoreTest {
     }
 
     @Test
+    fun `persisted reading activity updates in-progress books without changing completed books`() {
+        val recent = BookSummary("library", "recent", null, "Recent", format = "m4b", mediaKind = MediaKind.AUDIO,
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 100L, availableFormats = listOf("AUDIO"))
+        val older = BookSummary("library", "older", null, "Older", format = "m4b", mediaKind = MediaKind.AUDIO,
+            readStatus = BookReadStatus.REREADING, lastReadAtMillis = 200L, availableFormats = listOf("AUDIO"))
+        val finished = BookSummary("library", "finished", null, "Finished", format = "m4b", mediaKind = MediaKind.AUDIO,
+            readStatus = BookReadStatus.READ, lastReadAtMillis = 500L, availableFormats = listOf("AUDIO"))
+
+        val books = applyPersistedReadingActivity(
+            listOf(recent, older, finished),
+            mapOf(ReadingActivityKey("library", "recent") to 900L)
+        )
+
+        assertEquals(listOf("recent", "older"), currentlyReadingBooks(books, limit = null).map { it.id })
+        val continueListening = buildAndroidAutoContinueListeningSpecs(
+            activeBook = null,
+            catalogBooks = books,
+            localBooks = emptyList()
+        )
+        assertEquals(listOf("Recent", "Older"), continueListening.map { it.title })
+        assertEquals(900L, books.single { it.id == "recent" }.lastReadAtMillis)
+        assertEquals(200L, books.single { it.id == "older" }.lastReadAtMillis)
+        assertEquals(500L, books.single { it.id == "finished" }.lastReadAtMillis)
+    }
+
+    @Test
+    fun `provider activity remains authoritative when newer than local activity`() {
+        val serverNewer = BookSummary("library", "server-newer", null, "Server newer",
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 900L)
+        val localNewer = BookSummary("library", "local-newer", null, "Local newer",
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
+
+        val books = applyPersistedReadingActivity(
+            listOf(serverNewer, localNewer),
+            mapOf(
+                ReadingActivityKey("library", "server-newer") to 500L,
+                ReadingActivityKey("library", "local-newer") to 800L
+            )
+        )
+
+        assertEquals(900L, books.single { it.id == "server-newer" }.lastReadAtMillis)
+        assertEquals(800L, books.single { it.id == "local-newer" }.lastReadAtMillis)
+        assertEquals(listOf("server-newer", "local-newer"), currentlyReadingBooks(books, limit = null).map { it.id })
+    }
+
+    @Test
+    fun `provider current reading shelf sorts only its supplied membership by activity`() {
+        val newest = BookSummary("library", "newest", null, "Newest",
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 900L)
+        val oldest = BookSummary("library", "oldest", null, "Oldest",
+            readStatus = BookReadStatus.READING, lastReadAtMillis = 100L)
+        val suppliedShelf = listOf(oldest, newest)
+
+        assertEquals(listOf("newest", "oldest"), orderCurrentlyReadingByActivity(suppliedShelf).map { it.id })
+        assertEquals(setOf("newest", "oldest"), orderCurrentlyReadingByActivity(suppliedShelf).map { it.id }.toSet())
+    }
+
+    @Test
     fun `optimistic ordering stays ahead of known reading activity when device clock is behind`() {
         val reading = BookSummary("library", "reading", null, "Reading",
             readStatus = BookReadStatus.READING, lastReadAtMillis = 5_000L)
