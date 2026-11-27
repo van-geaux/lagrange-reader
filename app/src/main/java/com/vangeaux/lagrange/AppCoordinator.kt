@@ -483,8 +483,6 @@ class AppCoordinator internal constructor(
     private val remoteReadingBaselines = mutableMapOf<ReadingActivityKey, Long>()
     private var readingShelfOrder = emptyList<ReadingActivityKey>()
     private var readingActivityServerUrl: String? = null
-    private var readingActivityScopeKey: String? = null
-    private val sharedReadingActivityStore by lazy { uiContext?.let(::ReadingActivityStore) }
     private var pendingPostLoginDestination: PostLoginDestination? = null
     private var autoLoginAttemptedProfileId: String? = null
     private var allowCachedLoginFallback = true
@@ -2986,14 +2984,11 @@ class AppCoordinator internal constructor(
         val key = book.progressKey()
         val observedAt = System.currentTimeMillis()
         val activityServerUrl = lastBrowserState?.serverUrl
-        if (!activityServerUrl.isNullOrBlank()) {
+        if (repository.supportsLocalReadingActivity && !activityServerUrl.isNullOrBlank()) {
             useReadingActivityServer(activityServerUrl)
         }
-        val activityBooks = lastBrowserState?.let { browser ->
-            browser.homeBooks + browser.homeShelves.booksBySection[HomeSection.CURRENTLY_READING].orEmpty()
-        }.orEmpty()
-        val orderingAt = if (!activityServerUrl.isNullOrBlank()) {
-            nextReadingActivityOrder(observedAt, activityBooks, localReadingActivity.values)
+        val orderingAt = if (repository.supportsLocalReadingActivity && !activityServerUrl.isNullOrBlank()) {
+            nextReadingActivityOrder(observedAt, lastBrowserState?.homeBooks.orEmpty(), localReadingActivity.values)
         } else observedAt
         val progress = PendingProgress(
             book = book,
@@ -3006,7 +3001,7 @@ class AppCoordinator internal constructor(
         // Keep this assignment outside the coroutine. A reader can be closed immediately
         // after a page callback, and closeReader must still be able to flush this update.
         latestProgressByTarget[key] = progress
-        if (!activityServerUrl.isNullOrBlank()) {
+        if (repository.supportsLocalReadingActivity && !activityServerUrl.isNullOrBlank()) {
             localReadingActivity[book.readingActivityKey()] = progress.orderingAtMillis
             remoteReadingBaselines.remove(book.readingActivityKey())
         }
@@ -3366,15 +3361,21 @@ class AppCoordinator internal constructor(
     private fun applyLocalReadingActivity(books: List<BookSummary>): List<BookSummary> {
         val ranks = readingShelfOrder.withIndex().associate { it.value to it.index }
         return books.map { book ->
+            val localTimestamp = localReadingActivity[book.readingActivityKey()]
             val orderedBook = book.copy(
                 currentlyReadingTieOrder = ranks[book.readingActivityKey()]
             )
-            applyPersistedReadingActivity(listOf(orderedBook), localReadingActivity).single()
+            if (localTimestamp == null || (book.readStatus != BookReadStatus.READING &&
+                    book.readStatus != BookReadStatus.REREADING)) {
+                orderedBook
+            } else {
+                orderedBook.copy(lastReadAtMillis = localTimestamp)
+            }
         }
     }
 
     private fun BrowserState.withLocalReadingActivity(): BrowserState {
-        if (readingActivityServerUrl != serverUrl || readingActivityScopeKey != activityScopeKey(serverUrl)) return this
+        if (readingActivityServerUrl != serverUrl) return this
         return copy(
             books = applyLocalReadingActivity(books),
             homeBooks = applyLocalReadingActivity(homeBooks)
@@ -3382,9 +3383,8 @@ class AppCoordinator internal constructor(
     }
 
     private fun mergeKnownProgress(shelves: HomeShelfData): HomeShelfData = shelves.copy(
-        booksBySection = shelves.booksBySection.mapValues { (section, books) ->
-            val merged = mergeKnownProgress(books, null)
-            if (section == HomeSection.CURRENTLY_READING) orderCurrentlyReadingByActivity(merged) else merged
+        booksBySection = shelves.booksBySection.mapValues { (_, books) ->
+            mergeKnownProgress(books, null)
         },
         seriesBySection = shelves.seriesBySection.mapValues { (_, books) ->
             mergeKnownProgress(books, null)
@@ -3420,7 +3420,6 @@ class AppCoordinator internal constructor(
         remoteReadingBaselines.clear()
         readingShelfOrder = emptyList()
         readingActivityServerUrl = null
-        readingActivityScopeKey = null
         pendingPostLoginDestination = null
         loginRefreshInFlight = false
         loginSubmitInFlight = false
@@ -3575,41 +3574,28 @@ class AppCoordinator internal constructor(
 
     private fun BookSummary.readingActivityKey() = ReadingActivityKey(libraryId, id)
 
-    private fun activityScopeKey(serverUrl: String): String? =
-        uiContext?.let { context ->
-            resolveEpubReaderScope(context, serverUrl)?.let(::epubReaderPersistenceScopePrefix)
-        } ?: serverUrl.takeIf { repository.supportsLocalReadingActivity }
-
     private fun useReadingActivityServer(serverUrl: String) {
-        val scopeKey = activityScopeKey(serverUrl)
-        if (readingActivityServerUrl != serverUrl || readingActivityScopeKey != scopeKey) {
+        if (readingActivityServerUrl != serverUrl) {
             localReadingActivity.clear()
             remoteReadingBaselines.clear()
             readingShelfOrder = emptyList()
             readingActivityServerUrl = serverUrl
-            readingActivityScopeKey = scopeKey
         }
     }
 
     private suspend fun loadLocalReadingActivity(serverUrl: String) {
+        if (!repository.supportsLocalReadingActivity) return
         readingActivityMutex.withLock {
             useReadingActivityServer(serverUrl)
-            if (repository.supportsLocalReadingActivity) {
-                repository.loadReadingActivityValues(serverUrl).forEach { (key, value) ->
-                    val current = localReadingActivity[key]
-                    if (current == null || value.timestamp >= current) {
-                        localReadingActivity[key] = value.timestamp
-                        if (value.localBaseline == null) remoteReadingBaselines.remove(key)
-                        else remoteReadingBaselines[key] = value.localBaseline
-                    }
-                }
-                readingShelfOrder = repository.loadReadingShelfOrder(serverUrl)
-            } else {
-                val scopeKey = readingActivityScopeKey ?: return@withLock
-                sharedReadingActivityStore?.read(scopeKey)?.forEach { (key, timestamp) ->
-                    localReadingActivity[key] = timestamp
+            repository.loadReadingActivityValues(serverUrl).forEach { (key, value) ->
+                val current = localReadingActivity[key]
+                if (current == null || value.timestamp >= current) {
+                    localReadingActivity[key] = value.timestamp
+                    if (value.localBaseline == null) remoteReadingBaselines.remove(key)
+                    else remoteReadingBaselines[key] = value.localBaseline
                 }
             }
+            readingShelfOrder = repository.loadReadingShelfOrder(serverUrl)
         }
     }
 
@@ -3617,7 +3603,7 @@ class AppCoordinator internal constructor(
         if (!repository.supportsLocalReadingActivity) return
         if (repository.pendingProgressCount() != 0) return
         readingActivityMutex.withLock {
-            if (readingActivityServerUrl != serverUrl || readingActivityScopeKey != activityScopeKey(serverUrl)) return@withLock
+            if (readingActivityServerUrl != serverUrl) return@withLock
             books.forEach { book ->
                 if (book.readStatus != BookReadStatus.READING && book.readStatus != BookReadStatus.REREADING) {
                     return@forEach
@@ -3632,8 +3618,7 @@ class AppCoordinator internal constructor(
                 localReadingActivity[key] = remote
                 remoteReadingBaselines[key] = baseline
                 val recorded = repository.recordRemoteReadingActivity(serverUrl, key, local, remote)
-                if (readingActivityServerUrl == serverUrl && readingActivityScopeKey == activityScopeKey(serverUrl) &&
-                    localReadingActivity[key] == remote) {
+                if (readingActivityServerUrl == serverUrl && localReadingActivity[key] == remote) {
                     if (recorded == null) {
                         localReadingActivity[key] = local
                         if (baseline == local) remoteReadingBaselines.remove(key)
@@ -3652,7 +3637,7 @@ class AppCoordinator internal constructor(
         if (!repository.supportsLocalReadingActivity) return
         try {
             readingActivityMutex.withLock {
-                if (readingActivityServerUrl != serverUrl || readingActivityScopeKey != activityScopeKey(serverUrl)) return@withLock
+                if (readingActivityServerUrl != serverUrl) return@withLock
                 val visibleOrder = currentlyReadingBooks(applyLocalReadingActivity(books), limit = null)
                     .map { it.readingActivityKey() }
                     .distinct()
@@ -3686,15 +3671,11 @@ class AppCoordinator internal constructor(
     }
 
     private suspend fun persistReadingActivity(serverUrl: String, progress: PendingProgress) {
+        if (!repository.supportsLocalReadingActivity) return
         readingActivityMutex.withLock {
             val key = progress.book.readingActivityKey()
-            if (readingActivityServerUrl != serverUrl || readingActivityScopeKey != activityScopeKey(serverUrl) ||
-                localReadingActivity[key] != progress.orderingAtMillis) return@withLock
-            if (repository.supportsLocalReadingActivity) {
+            if (readingActivityServerUrl == serverUrl && localReadingActivity[key] == progress.orderingAtMillis) {
                 repository.recordReadingActivity(serverUrl, key, progress.orderingAtMillis)
-            } else {
-                val scopeKey = readingActivityScopeKey ?: return@withLock
-                sharedReadingActivityStore?.record(scopeKey, key, progress.orderingAtMillis)
             }
         }
     }
@@ -3710,16 +3691,12 @@ class AppCoordinator internal constructor(
     }
 
     private suspend fun removeLocalReadingActivity(book: BookSummary) {
+        if (!repository.supportsLocalReadingActivity) return
         val serverUrl = (serverSelectionModule()?.getServerUrl() ?: repository.getServerUrl()).orEmpty()
         readingActivityMutex.withLock {
             val key = book.readingActivityKey()
-            if (repository.supportsLocalReadingActivity) {
-                repository.removeReadingActivity(serverUrl, key)
-            } else {
-                readingActivityScopeKey?.takeIf { it == activityScopeKey(serverUrl) }
-                    ?.let { sharedReadingActivityStore?.remove(it, key) }
-            }
-            if (readingActivityServerUrl == serverUrl && readingActivityScopeKey == activityScopeKey(serverUrl)) {
+            repository.removeReadingActivity(serverUrl, key)
+            if (readingActivityServerUrl == serverUrl) {
                 localReadingActivity.remove(key)
                 remoteReadingBaselines.remove(key)
             }
