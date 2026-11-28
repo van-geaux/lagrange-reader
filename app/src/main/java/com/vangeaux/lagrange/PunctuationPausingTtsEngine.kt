@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import org.readium.navigator.media.tts.TtsEngine
 import org.readium.navigator.media.tts.TtsEngineProvider
 import org.readium.navigator.media.tts.android.AndroidTtsEngine
-import org.readium.navigator.media.tts.android.AndroidTtsEngineProvider
 import org.readium.navigator.media.tts.android.AndroidTtsPreferences
 import org.readium.navigator.media.tts.android.AndroidTtsPreferencesEditor
 import org.readium.navigator.media.tts.android.AndroidTtsSettings
@@ -115,10 +114,14 @@ internal fun scaleEpubTtsPauseMillis(baseMillis: Int, playbackSpeed: Float): Int
 @OptIn(ExperimentalReadiumApi::class)
 internal class PunctuationPausingTtsEngineProvider(
     context: Context,
-    private val pauseSettings: () -> EpubTtsPauseSettings
+    private val pauseSettings: () -> EpubTtsPauseSettings,
+    onNonStandardVoiceMetadata: () -> Unit
 ) : TtsEngineProvider<AndroidTtsSettings, AndroidTtsPreferences, AndroidTtsPreferencesEditor,
     AndroidTtsEngine.Error, AndroidTtsEngine.Voice> {
-    private val delegate = AndroidTtsEngineProvider(context)
+    private val delegate = QualityCompatibleAndroidTtsEngineProvider(
+        context = context,
+        onNonStandardVoiceMetadata = onNonStandardVoiceMetadata
+    )
 
     override suspend fun createEngine(
         publication: Publication,

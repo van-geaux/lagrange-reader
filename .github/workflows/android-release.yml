@@ -84,4 +84,8 @@ jobs:
           release_version="${GITHUB_REF_NAME#v}"
           release_notes="docs/release-notes/v${release_version}.md"
           test -f "$release_notes" || { echo "Missing release notes: $release_notes" >&2; exit 1; }
-          gh release create "$GITHUB_REF_NAME" $RELEASE_ASSETS --verify-tag --notes-file "$release_notes" --title "Lagrange ${release_version}"
+          release_flags=()
+          if [[ "$release_version" == *-* ]]; then
+            release_flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" $RELEASE_ASSETS "${release_flags[@]}" --verify-tag --notes-file "$release_notes" --title "Lagrange ${release_version}"
